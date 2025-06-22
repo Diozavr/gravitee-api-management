@@ -33,9 +33,11 @@ import static io.gravitee.plugin.endpoint.http.proxy.client.UriHelper.URI_QUERY_
 import io.gravitee.common.http.HttpHeader;
 import io.gravitee.common.util.MultiValueMap;
 import io.gravitee.common.util.URIUtils;
+import io.gravitee.definition.model.v4.ssl.pem.PEMTrustStore;
 import io.gravitee.gateway.api.buffer.Buffer;
 import io.gravitee.gateway.api.http.HttpHeaderNames;
 import io.gravitee.gateway.http.vertx.VertxHttpHeaders;
+import io.gravitee.gateway.reactive.api.context.DeploymentContext;
 import io.gravitee.gateway.reactive.api.context.http.HttpExecutionContext;
 import io.gravitee.gateway.reactive.api.context.http.HttpRequest;
 import io.gravitee.gateway.reactive.api.context.http.HttpResponse;
@@ -47,7 +49,9 @@ import io.gravitee.node.vertx.client.http.VertxHttpClientFactory;
 import io.gravitee.plugin.endpoint.http.proxy.client.HttpClientFactory;
 import io.gravitee.plugin.endpoint.http.proxy.client.UriHelper;
 import io.gravitee.plugin.endpoint.http.proxy.configuration.HttpProxyEndpointConnectorConfiguration;
+import io.gravitee.plugin.endpoint.http.proxy.configuration.HttpProxyEndpointConnectorConfigurationEvaluator;
 import io.gravitee.plugin.endpoint.http.proxy.configuration.HttpProxyEndpointConnectorSharedConfiguration;
+import io.gravitee.plugin.endpoint.http.proxy.configuration.HttpProxyEndpointConnectorSharedConfigurationEvaluator;
 import io.reactivex.rxjava3.core.Completable;
 import io.vertx.core.MultiMap;
 import io.vertx.core.http.HttpHeaders;
@@ -86,9 +90,12 @@ public class HttpConnector implements ProxyConnector {
     private final int defaultPort;
     private final boolean defaultSsl;
     private final MultiValueMap<String, String> targetParameters;
-    protected final HttpProxyEndpointConnectorConfiguration configuration;
-    protected final HttpProxyEndpointConnectorSharedConfiguration sharedConfiguration;
-    protected final HttpClientFactory httpClientFactory;
+    protected HttpProxyEndpointConnectorConfiguration configuration;
+    protected HttpProxyEndpointConnectorSharedConfiguration sharedConfiguration;
+    protected HttpClientFactory httpClientFactory;
+    private HttpProxyEndpointConnectorSharedConfigurationEvaluator sharedConfigurationEvaluator;
+    private HttpProxyEndpointConnectorConfigurationEvaluator configurationEvaluator;
+    private DeploymentContext deploymentContext;
 
     public HttpConnector(
         final HttpProxyEndpointConnectorConfiguration configuration,
@@ -98,6 +105,34 @@ public class HttpConnector implements ProxyConnector {
         this.configuration = configuration;
         this.sharedConfiguration = sharedConfiguration;
         this.httpClientFactory = httpClientFactory;
+        final URL targetUrl = VertxHttpClientFactory.buildUrl(configuration.getTarget());
+        this.relativeTarget = targetUrl.getPath();
+        this.defaultHost = targetUrl.getHost();
+        this.defaultPort = targetUrl.getPort() != -1 ? targetUrl.getPort() : targetUrl.getDefaultPort();
+        this.defaultSsl = VertxHttpClientFactory.isSecureProtocol(targetUrl.getProtocol());
+        if (targetUrl.getQuery() == null) {
+            targetParameters = null;
+        } else {
+            targetParameters = URIUtils.parameters(URI_QUERY_DELIMITER_CHAR_SEQUENCE + targetUrl.getQuery());
+        }
+    }
+
+    public HttpConnector(
+        HttpProxyEndpointConnectorConfigurationEvaluator configurationEvaluator,
+        HttpProxyEndpointConnectorSharedConfigurationEvaluator sharedConfigurationEvaluator,
+        HttpClientFactory httpClientFactory,
+        DeploymentContext deploymentContext
+    ) {
+        this.configurationEvaluator = configurationEvaluator;
+        this.sharedConfigurationEvaluator = sharedConfigurationEvaluator;
+        this.deploymentContext = deploymentContext;
+        this.httpClientFactory = httpClientFactory;
+        if (this.deploymentContext != null && this.configurationEvaluator != null) {
+            this.configuration = this.configurationEvaluator.evalNow(this.deploymentContext);
+        }
+        if (this.deploymentContext != null && this.sharedConfigurationEvaluator != null) {
+            this.sharedConfiguration = this.sharedConfigurationEvaluator.evalNow(this.deploymentContext);
+        }
         final URL targetUrl = VertxHttpClientFactory.buildUrl(configuration.getTarget());
         this.relativeTarget = targetUrl.getPath();
         this.defaultHost = targetUrl.getHost();
@@ -122,6 +157,12 @@ public class HttpConnector implements ProxyConnector {
             ctx.metrics().setEndpoint(absoluteUri);
             ObservableHttpClientRequest observableHttpClientRequest = new ObservableHttpClientRequest(options);
             Span httpRequestSpan = ctx.getTracer().startSpanFrom(observableHttpClientRequest);
+            if (this.deploymentContext != null && this.configurationEvaluator != null) {
+                this.configuration = this.configurationEvaluator.evalNow(this.deploymentContext);
+            }
+            if (this.deploymentContext != null && this.sharedConfigurationEvaluator != null) {
+                this.sharedConfiguration = this.sharedConfigurationEvaluator.evalNow(this.deploymentContext);
+            }
             return httpClientFactory
                 .getOrBuildHttpClient(ctx, configuration, sharedConfiguration)
                 .rxRequest(options)
