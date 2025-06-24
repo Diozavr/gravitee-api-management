@@ -1,0 +1,14 @@
+= Kafka Message Entrypoint
+
+== Description
+
+The *Kafka Message Entrypoint Connector* allows consuming messages from Kafka topics and pushing them through the Gateway message flow.
+
+== Entrypoint identifier
+
+Use the following identifier `kafka-message` while configuring your API entrypoints.
+
+== Configuration
+
+Configuration options include bootstrap servers, topics list, consumer group and security options.
+
