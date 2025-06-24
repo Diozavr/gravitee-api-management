@@ -1,0 +1,53 @@
+{
+  "id": "my-api",
+  "name": "my-api",
+  "apiVersion": "1.0",
+  "definitionVersion": "4.0.0",
+  "type": "message",
+  "description": "api v4 using Kafka message entrypoint",
+  "listeners": [
+    {
+      "type": "kafka",
+      "host": "kafka",
+      "port": 9092,
+      "entrypoints": [
+        {
+          "type": "kafka-message",
+          "configuration": {
+            "bootstrapServers": "bootstrap-server",
+            "topics": ["test-topic"],
+            "consumerGroup": "test-group"
+          }
+        }
+      ]
+    }
+  ],
+  "endpointGroups": [
+    {
+      "name": "default-group",
+      "type": "kafka",
+      "endpoints": [
+        {
+          "name": "default",
+          "type": "kafka",
+          "weight": 1,
+          "inheritConfiguration": false,
+          "configuration": {
+            "bootstrapServers": "bootstrap-server"
+          },
+          "sharedConfigurationOverride": {
+            "consumer": {
+              "enabled": true,
+              "autoOffsetReset": "earliest",
+              "topics": ["test-topic"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "flows": [],
+  "analytics": {
+    "enabled": false
+  }
+}
