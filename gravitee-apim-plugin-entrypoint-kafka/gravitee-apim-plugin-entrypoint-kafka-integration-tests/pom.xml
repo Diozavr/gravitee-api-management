@@ -24,7 +24,7 @@
     <parent>
         <groupId>io.gravitee.apim.plugin.entrypoint</groupId>
         <artifactId>gravitee-apim-plugin-entrypoint-kafka-parent</artifactId>
-        <version>${revision}${sha1}${changelist}</version>
+        <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -42,7 +42,7 @@
         <dependency>
             <groupId>io.gravitee.apim.gateway</groupId>
             <artifactId>gravitee-apim-gateway-tests-sdk</artifactId>
-            <version>${project.version}</version>
+            <version>${gravitee-apim.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
