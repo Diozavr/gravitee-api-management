@@ -39,8 +39,7 @@ import io.gravitee.rest.api.service.v4.ApiAuthorizationService;
 import io.gravitee.rest.api.service.v4.ApiSearchService;
 import java.util.Iterator;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -48,10 +47,9 @@ import org.springframework.stereotype.Component;
  * @author Guillaume Cusnieux (guillaume.cusnieux at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class AccessControlServiceImpl extends AbstractService implements AccessControlService {
-
-    private final Logger logger = LoggerFactory.getLogger(AccessControlServiceImpl.class);
 
     @Autowired
     private MembershipService membershipService;
@@ -82,7 +80,7 @@ public class AccessControlServiceImpl extends AbstractService implements AccessC
 
     @Override
     public boolean canAccessApiFromPortal(ExecutionContext executionContext, String apiId) {
-        GenericApiEntity genericApi = apiSearchService.findGenericById(executionContext, apiId);
+        GenericApiEntity genericApi = apiSearchService.findGenericById(executionContext, apiId, false, false, false);
         return canAccessApiFromPortal(executionContext, genericApi);
     }
 
@@ -122,7 +120,7 @@ public class AccessControlServiceImpl extends AbstractService implements AccessC
                         boolean groupMatched = userGroups.stream().anyMatch(group -> group.getId().equals(acl.getReferenceId()));
                         return pageEntity.isExcludedAccessControls() != groupMatched;
                     } else {
-                        logger.warn("ACL reference type [{}] not found", acl.getReferenceType());
+                        log.warn("ACL reference type [{}] not found", acl.getReferenceType());
                     }
                     return false;
                 });
@@ -140,7 +138,7 @@ public class AccessControlServiceImpl extends AbstractService implements AccessC
             return false;
         }
         if (apiId != null) {
-            final GenericApiEntity genericApiEntity = apiSearchService.findGenericById(executionContext, apiId);
+            final GenericApiEntity genericApiEntity = apiSearchService.findGenericById(executionContext, apiId, false, false, false);
             return canAccessPage(executionContext, genericApiEntity, pageEntity);
         }
         return canAccessPage(executionContext, null, pageEntity);
@@ -179,8 +177,12 @@ public class AccessControlServiceImpl extends AbstractService implements AccessC
             Iterator<String> groupIdIterator = genericApiEntity.getGroups().iterator();
             while (!canEditApiPage && groupIdIterator.hasNext()) {
                 String groupId = groupIdIterator.next();
-                member =
-                    membershipService.getUserMember(executionContext, MembershipReferenceType.GROUP, groupId, getAuthenticatedUsername());
+                member = membershipService.getUserMember(
+                    executionContext,
+                    MembershipReferenceType.GROUP,
+                    groupId,
+                    getAuthenticatedUsername()
+                );
                 canEditApiPage = canEditApiPage(member);
             }
         } else {
@@ -209,13 +211,12 @@ public class AccessControlServiceImpl extends AbstractService implements AccessC
         final String environmentId
     ) {
         if (genericApiEntity != null) {
-            Set<RoleEntity> roles =
-                this.membershipService.getRoles(
-                        MembershipReferenceType.API,
-                        genericApiEntity.getId(),
-                        MembershipMemberType.USER,
-                        getAuthenticatedUsername()
-                    );
+            Set<RoleEntity> roles = this.membershipService.getRoles(
+                MembershipReferenceType.API,
+                genericApiEntity.getId(),
+                MembershipMemberType.USER,
+                getAuthenticatedUsername()
+            );
 
             if (genericApiEntity.getGroups() != null && !genericApiEntity.getGroups().isEmpty()) {
                 genericApiEntity
@@ -235,11 +236,11 @@ public class AccessControlServiceImpl extends AbstractService implements AccessC
             return roles;
         } else {
             return this.membershipService.getRoles(
-                    MembershipReferenceType.ENVIRONMENT,
-                    environmentId,
-                    MembershipMemberType.USER,
-                    getAuthenticatedUsername()
-                );
+                MembershipReferenceType.ENVIRONMENT,
+                environmentId,
+                MembershipMemberType.USER,
+                getAuthenticatedUsername()
+            );
         }
     }
 }

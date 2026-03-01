@@ -24,15 +24,13 @@ import io.gravitee.gateway.policy.PolicyException;
 import io.gravitee.policy.api.PolicyChain;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * @author GraviteeSource Team
  */
+@CustomLog
 public class ConditionalExecutablePolicy implements Policy {
-
-    public static final Logger LOGGER = LoggerFactory.getLogger(ConditionalExecutablePolicy.class);
 
     protected final Policy policy;
     protected final Function<ExecutionContext, Boolean> evaluationFunction;
@@ -47,16 +45,15 @@ public class ConditionalExecutablePolicy implements Policy {
     protected ConditionalExecutablePolicy(ConditionalExecutablePolicy delegate, BiConsumer<String, Boolean> conditionResultConsumer) {
         this.policy = delegate.policy;
         this.condition = delegate.condition;
-        this.evaluationFunction =
-            context -> {
-                Boolean isConditionTruthy = null;
-                try {
-                    isConditionTruthy = delegate.evaluationFunction.apply(context);
-                } finally {
-                    conditionResultConsumer.accept(delegate.condition, isConditionTruthy);
-                }
-                return isConditionTruthy;
-            };
+        this.evaluationFunction = context -> {
+            Boolean isConditionTruthy = null;
+            try {
+                isConditionTruthy = delegate.evaluationFunction.apply(context);
+            } finally {
+                conditionResultConsumer.accept(delegate.condition, isConditionTruthy);
+            }
+            return isConditionTruthy;
+        };
     }
 
     @Override
@@ -101,7 +98,7 @@ public class ConditionalExecutablePolicy implements Policy {
             isConditionTruthy = evaluationFunction.apply(context);
         } catch (RuntimeException e) {
             // Catching all RuntimeException to catch those thrown by spring-expression without adding dependency to it
-            LOGGER.error("Condition evaluation fails for policy {}", this.id(), e);
+            log.error("Condition evaluation fails for policy {}", this.id(), e);
             throw new PolicyException("Request failed unintentionally", e);
         }
         return isConditionTruthy;

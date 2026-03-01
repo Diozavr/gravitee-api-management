@@ -32,8 +32,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -43,10 +42,9 @@ import org.springframework.stereotype.Component;
  * @author Azize ELAMRANI (azize.elamrani at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class MongoApiRepository implements ApiRepository {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(MongoApiRepository.class);
 
     @Autowired
     private ApiMongoRepository internalApiRepo;
@@ -110,18 +108,16 @@ public class MongoApiRepository implements ApiRepository {
         if (page == null || page.getContent() == null) {
             return Stream.empty();
         }
-        return Stream
-            .iterate(
-                page,
-                p -> !isEmpty(p),
-                p -> hasNext(p) ? search(apiCriteria, sortable, nextPageable(p, pageable), apiFieldFilter) : null
-            )
-            .flatMap(p -> {
-                if (p != null && p.getContent() != null) {
-                    return p.getContent().stream();
-                }
-                return Stream.empty();
-            });
+        return Stream.iterate(
+            page,
+            p -> !isEmpty(p),
+            p -> hasNext(p) ? search(apiCriteria, sortable, nextPageable(p, pageable), apiFieldFilter) : null
+        ).flatMap(p -> {
+            if (p != null && p.getContent() != null) {
+                return p.getContent().stream();
+            }
+            return Stream.empty();
+        });
     }
 
     @Override
@@ -166,13 +162,13 @@ public class MongoApiRepository implements ApiRepository {
 
     @Override
     public List<String> deleteByEnvironmentId(String environmentId) throws TechnicalException {
-        LOGGER.debug("Delete by environmentId [{}]", environmentId);
+        log.debug("Delete by environmentId [{}]", environmentId);
         try {
             final var apiMongos = internalApiRepo.deleteByEnvironmentId(environmentId).stream().map(ApiMongo::getId).toList();
-            LOGGER.debug("Delete by environmentId [{}] - Done", environmentId);
+            log.debug("Delete by environmentId [{}] - Done", environmentId);
             return apiMongos;
         } catch (Exception ex) {
-            LOGGER.error("Failed to delete api by environmentId: {}", environmentId, ex);
+            log.error("Failed to delete api by environmentId: {}", environmentId, ex);
             throw new TechnicalException("Failed to delete api by environmentId");
         }
     }

@@ -18,14 +18,16 @@ package io.gravitee.rest.api.management.rest.resource;
 import static java.lang.String.format;
 import static java.util.Collections.singletonList;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.gravitee.apim.core.debug.use_case.DebugApiUseCase;
 import io.gravitee.common.http.MediaType;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.Proxy;
 import io.gravitee.definition.model.VirtualHost;
 import io.gravitee.repository.exceptions.TechnicalException;
-import io.gravitee.repository.management.model.NotificationReferenceType;
 import io.gravitee.rest.api.exception.InvalidImageException;
 import io.gravitee.rest.api.management.rest.mapper.DebugApiMapper;
 import io.gravitee.rest.api.management.rest.resource.param.LifecycleAction;
@@ -107,8 +109,7 @@ import jakarta.ws.rs.core.UriBuilder;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 import java.util.Objects;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.web.bind.annotation.RequestBody;
 
 /**
@@ -119,10 +120,9 @@ import org.springframework.web.bind.annotation.RequestBody;
  * @author Azize ELAMRANI (azize.elamrani at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Tag(name = "APIs")
 public class ApiResource extends AbstractResource {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(ApiResource.class);
 
     @Context
     private ResourceContext resourceContext;
@@ -323,7 +323,7 @@ public class ApiResource extends AbstractResource {
             ImageUtils.verify(apiToUpdate.getPicture());
             ImageUtils.verify(apiToUpdate.getBackground());
         } catch (InvalidImageException e) {
-            LOGGER.warn("Invalid image format", e);
+            log.warn("Invalid image format", e);
             throw new BadRequestException("Invalid image format : " + e.getMessage());
         }
 
@@ -345,8 +345,7 @@ public class ApiResource extends AbstractResource {
         final ApiEntity updatedApi = apiService.update(GraviteeContext.getExecutionContext(), api, apiToUpdate, true);
         setPictures(updatedApi);
 
-        return Response
-            .ok(updatedApi)
+        return Response.ok(updatedApi)
             .tag(Long.toString(updatedApi.getUpdatedAt().getTime()))
             .lastModified(updatedApi.getUpdatedAt())
             .build();
@@ -386,8 +385,7 @@ public class ApiResource extends AbstractResource {
                 EventType.PUBLISH_API,
                 apiDeploymentEntity
             );
-            return Response
-                .ok(apiEntity)
+            return Response.ok(apiEntity)
                 .tag(Long.toString(apiEntity.getUpdatedAt().getTime()))
                 .lastModified(apiEntity.getUpdatedAt())
                 .build();
@@ -413,13 +411,11 @@ public class ApiResource extends AbstractResource {
     @GraviteeLicenseFeature("apim-debug-mode")
     public Response debugAPI(@Parameter(name = "request") @Valid final DebugApiEntity debugApiEntity) {
         debugApiEntity.setId(api);
-        return Response
-            .ok(
-                debugApiUseCase
-                    .execute(new DebugApiUseCase.Input(api, DebugApiMapper.INSTANCE.fromEntity(debugApiEntity), getAuditInfo()))
-                    .debugApiEvent()
-            )
-            .build();
+        return Response.ok(
+            debugApiUseCase
+                .execute(new DebugApiUseCase.Input(api, DebugApiMapper.INSTANCE.fromEntity(debugApiEntity), getAuditInfo()))
+                .debugApiEvent()
+        ).build();
     }
 
     @GET
@@ -459,8 +455,7 @@ public class ApiResource extends AbstractResource {
     public Response rollbackApi(@Parameter(name = "api", required = true) @Valid @NotNull final RollbackApiEntity apiEntity) {
         try {
             ApiEntity rollbackedApi = apiService.rollback(GraviteeContext.getExecutionContext(), api, apiEntity);
-            return Response
-                .ok(rollbackedApi)
+            return Response.ok(rollbackedApi)
                 .tag(Long.toString(rollbackedApi.getUpdatedAt().getTime()))
                 .lastModified(rollbackedApi.getUpdatedAt())
                 .build();
@@ -486,8 +481,7 @@ public class ApiResource extends AbstractResource {
     @Permissions({ @Permission(value = RolePermission.API_DEFINITION, acls = RolePermissionAction.UPDATE) })
     public Response deprecated_updateApiWithDefinition(@RequestBody @Valid @NotNull Object apiDefinitionOrUrl) {
         ApiEntity updatedApi = apiDuplicatorService.createWithImportedDefinition(GraviteeContext.getExecutionContext(), apiDefinitionOrUrl);
-        return Response
-            .ok(updatedApi)
+        return Response.ok(updatedApi)
             .tag(Long.toString(updatedApi.getUpdatedAt().getTime()))
             .lastModified(updatedApi.getUpdatedAt())
             .build();
@@ -552,15 +546,16 @@ public class ApiResource extends AbstractResource {
     }
 
     private Response updateApiWithDefinitionOrUrl(Object apiDefinitionOrUrl) {
+        // Validate and sanitize inline images if present. Invalid images are ignored and treated as null.
+        Object sanitizedPayload = sanitizeInlineImages(apiDefinitionOrUrl);
         final ApiEntity apiEntity = (ApiEntity) getApi().getEntity();
 
         ApiEntity updatedApi = apiDuplicatorService.updateWithImportedDefinition(
             GraviteeContext.getExecutionContext(),
             apiEntity.getId(),
-            apiDefinitionOrUrl
+            sanitizedPayload
         );
-        return Response
-            .ok(updatedApi)
+        return Response.ok(updatedApi)
             .tag(Long.toString(updatedApi.getUpdatedAt().getTime()))
             .lastModified(updatedApi.getUpdatedAt())
             .build();
@@ -588,8 +583,7 @@ public class ApiResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         SwaggerApiEntity swaggerApiEntity = swaggerService.createAPI(executionContext, swaggerDescriptor);
         final ApiEntity updatedApi = apiService.updateFromSwagger(executionContext, api, swaggerApiEntity, swaggerDescriptor);
-        return Response
-            .ok(updatedApi)
+        return Response.ok(updatedApi)
             .tag(Long.toString(updatedApi.getUpdatedAt().getTime()))
             .lastModified(updatedApi.getUpdatedAt())
             .build();
@@ -621,8 +615,7 @@ public class ApiResource extends AbstractResource {
             DefinitionVersion.valueOfLabel(definitionVersion)
         );
         final ApiEntity updatedApi = apiService.updateFromSwagger(executionContext, api, swaggerApiEntity, swaggerDescriptor);
-        return Response
-            .ok(updatedApi)
+        return Response.ok(updatedApi)
             .tag(Long.toString(updatedApi.getUpdatedAt().getTime()))
             .lastModified(updatedApi.getUpdatedAt())
             .build();
@@ -649,8 +642,7 @@ public class ApiResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final ApiEntity apiEntity = apiService.findById(executionContext, api);
         final String apiDefinition = apiExportService.exportAsJson(executionContext, api, version, exclude.split(","));
-        return Response
-            .ok(apiDefinition)
+        return Response.ok(apiDefinition)
             .header(HttpHeaders.CONTENT_DISPOSITION, format("attachment;filename=%s", getExportFilename(apiEntity, "json")))
             .build();
     }
@@ -669,8 +661,7 @@ public class ApiResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final ApiEntity apiEntity = apiService.findById(executionContext, api);
 
-        final ApiExportQuery exportQuery = ApiExportQuery
-            .builder()
+        final ApiExportQuery exportQuery = ApiExportQuery.builder()
             .removeIds(exportParams.isRemoveIds())
             .contextPath(exportParams.getContextPath())
             .version(exportParams.getVersion())
@@ -681,8 +672,7 @@ public class ApiResource extends AbstractResource {
 
         final String apiDefinition = apiExportService.exportAsCustomResourceDefinition(executionContext, apiEntity.getId(), exportQuery);
 
-        return Response
-            .ok(apiDefinition)
+        return Response.ok(apiDefinition)
             .header(HttpHeaders.CONTENT_DISPOSITION, format("attachment;filename=%s", getExportFilename(apiEntity, "yml")))
             .build();
     }
@@ -721,8 +711,7 @@ public class ApiResource extends AbstractResource {
             page,
             DefinitionVersion.valueOfLabel(definitionVersion)
         );
-        return Response
-            .ok(updatedApi)
+        return Response.ok(updatedApi)
             .tag(Long.toString(updatedApi.getUpdatedAt().getTime()))
             .lastModified(updatedApi.getUpdatedAt())
             .build();
@@ -736,6 +725,7 @@ public class ApiResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         canReadApi(executionContext, api);
         final ApiEntity apiEntity = apiService.findById(executionContext, api);
+
         return qualityMetricsService.getMetrics(executionContext, apiEntity);
     }
 
@@ -796,18 +786,30 @@ public class ApiResource extends AbstractResource {
         switch (action) {
             case ASK:
                 hasPermission(GraviteeContext.getExecutionContext(), RolePermission.API_DEFINITION, api, RolePermissionAction.UPDATE);
-                updatedApi =
-                    apiService.askForReview(GraviteeContext.getExecutionContext(), apiEntity.getId(), getAuthenticatedUser(), reviewEntity);
+                updatedApi = apiService.askForReview(
+                    GraviteeContext.getExecutionContext(),
+                    apiEntity.getId(),
+                    getAuthenticatedUser(),
+                    reviewEntity
+                );
                 break;
             case ACCEPT:
                 hasPermission(GraviteeContext.getExecutionContext(), RolePermission.API_REVIEWS, api, RolePermissionAction.UPDATE);
-                updatedApi =
-                    apiService.acceptReview(GraviteeContext.getExecutionContext(), apiEntity.getId(), getAuthenticatedUser(), reviewEntity);
+                updatedApi = apiService.acceptReview(
+                    GraviteeContext.getExecutionContext(),
+                    apiEntity.getId(),
+                    getAuthenticatedUser(),
+                    reviewEntity
+                );
                 break;
             case REJECT:
                 hasPermission(GraviteeContext.getExecutionContext(), RolePermission.API_REVIEWS, api, RolePermissionAction.UPDATE);
-                updatedApi =
-                    apiService.rejectReview(GraviteeContext.getExecutionContext(), apiEntity.getId(), getAuthenticatedUser(), reviewEntity);
+                updatedApi = apiService.rejectReview(
+                    GraviteeContext.getExecutionContext(),
+                    apiEntity.getId(),
+                    getAuthenticatedUser(),
+                    reviewEntity
+                );
                 break;
         }
 
@@ -1053,5 +1055,47 @@ public class ApiResource extends AbstractResource {
         entity.setResources(null);
         entity.setPathMappings(null);
         entity.setResponseTemplates(null);
+    }
+
+    private Object sanitizeInlineImages(Object apiDefinitionOrUrl) {
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            if (apiDefinitionOrUrl instanceof JsonNode node && node.isObject()) {
+                ObjectNode root = (ObjectNode) node;
+                sanitizeImageField(root, "picture");
+                sanitizeImageField(root, "background");
+                return root;
+            }
+
+            if (apiDefinitionOrUrl instanceof String str) {
+                String trimmed = str.trim();
+                if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                    JsonNode parsed = mapper.readTree(trimmed);
+                    if (parsed.isObject()) {
+                        ObjectNode root = (ObjectNode) parsed;
+                        sanitizeImageField(root, "picture");
+                        sanitizeImageField(root, "background");
+                        return mapper.writeValueAsString(root);
+                    }
+                }
+            }
+        } catch (JsonProcessingException e) {
+            log.debug("Skipping inline image sanitization due to malformed JSON input", e);
+        } catch (Exception e) {
+            log.warn("Unexpected error while sanitizing inline images, returning original payload", e);
+        }
+
+        return apiDefinitionOrUrl;
+    }
+
+    private void sanitizeImageField(ObjectNode node, String fieldName) {
+        if (node.hasNonNull(fieldName) && node.get(fieldName).isTextual()) {
+            String value = node.get(fieldName).asText();
+            try {
+                ImageUtils.verify(value);
+            } catch (InvalidImageException e) {
+                node.putNull(fieldName); // replace invalid image with null
+            }
+        }
     }
 }

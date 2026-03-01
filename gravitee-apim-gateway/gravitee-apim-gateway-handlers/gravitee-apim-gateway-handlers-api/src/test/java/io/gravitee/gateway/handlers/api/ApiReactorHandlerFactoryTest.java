@@ -39,6 +39,7 @@ import io.gravitee.gateway.reactive.platform.organization.policy.OrganizationPol
 import io.gravitee.gateway.reactor.handler.HttpAcceptorFactory;
 import io.gravitee.gateway.reactor.handler.ReactorHandler;
 import io.gravitee.gateway.reactor.handler.context.ApiTemplateVariableProviderFactory;
+import io.gravitee.gateway.report.guard.LogGuardService;
 import io.gravitee.node.api.configuration.Configuration;
 import io.gravitee.node.opentelemetry.OpenTelemetryFactory;
 import io.gravitee.node.opentelemetry.configuration.OpenTelemetryConfiguration;
@@ -104,6 +105,9 @@ public class ApiReactorHandlerFactoryTest {
     @Mock
     private OpenTelemetryFactory openTelemetryFactory;
 
+    @Mock
+    private LogGuardService logGuardService;
+
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -113,30 +117,31 @@ public class ApiReactorHandlerFactoryTest {
         when(openTelemetryConfiguration.isTracesEnabled()).thenReturn(false);
         when(applicationContext.getBean(GatewayConfiguration.class)).thenReturn(gatewayConfiguration);
         when(applicationContext.getBean(ApiTemplateVariableProviderFactory.class)).thenReturn(apiTemplateVariableProviderFactory);
-        when(applicationContext.getBeanNamesForType(any(ResolvableType.class)))
-            .thenReturn(new String[] { "configurablePluginManager", "resourcePlugin" });
+        when(applicationContext.getBeanNamesForType(any(ResolvableType.class))).thenReturn(
+            new String[] { "configurablePluginManager", "resourcePlugin" }
+        );
 
-        apiContextHandlerFactory =
-            new ApiReactorHandlerFactory(
-                applicationContext,
-                configuration,
-                null,
-                v3PolicyFactoryCreator,
-                null,
-                organizationPolicyChainFactoryManager,
-                null,
-                policyChainProviderLoader,
-                apiProcessorChainFactory,
-                flowResolverFactory,
-                new RequestTimeoutConfiguration(2000L, 10L),
-                accessPointManager,
-                eventManager,
-                new HttpAcceptorFactory(false),
-                openTelemetryConfiguration,
-                openTelemetryFactory,
-                List.of(),
-                dictionaryManager
-            );
+        apiContextHandlerFactory = new ApiReactorHandlerFactory(
+            applicationContext,
+            configuration,
+            null,
+            v3PolicyFactoryCreator,
+            null,
+            organizationPolicyChainFactoryManager,
+            null,
+            policyChainProviderLoader,
+            apiProcessorChainFactory,
+            flowResolverFactory,
+            new RequestTimeoutConfiguration(2000L, 10L),
+            accessPointManager,
+            eventManager,
+            new HttpAcceptorFactory(false),
+            openTelemetryConfiguration,
+            openTelemetryFactory,
+            List.of(),
+            dictionaryManager,
+            logGuardService
+        );
     }
 
     @Test

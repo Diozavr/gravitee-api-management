@@ -17,6 +17,7 @@ package io.gravitee.gateway.reactive.debug.reactor.processor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.gravitee.gateway.env.GatewayConfiguration;
+import io.gravitee.gateway.reactive.core.connection.ConnectionDrainManager;
 import io.gravitee.gateway.reactive.core.processor.Processor;
 import io.gravitee.gateway.reactive.reactor.processor.DefaultPlatformProcessorChainFactory;
 import io.gravitee.gateway.reactive.reactor.processor.transaction.TransactionPreProcessorFactory;
@@ -46,7 +47,8 @@ public class DebugPlatformProcessorChainFactory extends DefaultPlatformProcessor
         final boolean tracing,
         final GatewayConfiguration gatewayConfiguration,
         final EventRepository eventRepository,
-        final ObjectMapper objectMapper
+        final ObjectMapper objectMapper,
+        final ConnectionDrainManager connectionDrainManager
     ) {
         super(
             transactionHandlerFactory,
@@ -56,11 +58,18 @@ public class DebugPlatformProcessorChainFactory extends DefaultPlatformProcessor
             eventProducer,
             node,
             port,
-            tracing,
-            gatewayConfiguration
+            gatewayConfiguration,
+            connectionDrainManager
         );
         this.eventRepository = eventRepository;
         this.objectMapper = objectMapper;
+    }
+
+    @Override
+    protected List<Processor> buildPreProcessorList() {
+        List<Processor> processorList = super.buildPreProcessorList();
+        processorList.add(new DebugInitProcessor());
+        return processorList;
     }
 
     @Override

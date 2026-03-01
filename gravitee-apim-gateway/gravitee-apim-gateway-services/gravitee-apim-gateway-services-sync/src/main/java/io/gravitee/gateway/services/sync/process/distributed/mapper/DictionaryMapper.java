@@ -23,11 +23,11 @@ import io.gravitee.repository.distributedsync.model.DistributedEvent;
 import io.gravitee.repository.distributedsync.model.DistributedEventType;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Date;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class DictionaryMapper {
 
     private final ObjectMapper objectMapper;
@@ -36,8 +36,7 @@ public class DictionaryMapper {
         return Maybe.fromCallable(() -> {
             try {
                 final Dictionary dictionary = objectMapper.readValue(event.getPayload(), Dictionary.class);
-                return DictionaryDeployable
-                    .builder()
+                return DictionaryDeployable.builder()
                     .id(dictionary.getId())
                     .dictionary(dictionary)
                     .syncAction(SyncActionMapper.to(event.getSyncAction()))
@@ -52,8 +51,7 @@ public class DictionaryMapper {
     public Maybe<DistributedEvent> to(final DictionaryDeployable deployable) {
         return Maybe.fromCallable(() -> {
             try {
-                DistributedEvent.DistributedEventBuilder builder = DistributedEvent
-                    .builder()
+                DistributedEvent.DistributedEventBuilder builder = DistributedEvent.builder()
                     .id(deployable.id())
                     .type(DistributedEventType.DICTIONARY)
                     .syncAction(SyncActionMapper.to(deployable.syncAction()))

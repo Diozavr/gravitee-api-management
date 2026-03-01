@@ -62,19 +62,22 @@ import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import lombok.CustomLog;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @Getter
 @RequiredArgsConstructor
 public class HttpHealthCheckService implements ApiService {
@@ -121,7 +124,7 @@ public class HttpHealthCheckService implements ApiService {
 
     @Override
     public Completable stop() {
-        log.info("Stopping health check service for api {}.", api.getName());
+        log.info("Stopping health check service for api {}.", api.getId());
 
         // Stop listening to endpoint events.
         endpointManager.removeListener(listenerId);
@@ -157,7 +160,7 @@ public class HttpHealthCheckService implements ApiService {
                 jobs.computeIfAbsent(endpoint, managedEndpoint -> scheduleInBackground(endpoint, hcConfiguration));
             }
         } catch (PluginConfigurationException e) {
-            log.warn("Unable to start healthcheck for api [{}] and endpoint [{}].", api.getName(), endpoint.getDefinition().getName());
+            log.warn("Unable to start healthcheck for api [{}] and endpoint [{}].", api.getId(), endpoint.getDefinition().getName());
         }
     }
 
@@ -186,11 +189,15 @@ public class HttpHealthCheckService implements ApiService {
         );
         final CronTrigger cron = new CronTrigger(hcConfiguration.getSchedule());
         final AtomicLong errorCount = new AtomicLong(0);
+        final AtomicReference<HttpHealthCheckExecutionContext> lastCtx = new AtomicReference<>();
 
-        return Observable
-            .defer(() -> Observable.timer(cron.nextExecutionIn(), TimeUnit.MILLISECONDS))
+        final int jitterMs = gatewayConfiguration.healthCheckJitterInMs();
+        final int spreadOffsetMs = Math.floorMod(Objects.hash(api.getId(), endpoint.getDefinition().getName()), jitterMs + 1);
+
+        return Observable.defer(() -> Observable.timer(cron.nextExecutionIn() + spreadOffsetMs, TimeUnit.MILLISECONDS))
             .switchMapCompletable(aLong -> {
                 final HttpHealthCheckExecutionContext ctx = new HttpHealthCheckExecutionContext(hcConfiguration, deploymentContext);
+                lastCtx.set(ctx);
 
                 if (endpoint.getDefinition().getType().startsWith("http")) {
                     return checkUsingEndpointConnector(hcConfiguration, hcManagedEndpoint, ctx);
@@ -198,15 +205,20 @@ public class HttpHealthCheckService implements ApiService {
                     return checkUsingHttpClient(hcConfiguration, hcManagedEndpoint, ctx);
                 }
             })
-            .onErrorResumeNext(throwable -> continueOnError(endpoint, errorCount, throwable))
+            .onErrorResumeNext(throwable -> continueOnError(lastCtx, endpoint, errorCount, throwable))
             .repeat()
             .subscribe(
                 () -> {},
                 throwable -> {
-                    log.error("Unable to run health check", throwable);
+                    logFromNullableExecutionContext(lastCtx).error("Unable to run health check for API {}", api.getId(), throwable);
                     jobs.remove(endpoint);
                 }
             );
+    }
+
+    private static Logger logFromNullableExecutionContext(AtomicReference<HttpHealthCheckExecutionContext> ctxRef) {
+        var context = ctxRef.get();
+        return context != null ? context.withLogger(log) : log;
     }
 
     private Completable checkUsingEndpointConnector(
@@ -255,7 +267,7 @@ public class HttpHealthCheckService implements ApiService {
 
     private CompletableSource ignoreConnectionError(HttpHealthCheckExecutionContext ctx, Throwable err) {
         if (err instanceof UnknownHostException || err instanceof SocketException) {
-            log.debug("HealthCheck failed, unable to connect to the Service", err);
+            ctx.withLogger(log).debug("HealthCheck failed for API {}, unable to connect to the Service", api.getId(), err);
             final Response response = ctx.response();
             response.status(UNREACHABLE_SERVICE);
             if (!Strings.isNullOrEmpty(err.getMessage())) {
@@ -266,16 +278,21 @@ public class HttpHealthCheckService implements ApiService {
         return Completable.error(err);
     }
 
-    private Completable continueOnError(ManagedEndpoint endpoint, AtomicLong errorCount, Throwable throwable) {
+    private Completable continueOnError(
+        AtomicReference<HttpHealthCheckExecutionContext> ctxRef,
+        ManagedEndpoint endpoint,
+        AtomicLong errorCount,
+        Throwable throwable
+    ) {
         if (errorCount.incrementAndGet() == 1) {
-            log.warn(
+            logFromNullableExecutionContext(ctxRef).warn(
                 "Unable to run health check for api [{}] and endpoint [{}].",
                 api.getId(),
                 endpoint.getDefinition().getName(),
                 throwable
             );
         } else if ((errorCount.get() % LOG_ERROR_COUNT == 0)) {
-            log.warn(
+            logFromNullableExecutionContext(ctxRef).warn(
                 "Unable to run health check for api [{}] and endpoint [{}] (times: {}, see previous log report for details).",
                 api.getId(),
                 endpoint.getDefinition().getName(),
@@ -298,14 +315,12 @@ public class HttpHealthCheckService implements ApiService {
             synchronized (this) {
                 // Double-checked locking.
                 if (httpClientCreated.compareAndSet(false, true)) {
-                    httpClient =
-                        VertxHttpClientFactory
-                            .builder()
-                            .vertx(deploymentContext.getComponent(Vertx.class))
-                            .nodeConfiguration(deploymentContext.getComponent(Configuration.class))
-                            .defaultTarget(hcConfiguration.getTarget())
-                            .build()
-                            .createHttpClient();
+                    httpClient = VertxHttpClientFactory.builder()
+                        .vertx(deploymentContext.getComponent(Vertx.class))
+                        .nodeConfiguration(deploymentContext.getComponent(Configuration.class))
+                        .defaultTarget(hcConfiguration.getTarget())
+                        .build()
+                        .createHttpClient();
                 }
             }
         }
@@ -364,12 +379,13 @@ public class HttpHealthCheckService implements ApiService {
                     reportRequest.setUri(ctx.metrics().getEndpoint());
                     reportResponse.setStatus(response.status());
 
-                    final EndpointStatus.Builder statusBuilder = EndpointStatus
-                        .forEndpoint(api.getId(), api.getName(), hcEndpoint.getDefinition().getName())
-                        .on(request.timestamp());
+                    final EndpointStatus.Builder statusBuilder = EndpointStatus.forEndpoint(
+                        api.getId(),
+                        api.getName(),
+                        hcEndpoint.getDefinition().getName()
+                    ).on(request.timestamp());
 
-                    final EndpointStatus.StepBuilder stepBuilder = EndpointStatus
-                        .forStep(DEFAULT_STEP)
+                    final EndpointStatus.StepBuilder stepBuilder = EndpointStatus.forStep(DEFAULT_STEP)
                         .request(reportRequest)
                         .response(reportResponse)
                         .responseTime(currentTimestamp - request.timestamp());

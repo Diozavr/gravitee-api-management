@@ -13,27 +13,73 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@use '../../scss/theme' as theme;
+
 .subscription-info {
   height: 100%;
 
   &__header {
-    padding: 8px 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 32px;
+
+    h1 {
+      margin: 5px 0 5px;
+    }
   }
 
   &__content-row {
+    display: contents;
+
     span:first-child {
+      display: flex;
+      align-items: center;
       margin-right: 5px;
+      color: theme.$paragraph-color;
+      white-space: nowrap;
     }
   }
 
   &__content {
     display: flex;
     flex-flow: column;
-    gap: 32px;
-  }
-}
+    gap: 15px;
 
-.banner-body {
-  display: flex;
-  gap: 8px;
+    &__subsections {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px 100px;
+    }
+
+    &__grid {
+      display: grid;
+      grid-auto-rows: 22px;
+      grid-gap: 15px 30px;
+      grid-template-columns: min-content 1fr;
+    }
+  }
+
+  &__failure {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding-top: 30px;
+    gap: 10px;
+
+    &__banner {
+      display: flex;
+      padding: 0 10px;
+      gap: 8px;
+
+      &__icon {
+        overflow: visible;
+      }
+
+      &__cause {
+        display: flex;
+        flex-direction: column;
+      }
+    }
+  }
 }

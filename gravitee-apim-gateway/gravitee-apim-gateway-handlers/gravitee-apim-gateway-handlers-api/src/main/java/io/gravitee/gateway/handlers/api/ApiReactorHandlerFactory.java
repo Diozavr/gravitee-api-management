@@ -78,6 +78,7 @@ import io.gravitee.gateway.reactor.handler.HttpAcceptorFactory;
 import io.gravitee.gateway.reactor.handler.ReactorHandler;
 import io.gravitee.gateway.reactor.handler.context.DefaultV3ExecutionContextFactory;
 import io.gravitee.gateway.reactor.handler.context.V3ExecutionContextFactory;
+import io.gravitee.gateway.report.guard.LogGuardService;
 import io.gravitee.gateway.resource.ResourceConfigurationFactory;
 import io.gravitee.gateway.resource.ResourceLifecycleManager;
 import io.gravitee.gateway.resource.internal.ResourceConfigurationFactoryImpl;
@@ -103,8 +104,7 @@ import io.gravitee.resource.api.ResourceManager;
 import io.vertx.core.Vertx;
 import java.util.ArrayList;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.ResolvableType;
 
@@ -112,6 +112,7 @@ import org.springframework.core.ResolvableType;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class ApiReactorHandlerFactory implements ReactorFactory<Api> {
 
     public static final String CLASSLOADER_LEGACY_ENABLED_PROPERTY = "classloader.legacy.enabled";
@@ -123,7 +124,6 @@ public class ApiReactorHandlerFactory implements ReactorFactory<Api> {
     protected final ContentTemplateVariableProvider contentTemplateVariableProvider;
     protected final Node node;
 
-    private final Logger logger = LoggerFactory.getLogger(ApiReactorHandlerFactory.class);
     private final Configuration configuration;
     private final io.gravitee.gateway.policy.PolicyFactoryCreator v3PolicyFactoryCreator;
     private final io.gravitee.gateway.reactive.policy.PolicyFactoryManager policyFactoryManager;
@@ -141,6 +141,7 @@ public class ApiReactorHandlerFactory implements ReactorFactory<Api> {
     private final List<InstrumenterTracerFactory> instrumenterTracerFactories;
     private final DictionaryManager dictionaryManager;
     private ApplicationContext applicationContext;
+    private final LogGuardService logGuardService;
 
     public ApiReactorHandlerFactory(
         ApplicationContext applicationContext,
@@ -160,7 +161,8 @@ public class ApiReactorHandlerFactory implements ReactorFactory<Api> {
         OpenTelemetryConfiguration openTelemetryConfiguration,
         OpenTelemetryFactory openTelemetryFactory,
         List<InstrumenterTracerFactory> instrumenterTracerFactories,
-        DictionaryManager dictionaryManager
+        DictionaryManager dictionaryManager,
+        LogGuardService logGuardService
     ) {
         this.applicationContext = applicationContext;
         this.configuration = configuration;
@@ -181,6 +183,7 @@ public class ApiReactorHandlerFactory implements ReactorFactory<Api> {
         this.instrumenterTracerFactories = instrumenterTracerFactories;
         this.dictionaryManager = dictionaryManager;
         this.contentTemplateVariableProvider = new ContentTemplateVariableProvider();
+        this.logGuardService = logGuardService;
     }
 
     @Override
@@ -333,10 +336,10 @@ public class ApiReactorHandlerFactory implements ReactorFactory<Api> {
                     );
                 }
             } else {
-                logger.warn("Api is disabled !");
+                log.warn("Api is disabled !");
             }
         } catch (Exception ex) {
-            logger.error("Unexpected error while creating API handler", ex);
+            log.error("Unexpected error while creating API handler", ex);
         }
 
         return null;
@@ -374,7 +377,8 @@ public class ApiReactorHandlerFactory implements ReactorFactory<Api> {
             accessPointManager,
             eventManager,
             httpAcceptorFactory,
-            createTracingContext(api, "API_V2_EMULATED")
+            createTracingContext(api, "API_V2_EMULATED"),
+            logGuardService
         );
     }
 

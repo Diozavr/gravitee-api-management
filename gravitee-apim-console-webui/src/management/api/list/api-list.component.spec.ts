@@ -67,16 +67,22 @@ describe('ApisListComponent', () => {
             actions: '',
             access: 'Access',
             categories: 'Categories',
-            definitionVersion: 'Definition',
+            apiType: 'API Type',
             name: 'Name',
             owner: 'Owner',
             picture: '',
-            states: 'Status',
-            tags: 'Tags',
-            visibility: 'Visibility',
+            portalStatus: 'Portal Status',
+            states: 'API Status',
+            tags: 'Sharding Tags',
+            visibility: 'Portal Visibility',
           },
         ]);
-        expect(rowCells).toEqual([['There is no API (yet).']]);
+        expect(rowCells).toHaveLength(0);
+
+        const table = await loader.getHarness(MatTableHarness.with({ selector: '#apisTable' }));
+        const tableElement = await table.host();
+
+        expect(await tableElement.text()).toContain('There is no API (yet).');
       }));
 
       it('should display a table with one row', fakeAsync(async () => {
@@ -84,7 +90,9 @@ describe('ApisListComponent', () => {
         await initComponent([api]);
 
         const { rowCells } = await computeApisTableCells();
-        expect(rowCells).toEqual([['', '🪐 Planets (1.0)', 'V2 Gravitee', '', '/planets', '', '', 'admin', 'public', 'edit']]);
+        expect(rowCells).toEqual([
+          ['', '🪐 Planets (1.0)', 'V2 HTTP Proxy Gravitee', '', '/planets', '', '', 'admin', '', 'public', 'edit'],
+        ]);
         expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
       }));
 
@@ -93,7 +101,7 @@ describe('ApisListComponent', () => {
         await initComponent([api]);
 
         const { rowCells } = await computeApisTableCells();
-        expect(rowCells).toEqual([['', '🪐 Planets (1.0)', 'V4 - Message Gravitee', '', '', '', '', 'admin', 'public', 'edit']]);
+        expect(rowCells).toEqual([['', '🪐 Planets (1.0)', 'Message Gravitee', '', '', '', '', 'admin', '', 'public', 'edit']]);
         expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
       }));
 
@@ -102,7 +110,9 @@ describe('ApisListComponent', () => {
         await initComponent([api]);
 
         const { rowCells } = await computeApisTableCells();
-        expect(rowCells).toEqual([['', '🪐 Planets (1.0)', 'V2 Gravitee', '', '/planets', '', '', 'admin', 'public', 'edit']]);
+        expect(rowCells).toEqual([
+          ['', '🪐 Planets (1.0)', 'V2 HTTP Proxy Gravitee', '', '/planets', '', '', 'admin', '', 'public', 'edit'],
+        ]);
         expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
       }));
 
@@ -129,7 +139,7 @@ describe('ApisListComponent', () => {
 
         const { rowCells } = await computeApisTableCells();
         expect(rowCells).toEqual([
-          ['', '🪐 Planets (1.0)', 'V4 - Message Gravitee', '', '/test/ws 2 more', '', '', 'admin', 'public', 'edit'],
+          ['', '🪐 Planets (1.0)', 'Message Gravitee', '', '/test/ws 2 more', '', '', 'admin', '', 'public', 'edit'],
         ]);
         expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
       }));
@@ -153,7 +163,9 @@ describe('ApisListComponent', () => {
         await initComponent([api]);
 
         const { rowCells } = await computeApisTableCells();
-        expect(rowCells).toEqual([['', '🪐 Planets (1.0)', 'V2 Gravitee', '', '/test/ws 2 more', '', '', 'admin', 'public', 'edit']]);
+        expect(rowCells).toEqual([
+          ['', '🪐 Planets (1.0)', 'V2 HTTP Proxy Gravitee', '', '/test/ws 2 more', '', '', 'admin', '', 'public', 'edit'],
+        ]);
         expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
       }));
 
@@ -183,7 +195,7 @@ describe('ApisListComponent', () => {
 
         const { rowCells } = await computeApisTableCells();
         expect(rowCells).toEqual([
-          ['', '🪐 Planets (1.0)', 'V4 - Message Gravitee', '', 'test.domain.com/test/ws 2 more', '', '', 'admin', 'public', 'edit'],
+          ['', '🪐 Planets (1.0)', 'Message Gravitee', '', 'test.domain.com/test/ws 2 more', '', '', 'admin', '', 'public', 'edit'],
         ]);
         expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
       }));
@@ -211,7 +223,7 @@ describe('ApisListComponent', () => {
 
         const { rowCells } = await computeApisTableCells();
         expect(rowCells).toEqual([
-          ['', '🪐 Planets (1.0)', 'V2 Gravitee', '', 'test.domain.com/test/ws 2 more', '', '', 'admin', 'public', 'edit'],
+          ['', '🪐 Planets (1.0)', 'V2 HTTP Proxy Gravitee', '', 'test.domain.com/test/ws 2 more', '', '', 'admin', '', 'public', 'edit'],
         ]);
         expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
       }));
@@ -219,14 +231,14 @@ describe('ApisListComponent', () => {
       it('should allow new search on request throw', fakeAsync(async () => {
         await initComponent([]);
 
-        await loader.getHarness(GioTableWrapperHarness).then((tableWrapper) => tableWrapper.setSearchValue('bad-search'));
+        await loader.getHarness(GioTableWrapperHarness).then(tableWrapper => tableWrapper.setSearchValue('bad-search'));
         await tick(400);
         const req = httpTestingController.expectOne(`${CONSTANTS_TESTING.env.v2BaseURL}/apis/_search?page=1&perPage=25`);
         expect(req.request.body).toEqual({ query: 'bad-search' });
 
         req.flush('Internal error', { status: 500, statusText: 'Internal error' });
 
-        await loader.getHarness(GioTableWrapperHarness).then((tableWrapper) => tableWrapper.setSearchValue('good-search'));
+        await loader.getHarness(GioTableWrapperHarness).then(tableWrapper => tableWrapper.setSearchValue('good-search'));
 
         expectApisListRequest([], null, 'good-search');
       }));
@@ -247,16 +259,14 @@ describe('ApisListComponent', () => {
         const apis = [planetsApi, unicornsApi];
         await initComponent(apis);
 
-        const nameSort = await loader
-          .getHarness(MatSortHeaderHarness.with({ selector: '#name' }))
-          .then((sortHarness) => sortHarness.host());
+        const nameSort = await loader.getHarness(MatSortHeaderHarness.with({ selector: '#name' })).then(sortHarness => sortHarness.host());
         await nameSort.click();
-        apis.map((api) => expectSyncedApi(api.id, true));
+        apis.map(api => expectSyncedApi(api.id, true));
         expectApisListRequest(apis, 'name');
 
         fixture.detectChanges();
         await nameSort.click();
-        apis.map((api) => expectSyncedApi(api.id, true));
+        apis.map(api => expectSyncedApi(api.id, true));
         expectApisListRequest(apis, '-name');
       }));
 
@@ -268,14 +278,14 @@ describe('ApisListComponent', () => {
 
         const accessSort = await loader
           .getHarness(MatSortHeaderHarness.with({ selector: '#access' }))
-          .then((sortHarness) => sortHarness.host());
+          .then(sortHarness => sortHarness.host());
         await accessSort.click();
-        apis.map((api) => expectSyncedApi(api.id, true));
+        apis.map(api => expectSyncedApi(api.id, true));
         expectApisListRequest(apis, 'paths');
 
         fixture.detectChanges();
         await accessSort.click();
-        apis.map((api) => expectSyncedApi(api.id, true));
+        apis.map(api => expectSyncedApi(api.id, true));
         expectApisListRequest(apis, '-paths');
       }));
 
@@ -316,7 +326,9 @@ describe('ApisListComponent', () => {
       it('should display quality columns', fakeAsync(async () => {
         await initComponent(fakeApiV2());
         const { rowCells } = await computeApisTableCells();
-        expect(rowCells).toEqual([['', '🪐 Planets (1.0)', 'V2 Gravitee', '', '/planets', '100%', '', '', 'admin', 'public', 'edit']]);
+        expect(rowCells).toEqual([
+          ['', '🪐 Planets (1.0)', 'V2 HTTP Proxy Gravitee', '', '/planets', '100%', '', '', 'admin', '', 'public', 'edit'],
+        ]);
         expect(fixture.debugElement.query(By.css('.quality-score__good'))).toBeTruthy();
         expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
       }));
@@ -335,15 +347,22 @@ describe('ApisListComponent', () => {
         expectApisListRequest([api], 'name');
         loader = TestbedHarnessEnvironment.loader(fixture);
         expectSyncedApi(api.id, true);
+        expectTagsRequest();
         expectQualityRequest(api.id, score);
+        httpTestingController.verify();
         fixture.detectChanges();
       }
 
-      function expectQualityRequest(apiId: string, score: number) {
+      function expectTagsRequest() {
         // wait debounceTime
         fixture.detectChanges();
         tick();
 
+        const reqTags = httpTestingController.expectOne(`${CONSTANTS_TESTING.org.baseURL}/configuration/tags`);
+        reqTags.flush([{ id: 'tag-1' }, { id: 'tag-2' }]);
+      }
+
+      function expectQualityRequest(apiId: string, score: number) {
         const req = httpTestingController.expectOne(`${CONSTANTS_TESTING.env.baseURL}/apis/${apiId}/quality`);
         expect(req.request.method).toEqual('GET');
         req.flush({ score });
@@ -351,7 +370,6 @@ describe('ApisListComponent', () => {
         const reqCat = httpTestingController.expectOne(`${CONSTANTS_TESTING.env.baseURL}/configuration/categories`);
         expect(reqCat.request.method).toEqual('GET');
         reqCat.flush([]);
-        httpTestingController.verify();
       }
     });
   });
@@ -391,19 +409,20 @@ describe('ApisListComponent', () => {
         {
           actions: '',
           access: 'Access',
-          definitionVersion: 'Definition',
+          apiType: 'API Type',
           name: 'Name',
           owner: 'Owner',
           picture: '',
+          portalStatus: 'Portal Status',
           qualityScore: 'Quality',
-          states: 'Status',
-          tags: 'Tags',
+          states: 'API Status',
+          tags: 'Sharding Tags',
           categories: 'Categories',
-          visibility: 'Visibility',
+          visibility: 'Portal Visibility',
         },
       ]);
       expect(rowCells).toEqual([
-        ['', '🪐 Planets (1.0)', 'V4 - TCP Proxy Gravitee', '', 'foo.example.com 1 more', '', '', '', 'admin', 'public', 'edit'],
+        ['', '🪐 Planets (1.0)', 'TCP Proxy Gravitee', '', 'foo.example.com 1 more', '', '', '', 'admin', '', 'public', 'edit'],
       ]);
       expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
     }));
@@ -437,8 +456,107 @@ describe('ApisListComponent', () => {
 
         const { rowCells } = await computeApisTableCells();
         expect(rowCells).toEqual([
-          ['', '🪐 Planets (1.0)', 'V4 - Kafka Gravitee', '', 'kafka-host:1000', '', '', '', 'admin', 'public', 'edit'],
+          ['', '🪐 Planets (1.0)', 'Kafka Native Gravitee', '', 'kafka-host:1000', '', '', '', 'admin', '', 'public', 'edit'],
         ]);
+        expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
+      }));
+
+      async function initComponent(apis: Api[]) {
+        // APIs are sorted by name by default
+        expectApisListRequest(apis, 'name');
+        loader = TestbedHarnessEnvironment.loader(fixture);
+        fixture.detectChanges();
+      }
+    });
+  });
+
+  describe('with MCP Proxy API', () => {
+    describe('without quality score', () => {
+      beforeEach(() => {
+        TestBed.configureTestingModule({
+          imports: [ApiListModule, MatIconTestingModule, NoopAnimationsModule, GioTestingModule],
+          providers: [
+            { provide: GioTestingPermissionProvider, useValue: ['environment-api-c'] },
+            { provide: Constants, useValue: fakeConstants },
+          ],
+        }).compileComponents();
+
+        fixture = TestBed.createComponent(ApiListComponent);
+        httpTestingController = TestBed.inject(HttpTestingController);
+      });
+
+      it('should display a table with one row', fakeAsync(async () => {
+        const api = fakeApiV4({ type: 'MCP_PROXY', listeners: [] });
+        await initComponent([api]);
+
+        const { rowCells } = await computeApisTableCells();
+        expect(rowCells).toEqual([['', '🪐 Planets (1.0)', 'MCP Proxy Gravitee', '', '', '', '', '', 'admin', '', 'public', 'edit']]);
+        expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
+      }));
+
+      async function initComponent(apis: Api[]) {
+        // APIs are sorted by name by default
+        expectApisListRequest(apis, 'name');
+        loader = TestbedHarnessEnvironment.loader(fixture);
+        fixture.detectChanges();
+      }
+    });
+  });
+
+  describe('with A2A Proxy API', () => {
+    describe('without quality score', () => {
+      beforeEach(() => {
+        TestBed.configureTestingModule({
+          imports: [ApiListModule, MatIconTestingModule, NoopAnimationsModule, GioTestingModule],
+          providers: [
+            { provide: GioTestingPermissionProvider, useValue: ['environment-api-c'] },
+            { provide: Constants, useValue: fakeConstants },
+          ],
+        }).compileComponents();
+
+        fixture = TestBed.createComponent(ApiListComponent);
+        httpTestingController = TestBed.inject(HttpTestingController);
+      });
+
+      it('should display a table with one row', fakeAsync(async () => {
+        const api = fakeApiV4({ type: 'A2A_PROXY', listeners: [] });
+        await initComponent([api]);
+
+        const { rowCells } = await computeApisTableCells();
+        expect(rowCells).toEqual([['', '🪐 Planets (1.0)', 'A2A Proxy Gravitee', '', '', '', '', '', 'admin', '', 'public', 'edit']]);
+        expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
+      }));
+
+      async function initComponent(apis: Api[]) {
+        // APIs are sorted by name by default
+        expectApisListRequest(apis, 'name');
+        loader = TestbedHarnessEnvironment.loader(fixture);
+        fixture.detectChanges();
+      }
+    });
+  });
+
+  describe('with LLM Proxy API', () => {
+    describe('without quality score', () => {
+      beforeEach(() => {
+        TestBed.configureTestingModule({
+          imports: [ApiListModule, MatIconTestingModule, NoopAnimationsModule, GioTestingModule],
+          providers: [
+            { provide: GioTestingPermissionProvider, useValue: ['environment-api-c'] },
+            { provide: Constants, useValue: fakeConstants },
+          ],
+        }).compileComponents();
+
+        fixture = TestBed.createComponent(ApiListComponent);
+        httpTestingController = TestBed.inject(HttpTestingController);
+      });
+
+      it('should display a table with one row', fakeAsync(async () => {
+        const api = fakeApiV4({ type: 'LLM_PROXY', listeners: [] });
+        await initComponent([api]);
+
+        const { rowCells } = await computeApisTableCells();
+        expect(rowCells).toEqual([['', '🪐 Planets (1.0)', 'LLM Proxy Gravitee', '', '', '', '', '', 'admin', '', 'public', 'edit']]);
         expect(await loader.getHarness(MatIconHarness.with({ selector: '.states__api-started' }))).toBeTruthy();
       }));
 
@@ -455,10 +573,10 @@ describe('ApisListComponent', () => {
     const table = await loader.getHarness(MatTableHarness.with({ selector: '#apisTable' }));
 
     const headerRows = await table.getHeaderRows();
-    const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+    const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
     const rows = await table.getRows();
-    const rowCells = await parallel(() => rows.map((row) => row.getCellTextByIndex()));
+    const rowCells = await parallel(() => rows.map(row => row.getCellTextByIndex()));
     return { headerCells, rowCells };
   }
 

@@ -31,19 +31,17 @@ import io.gravitee.rest.api.service.common.IdBuilder;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Response;
+import lombok.CustomLog;
 
 /**
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class SharedPolicyGroupResource extends AbstractResource {
-
-    @PathParam("hrid")
-    private String hrid;
 
     @Inject
     private SharedPolicyGroupCrudService sharedPolicyGroupCrudService;
@@ -53,33 +51,32 @@ public class SharedPolicyGroupResource extends AbstractResource {
 
     @GET
     @Permissions({ @Permission(value = RolePermission.ENVIRONMENT_SHARED_POLICY_GROUP, acls = { RolePermissionAction.READ }) })
-    public Response get() {
+    public Response get(@PathParam("hrid") String hrid, @QueryParam("legacy") boolean legacy) {
         var executionContext = GraviteeContext.getExecutionContext();
 
         try {
             var sharedPolicyGroup = sharedPolicyGroupCrudService.getByEnvironmentId(
                 executionContext.getEnvironmentId(),
-                IdBuilder.builder(executionContext, hrid).buildId()
+                legacy ? hrid : IdBuilder.builder(executionContext, hrid).buildId()
             );
             return Response.ok(SharedPolicyGroupMapper.INSTANCE.toState(sharedPolicyGroup)).build();
         } catch (SharedPolicyGroupNotFoundException e) {
+            log.warn("SharedPolicyGroup not found for hrid: {}, operation: get", hrid);
             throw new HRIDNotFoundException(hrid);
         }
     }
 
     @DELETE
     @Permissions({ @Permission(value = RolePermission.ENVIRONMENT_SHARED_POLICY_GROUP, acls = { RolePermissionAction.DELETE }) })
-    public Response delete(@QueryParam("dryRun") boolean dryRun) {
+    public Response delete(@PathParam("hrid") String hrid, @QueryParam("dryRun") boolean dryRun, @QueryParam("legacy") boolean legacy) {
         var executionContext = GraviteeContext.getExecutionContext();
         var userDetails = getAuthenticatedUserDetails();
 
-        var auditInfo = AuditInfo
-            .builder()
+        var auditInfo = AuditInfo.builder()
             .organizationId(executionContext.getOrganizationId())
             .environmentId(executionContext.getEnvironmentId())
             .actor(
-                AuditActor
-                    .builder()
+                AuditActor.builder()
                     .userId(userDetails.getUsername())
                     .userSource(userDetails.getSource())
                     .userSourceId(userDetails.getSourceId())
@@ -90,12 +87,13 @@ public class SharedPolicyGroupResource extends AbstractResource {
         try {
             var sharedPolicyGroup = sharedPolicyGroupCrudService.getByEnvironmentId(
                 executionContext.getEnvironmentId(),
-                IdBuilder.builder(auditInfo, hrid).buildId()
+                legacy ? hrid : IdBuilder.builder(executionContext, hrid).buildId()
             );
             if (!dryRun) {
                 deleteSharedPolicyGroupUseCase.execute(new DeleteSharedPolicyGroupUseCase.Input(sharedPolicyGroup.getId(), auditInfo));
             }
         } catch (SharedPolicyGroupNotFoundException e) {
+            log.warn("SharedPolicyGroup not found for hrid: {}, operation: delete", hrid);
             throw new HRIDNotFoundException(hrid);
         }
 

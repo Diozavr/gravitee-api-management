@@ -75,7 +75,7 @@ public class IntegrationControllerConfiguration {
     @Bean("integrationControllerCommandHandlerFactory")
     public IntegrationControllerCommandHandlerFactory integrationControllerCommandHandlerFactory(
         final CheckIntegrationUseCase checkIntegrationUseCase,
-        final IngestFederatedApisUseCase ingestFederatedApisUseCase
+        final @Lazy IngestFederatedApisUseCase ingestFederatedApisUseCase
     ) {
         return new IntegrationControllerCommandHandlerFactory(checkIntegrationUseCase, ingestFederatedApisUseCase);
     }
@@ -89,9 +89,9 @@ public class IntegrationControllerConfiguration {
         final KeyStoreLoaderFactoryRegistry<KeyStoreLoaderOptions> keyStoreLoaderFactoryRegistry,
         final KeyStoreLoaderFactoryRegistry<TrustStoreLoaderOptions> trustStoreLoaderFactoryRegistry,
         final @Qualifier("integrationIdentifyConfiguration") IdentifyConfiguration identifyConfiguration,
-        final @Qualifier(
-            "integrationWebsocketControllerAuthentication"
-        ) WebSocketControllerAuthentication<?> integrationWebsocketControllerAuthentication,
+        final @Qualifier("integrationWebsocketControllerAuthentication") WebSocketControllerAuthentication<
+            ?
+        > integrationWebsocketControllerAuthentication,
         final @Qualifier(
             "integrationControllerCommandHandlerFactory"
         ) ControllerCommandHandlersFactory integrationControllerCommandHandlerFactory,

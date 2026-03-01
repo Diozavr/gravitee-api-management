@@ -23,6 +23,7 @@ import io.gravitee.repository.management.api.search.Pageable;
 import io.gravitee.repository.management.api.search.Sortable;
 import io.gravitee.repository.management.api.search.SubscriptionCriteria;
 import io.gravitee.repository.management.model.Subscription;
+import io.gravitee.repository.management.model.SubscriptionReferenceType;
 import io.gravitee.repository.mongodb.management.internal.model.SubscriptionMongo;
 import io.gravitee.repository.mongodb.management.internal.plan.SubscriptionMongoRepository;
 import io.gravitee.repository.mongodb.management.mapper.GraviteeMapper;
@@ -32,8 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -41,10 +41,9 @@ import org.springframework.stereotype.Component;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class MongoSubscriptionRepository implements SubscriptionRepository {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(MongoSubscriptionRepository.class);
 
     @Autowired
     private GraviteeMapper mapper;
@@ -111,17 +110,17 @@ public class MongoSubscriptionRepository implements SubscriptionRepository {
 
     @Override
     public List<String> deleteByEnvironmentId(String environmentId) throws TechnicalException {
-        LOGGER.debug("Delete subscriptions by environment [{}]", environmentId);
+        log.debug("Delete subscriptions by environment [{}]", environmentId);
         try {
             final var subscriptionMongos = internalSubscriptionRepository
                 .deleteByEnvironmentId(environmentId)
                 .stream()
                 .map(SubscriptionMongo::getId)
                 .toList();
-            LOGGER.debug("Delete subscriptions by environment [{}] - Done", environmentId);
+            log.debug("Delete subscriptions by environment [{}] - Done", environmentId);
             return subscriptionMongos;
         } catch (Exception e) {
-            LOGGER.error("Failed to delete subscriptions by environment [{}]", environmentId, e);
+            log.error("Failed to delete subscriptions by environment [{}]", environmentId, e);
             throw new TechnicalException("Failed to delete subscriptions by environment");
         }
     }
@@ -143,5 +142,34 @@ public class MongoSubscriptionRepository implements SubscriptionRepository {
 
     private Subscription map(SubscriptionMongo subscriptionMongo) {
         return (subscriptionMongo == null) ? null : mapper.map(subscriptionMongo);
+    }
+
+    @Override
+    public Set<Subscription> findByReferenceIdAndReferenceType(String referenceId, SubscriptionReferenceType referenceType)
+        throws TechnicalException {
+        try {
+            return internalSubscriptionRepository
+                .findByReferenceIdAndReferenceType(referenceId, referenceType.name())
+                .stream()
+                .map(this::map)
+                .collect(Collectors.toSet());
+        } catch (Exception e) {
+            throw new TechnicalException("An error occurred trying to find subscriptions by reference", e);
+        }
+    }
+
+    @Override
+    public Optional<Subscription> findByIdAndReferenceIdAndReferenceType(
+        String subscriptionId,
+        String referenceId,
+        SubscriptionReferenceType referenceType
+    ) throws TechnicalException {
+        try {
+            return internalSubscriptionRepository
+                .findByIdAndReferenceIdAndReferenceType(subscriptionId, referenceId, referenceType.name())
+                .map(this::map);
+        } catch (Exception e) {
+            throw new TechnicalException("An error occurred trying to find subscription by id and reference", e);
+        }
     }
 }

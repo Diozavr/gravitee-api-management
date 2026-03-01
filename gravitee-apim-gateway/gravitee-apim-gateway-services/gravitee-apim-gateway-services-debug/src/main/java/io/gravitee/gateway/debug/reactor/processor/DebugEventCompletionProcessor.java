@@ -44,16 +44,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * @author Yann TAVERNIER (yann.tavernier at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class DebugEventCompletionProcessor extends AbstractProcessor<ExecutionContext> {
 
-    private final Logger LOGGER = LoggerFactory.getLogger(DebugEventCompletionProcessor.class);
     private final EventRepository eventRepository;
     private final ObjectMapper objectMapper;
 
@@ -68,29 +67,21 @@ public class DebugEventCompletionProcessor extends AbstractProcessor<ExecutionCo
         final DebugApiV2 debugApiComponent = (DebugApiV2) debugContext.getComponent(Api.class);
 
         final Vertx vertx = context.getComponent(Vertx.class);
-        vertx.executeBlocking(
-            (Handler<Promise<Void>>) promise -> {
-                Event event = null;
-                try {
-                    event = eventRepository.findById(debugApiComponent.getEventId()).orElseThrow(TechnicalException::new);
-                    final io.gravitee.definition.model.debug.DebugApiV2 debugApi = computeDebugApiEventPayload(
-                        debugContext,
-                        debugApiComponent
-                    );
-
-                    event.setPayload(objectMapper.writeValueAsString(debugApi));
-                    updateEvent(event, ApiDebugStatus.SUCCESS);
-                } catch (JsonProcessingException | TechnicalException e) {
-                    LOGGER.error("Error occurs while saving debug event", e);
-                    failEvent(event);
-                }
-                promise.complete();
-            },
-            result -> {
-                // Push response to the next handler
-                next.handle(context);
+        vertx.executeBlocking((Handler<Promise<Void>>) promise -> {
+            Event event = null;
+            try {
+                event = eventRepository.findById(debugApiComponent.getEventId()).orElseThrow(TechnicalException::new);
+                final io.gravitee.definition.model.debug.DebugApiV2 debugApi = computeDebugApiEventPayload(debugContext, debugApiComponent);
+                updateEvent(event.updatePayload(objectMapper.writeValueAsString(debugApi)), ApiDebugStatus.SUCCESS);
+            } catch (JsonProcessingException | TechnicalException e) {
+                log.error("Error occurs while saving debug event", e);
+                failEvent(event);
             }
-        );
+            promise.complete();
+        }, result -> {
+            // Push response to the next handler
+            next.handle(context);
+        });
     }
 
     private io.gravitee.definition.model.debug.DebugApiV2 computeDebugApiEventPayload(
@@ -169,16 +160,18 @@ public class DebugEventCompletionProcessor extends AbstractProcessor<ExecutionCo
                 updateEvent(debugEvent, ApiDebugStatus.ERROR);
             }
         } catch (TechnicalException e) {
-            LOGGER.error("Error when updating event {} with ERROR status", debugEvent.getId());
+            log.error("Error when updating event {} with ERROR status", debugEvent.getId());
         }
     }
 
     private void updateEvent(io.gravitee.repository.management.model.Event debugEvent, ApiDebugStatus apiDebugStatus)
         throws TechnicalException {
-        debugEvent
-            .getProperties()
-            .put(io.gravitee.repository.management.model.Event.EventProperties.API_DEBUG_STATUS.getValue(), apiDebugStatus.name());
-        eventRepository.update(debugEvent);
+        eventRepository.update(
+            debugEvent.updateProperties(
+                io.gravitee.repository.management.model.Event.EventProperties.API_DEBUG_STATUS.getValue(),
+                apiDebugStatus.name()
+            )
+        );
     }
 
     protected io.gravitee.definition.model.debug.DebugApiV2 convert(DebugApiV2 content) {

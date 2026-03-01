@@ -13,10 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@use '../../scss/layout' as layout;
+
 :host {
-  display: flex;
-  flex-flow: column;
-  gap: 32px;
+  @include layout.large-container-legacy();
+}
+
+mat-card {
+  width: 100%;
 }
 
 .tile {
@@ -25,10 +29,26 @@
   gap: 16px;
 }
 
+.app-list-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+
+  &__title {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
 .app-list__container {
   display: grid;
   gap: 32px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  &--mobile {
+    grid-template-columns: 1fr !important;
+  }
 
   > * {
     height: 256px;

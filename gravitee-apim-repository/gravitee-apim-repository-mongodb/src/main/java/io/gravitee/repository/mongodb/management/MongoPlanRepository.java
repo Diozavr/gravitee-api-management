@@ -27,8 +27,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -36,26 +35,15 @@ import org.springframework.stereotype.Component;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class MongoPlanRepository implements PlanRepository {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(MongoPlanRepository.class);
 
     @Autowired
     private GraviteeMapper mapper;
 
     @Autowired
     private PlanMongoRepository internalPlanRepository;
-
-    @Override
-    public List<Plan> findByApisAndEnvironments(List<String> apiIds, Set<String> environments) {
-        return internalPlanRepository.findByApiInAndEnvironments(apiIds, environments).stream().map(this::map).collect(Collectors.toList());
-    }
-
-    @Override
-    public Set<Plan> findByApi(String apiId) {
-        return internalPlanRepository.findByApi(apiId).stream().map(this::map).collect(Collectors.toSet());
-    }
 
     @Override
     public Optional<Plan> findById(String plan) throws TechnicalException {
@@ -117,26 +105,76 @@ public class MongoPlanRepository implements PlanRepository {
 
     @Override
     public List<String> deleteByEnvironmentId(String environmentId) throws TechnicalException {
-        LOGGER.debug("Delete plan by environment [{}]", environmentId);
+        log.debug("Delete plan by environment [{}]", environmentId);
         try {
             final var plans = internalPlanRepository.deleteByEnvironmentId(environmentId).stream().map(PlanMongo::getId).toList();
-            LOGGER.debug("Delete plan by environment [{}] - Done", environmentId);
+            log.debug("Delete plan by environment [{}] - Done", environmentId);
             return plans;
         } catch (Exception e) {
-            LOGGER.error("Failed to delete plan by environment [{}]", environmentId, e);
+            log.error("Failed to delete plan by environment [{}]", environmentId, e);
             throw new TechnicalException("Failed to delete plan by environment", e);
         }
     }
 
     @Override
     public boolean exists(String id) throws TechnicalException {
-        LOGGER.debug("Checking if plan exists by id [{}]", id);
+        log.debug("Checking if plan exists by id [{}]", id);
 
         try {
             return internalPlanRepository.existsById(id);
         } catch (Exception e) {
-            LOGGER.error("Failed to check if plan exists by id [{}]", id, e);
+            log.error("Failed to check if plan exists by id [{}]", id, e);
             throw new TechnicalException("Failed to determine if plan exists by id", e);
         }
+    }
+
+    @Override
+    public void updateOrder(String planId, int order) throws TechnicalException {
+        log.debug("Update plan order for id [{}] to [{}]", planId, order);
+        try {
+            internalPlanRepository.updateOrder(planId, order);
+        } catch (Exception e) {
+            log.error("Failed to update plan order for id [{}]", planId, e);
+            throw new TechnicalException("Failed to update plan order", e);
+        }
+    }
+
+    @Override
+    public void updateCrossIds(List<Plan> plans) throws TechnicalException {
+        log.debug("Update plans  cross Ids [{}]", plans);
+        try {
+            internalPlanRepository.updateCrossIds(plans);
+        } catch (Exception e) {
+            throw new TechnicalException("Failed to update plans cross IDs", e);
+        }
+    }
+
+    @Override
+    public Set<Plan> findByReferenceIdAndReferenceType(String referenceId, Plan.PlanReferenceType planReferenceType)
+        throws TechnicalException {
+        return internalPlanRepository
+            .findByReferenceIdAndReferenceType(referenceId, planReferenceType.name())
+            .stream()
+            .map(this::map)
+            .collect(Collectors.toSet());
+    }
+
+    @Override
+    public List<Plan> findByReferenceIdsAndReferenceTypeAndEnvironment(
+        List<String> referenceIds,
+        Plan.PlanReferenceType planReferenceType,
+        Set<String> environments
+    ) {
+        return internalPlanRepository
+            .findByReferenceIdsAndReferenceTypeAndEnvironments(referenceIds, planReferenceType, environments)
+            .stream()
+            .map(this::map)
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<Plan> findByIdAndReferenceIdAndReferenceType(String id, String referenceId, Plan.PlanReferenceType planReferenceType)
+        throws TechnicalException {
+        return internalPlanRepository.findByIdAndReferenceIdAndReferenceType(id, referenceId, planReferenceType.name()).map(this::map);
     }
 }

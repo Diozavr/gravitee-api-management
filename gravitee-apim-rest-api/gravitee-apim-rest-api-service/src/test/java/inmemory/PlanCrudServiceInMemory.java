@@ -17,6 +17,7 @@ package inmemory;
 
 import io.gravitee.apim.core.plan.crud_service.PlanCrudService;
 import io.gravitee.apim.core.plan.model.Plan;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.service.exceptions.PlanNotFoundException;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.stream.Collectors;
 
 public class PlanCrudServiceInMemory implements PlanCrudService, InMemoryAlternative<Plan> {
 
@@ -44,12 +46,63 @@ public class PlanCrudServiceInMemory implements PlanCrudService, InMemoryAlterna
 
     @Override
     public Optional<Plan> findById(String planId) {
-        return storage.stream().filter(plan -> planId.equals(plan.getId())).findFirst();
+        return storage
+            .stream()
+            .filter(plan -> planId.equals(plan.getId()))
+            .findFirst();
+    }
+
+    @Override
+    public List<Plan> findByIds(List<String> planIds) {
+        return storage
+            .stream()
+            .filter(plan -> planIds.contains(plan.getId()))
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public void updateCrossIds(List<Plan> plans) {
+        if (plans == null || plans.isEmpty()) {
+            return;
+        }
+
+        for (Plan updatedPlan : plans) {
+            storage
+                .stream()
+                .filter(existing -> existing.getId().equals(updatedPlan.getId()))
+                .findFirst()
+                .ifPresent(existing -> existing.setCrossId(updatedPlan.getCrossId()));
+        }
+    }
+
+    @Override
+    public Optional<Plan> findByPlanIdAndReferenceIdAndReferenceType(String planId, String referenceId, String referenceType) {
+        return storage
+            .stream()
+            .filter(
+                plan ->
+                    planId.equals(plan.getId()) &&
+                    plan.getReferenceId().equals(referenceId) &&
+                    plan.getReferenceType().equals(GenericPlanEntity.ReferenceType.valueOf(referenceType))
+            )
+            .findFirst();
+    }
+
+    @Override
+    public Collection<Plan> findByReferenceIdAndReferenceType(String referenceId, String referenceType) {
+        return storage
+            .stream()
+            .filter(
+                plan ->
+                    plan.getReferenceId().equals(referenceId) &&
+                    plan.getReferenceType().equals(GenericPlanEntity.ReferenceType.valueOf(referenceType))
+            )
+            .toList();
     }
 
     @Override
     public Collection<Plan> findByApiId(String apiId) {
-        return storage.stream().filter(plan -> plan.getApiId().equals(apiId)).toList();
+        return findByReferenceIdAndReferenceType(apiId, GenericPlanEntity.ReferenceType.API.name());
     }
 
     @Override

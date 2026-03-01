@@ -41,6 +41,8 @@ type SubscriptionsTableDS = {
   isSharedApiKey: boolean;
   apiName: string;
   apiPo: string;
+  /** Display label for reference type: "API" or "API Product" */
+  referenceTypeLabel: string;
   createdAt: Date;
   processedAt: Date;
   startingAt: Date;
@@ -184,16 +186,22 @@ export class ApplicationSubscriptionListComponent implements OnInit, OnDestroy {
       .subscribe(([applicationSubscriptions, application]) => {
         this.subscriptionsCount = applicationSubscriptions.page.total_elements;
 
-        this.subscriptionsTableDS = (applicationSubscriptions.data ?? []).map((subscription) => {
-          const status = this.statuses.find((status) => status.id === subscription.status);
+        this.subscriptionsTableDS = (applicationSubscriptions.data ?? []).map(subscription => {
+          const status = this.statuses.find(status => status.id === subscription.status);
 
           const planMetadata = get(applicationSubscriptions.metadata, [subscription.plan], {});
-          const apiMetadata = get(applicationSubscriptions.metadata, [subscription.api], {});
+          const apiMetadataKey =
+            subscription.referenceType === 'API_PRODUCT' ? subscription.referenceId : (subscription.api ?? subscription.referenceId);
+          const apiMetadata = get(applicationSubscriptions.metadata, [apiMetadataKey], {});
 
+          const isApiProduct = subscription.referenceType === 'API_PRODUCT';
           return {
             id: subscription.id,
-            apiName: apiMetadata['name'] ? `${apiMetadata['name']} - ${apiMetadata['apiVersion']}` : subscription.api,
+            apiName: apiMetadata['name']
+              ? `${apiMetadata['name']} - ${apiMetadata['apiVersion'] ?? ''}`
+              : (subscription.api ?? subscription.referenceId ?? ''),
             apiPo: apiMetadata['apiPrimaryOwner'] ?? 'Unknown API owner',
+            referenceTypeLabel: isApiProduct ? 'API Product' : 'API',
             createdAt: subscription.created_at,
             endAt: subscription.ending_at,
             planName: planMetadata['name'] ?? subscription.plan,
@@ -238,7 +246,7 @@ export class ApplicationSubscriptionListComponent implements OnInit, OnDestroy {
       })
       .afterClosed()
       .pipe(
-        filter((result) => !!result),
+        filter(result => !!result),
         switchMap(() => this.applicationSubscriptionService.closeSubscription(applicationId, subscription.id)),
         takeUntil(this.unsubscribe$),
       )
@@ -298,17 +306,17 @@ export class ApplicationSubscriptionListComponent implements OnInit, OnDestroy {
     return this.applicationService
       .getSubscribedAPIList(this.activatedRoute.snapshot.params.applicationId)
       .pipe(
-        map((subscribers) =>
+        map(subscribers =>
           subscribers
-            ?.filter((subscriber) => subscriber.name.includes(searchTerm) && !this.filtersForm.controls.apis.value?.includes(subscriber.id))
-            ?.map((subscriber) => ({ value: subscriber.id, label: subscriber.name })),
+            ?.filter(subscriber => subscriber.name.includes(searchTerm) && !this.filtersForm.controls.apis.value?.includes(subscriber.id))
+            ?.map(subscriber => ({ value: subscriber.id, label: subscriber.name })),
         ),
       );
   };
 
   public displayApi: (value: string) => Observable<string> = (value: string) => {
     return this.apiService.get(value).pipe(
-      map((api) => `${api.name} (${api.primaryOwner?.displayName})`),
+      map(api => `${api.name} (${api.primaryOwner?.displayName})`),
       catchError(() => of(value)),
     );
   };
@@ -327,8 +335,8 @@ export class ApplicationSubscriptionListComponent implements OnInit, OnDestroy {
       })
       .afterClosed()
       .pipe(
-        filter((result) => !!result),
-        switchMap((result) => {
+        filter(result => !!result),
+        switchMap(result => {
           return this.applicationSubscriptionService.subscribe(
             this.activatedRoute.snapshot.params.applicationId,
             result.planId,
@@ -338,12 +346,12 @@ export class ApplicationSubscriptionListComponent implements OnInit, OnDestroy {
         tap(() => {
           this.snackBarService.success(`Subscription successfully created`);
         }),
-        catchError(() => {
-          this.snackBarService.error('An error occured during subscription creation');
+        catchError(({ error }) => {
+          this.snackBarService.error(error?.message ?? 'An error occured during subscription creation');
           return EMPTY;
         }),
         takeUntil(this.unsubscribe$),
       )
-      .subscribe((subscription) => this.router.navigate(['.', subscription.id], { relativeTo: this.activatedRoute }));
+      .subscribe(subscription => this.router.navigate(['.', subscription.id], { relativeTo: this.activatedRoute }));
   }
 }

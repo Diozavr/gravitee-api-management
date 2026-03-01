@@ -16,6 +16,7 @@
 package io.gravitee.repository.noop;
 
 import io.gravitee.repository.management.api.*;
+import io.gravitee.repository.management.api.ApiProductsRepository;
 import io.gravitee.repository.noop.management.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -68,6 +69,11 @@ public class NoOpManagementRepositoryConfiguration {
     }
 
     @Bean
+    public ApiProductsRepository apiProductsRepository() {
+        return new NoOpApiProductsRepository();
+    }
+
+    @Bean
     public CommandRepository commandRepository() {
         return new NoOpCommandRepository();
     }
@@ -85,5 +91,10 @@ public class NoOpManagementRepositoryConfiguration {
     @Bean
     public SharedPolicyGroupRepository sharedPolicyGroupRepository() {
         return new NoOpSharedPolicyGroupRepository();
+    }
+
+    @Bean
+    public SubscriptionFormRepository subscriptionFormRepository() {
+        return new NoOpSubscriptionFormRepository();
     }
 }

@@ -28,11 +28,11 @@ import io.gravitee.repository.management.model.Event;
 import io.gravitee.repository.management.model.LifecycleState;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Optional;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class ApiMapper {
 
     private final ObjectMapper objectMapper;
@@ -57,7 +57,12 @@ public class ApiMapper {
 
                     // Update definition with required information for deployment phase
                     reactableApi = new io.gravitee.gateway.reactive.handlers.api.v4.NativeApi(eventApiDefinition);
-                } else if (api.getType() == ApiType.PROXY || api.getType() == ApiType.MESSAGE) {
+                } else if (
+                    api.getType() == ApiType.PROXY ||
+                    api.getType() == ApiType.LLM_PROXY ||
+                    api.getType() == ApiType.MCP_PROXY ||
+                    api.getType() == ApiType.MESSAGE
+                ) {
                     var eventApiDefinition = objectMapper.readValue(api.getDefinition(), io.gravitee.definition.model.v4.Api.class);
 
                     // Update definition with required information for deployment phase
@@ -70,7 +75,9 @@ public class ApiMapper {
             reactableApi.setEnabled(api.getLifecycleState() == LifecycleState.STARTED);
             reactableApi.setDeployedAt(apiEvent.getCreatedAt());
             reactableApi.setRevision(
-                Optional.ofNullable(apiEvent.getProperties()).map(props -> props.get(DEPLOYMENT_NUMBER.getValue())).orElse(null)
+                Optional.ofNullable(apiEvent.getProperties())
+                    .map(props -> props.get(DEPLOYMENT_NUMBER.getValue()))
+                    .orElse(null)
             );
 
             environmentService.fill(api.getEnvironmentId(), reactableApi);

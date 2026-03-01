@@ -16,6 +16,8 @@
 package io.gravitee.gateway.services.sync.process.repository.service;
 
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.api.ApiReactorDeployable;
+import io.gravitee.gateway.services.sync.process.repository.synchronizer.apiproduct.ApiProductReactorDeployable;
+import io.gravitee.repository.management.model.Plan;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -30,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 public class PlanService {
 
     private final Map<String, Set<String>> plansPerApi = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> plansPerApiProduct = new ConcurrentHashMap<>();
 
     public void register(final ApiReactorDeployable apiReactorDeployable) {
         if (apiReactorDeployable != null && apiReactorDeployable.apiId() != null) {
@@ -43,7 +46,47 @@ public class PlanService {
         }
     }
 
+    public void register(final ApiProductReactorDeployable apiProductReactorDeployable) {
+        if (apiProductReactorDeployable != null && apiProductReactorDeployable.apiProductId() != null) {
+            plansPerApiProduct.put(apiProductReactorDeployable.apiProductId(), Set.copyOf(apiProductReactorDeployable.subscribablePlans()));
+        }
+    }
+
+    public void unregister(final ApiProductReactorDeployable apiProductReactorDeployable) {
+        if (apiProductReactorDeployable != null && apiProductReactorDeployable.apiProductId() != null) {
+            plansPerApiProduct.remove(apiProductReactorDeployable.apiProductId());
+        }
+    }
+
+    /**
+     * Returns subscribable plan IDs for the given API Product (before unregister)
+     */
+    public Set<String> getSubscribablePlansForApiProduct(final String apiProductId) {
+        if (apiProductId == null) {
+            return Set.of();
+        }
+        Set<String> plans = plansPerApiProduct.get(apiProductId);
+        return plans != null ? Set.copyOf(plans) : Set.of();
+    }
+
     public boolean isDeployed(final String apiId, final String planId) {
-        return Optional.ofNullable(plansPerApi.get(apiId)).map(strings -> strings.contains(planId)).orElse(false);
+        return isDeployed(apiId, planId, Plan.PlanReferenceType.API);
+    }
+
+    /**
+     * Check if a plan is deployed for the given reference (API or API Product).
+     */
+    public boolean isDeployed(final String referenceId, final String planId, final Plan.PlanReferenceType referenceType) {
+        if (referenceId == null || planId == null || referenceType == null) {
+            return false;
+        }
+        return switch (referenceType) {
+            case API -> Optional.ofNullable(plansPerApi.get(referenceId))
+                .map(plans -> plans.contains(planId))
+                .orElse(false);
+            case API_PRODUCT -> Optional.ofNullable(plansPerApiProduct.get(referenceId))
+                .map(plans -> plans.contains(planId))
+                .orElse(false);
+        };
     }
 }

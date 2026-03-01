@@ -25,16 +25,14 @@ import io.gravitee.gateway.core.endpoint.lifecycle.impl.EndpointGroupLifecycleMa
 import io.gravitee.gateway.core.endpoint.ref.ReferenceRegister;
 import io.gravitee.node.api.configuration.Configuration;
 import java.util.function.Predicate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class MultiTenantAwareEndpointLifecycleManager extends EndpointGroupLifecycleManager {
-
-    private final Logger logger = LoggerFactory.getLogger(MultiTenantAwareEndpointLifecycleManager.class);
 
     private final String tenant;
 
@@ -54,7 +52,7 @@ public class MultiTenantAwareEndpointLifecycleManager extends EndpointGroupLifec
 
     @Override
     protected void doStart() throws Exception {
-        logger.debug("Prepare API endpoints for tenant: {}", tenant);
+        log.debug("Prepare API endpoints for tenant: {}", tenant);
 
         super.doStart();
     }
@@ -63,9 +61,10 @@ public class MultiTenantAwareEndpointLifecycleManager extends EndpointGroupLifec
     protected Predicate<Endpoint> filter() {
         return super
             .filter()
-            .and(endpoint ->
-                (endpoint.getTenants() == null || endpoint.getTenants().isEmpty()) ||
-                (endpoint.getTenants() != null && endpoint.getTenants().contains(tenant))
+            .and(
+                endpoint ->
+                    (endpoint.getTenants() == null || endpoint.getTenants().isEmpty()) ||
+                    (endpoint.getTenants() != null && endpoint.getTenants().contains(tenant))
             );
     }
 }

@@ -29,13 +29,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @DomainService
 @AllArgsConstructor
 public class ValidatePageAccessControlsDomainService implements Validator<ValidatePageAccessControlsDomainService.Input> {
@@ -81,8 +81,9 @@ public class ValidatePageAccessControlsDomainService implements Validator<Valida
 
         var byIds = this.groupQueryService.findByIds(references).stream().collect(Collectors.toMap(Group::getId, Group::getId));
 
-        var byNames =
-            this.groupQueryService.findByNames(environmentId, references).stream().collect(Collectors.toMap(Group::getName, Group::getId));
+        var byNames = this.groupQueryService.findByNames(environmentId, references)
+            .stream()
+            .collect(Collectors.toMap(Group::getName, Group::getId));
 
         var mapping = new HashMap<>(byIds);
         mapping.putAll(byNames);

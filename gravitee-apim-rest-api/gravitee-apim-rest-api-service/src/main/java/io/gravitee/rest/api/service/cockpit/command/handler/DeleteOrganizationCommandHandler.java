@@ -18,6 +18,8 @@ package io.gravitee.rest.api.service.cockpit.command.handler;
 import io.gravitee.apim.core.access_point.crud_service.AccessPointCrudService;
 import io.gravitee.apim.core.access_point.model.AccessPoint;
 import io.gravitee.cockpit.api.command.v1.CockpitCommandType;
+import io.gravitee.cockpit.api.command.v1.environment.DeleteEnvironmentCommand;
+import io.gravitee.cockpit.api.command.v1.environment.DeleteEnvironmentCommandPayload;
 import io.gravitee.cockpit.api.command.v1.organization.DeleteOrganizationCommand;
 import io.gravitee.cockpit.api.command.v1.organization.DeleteOrganizationReply;
 import io.gravitee.exchange.api.command.CommandHandler;
@@ -32,6 +34,7 @@ import io.gravitee.rest.api.model.TokenReferenceType;
 import io.gravitee.rest.api.model.UserEntity;
 import io.gravitee.rest.api.model.configuration.identity.IdentityProviderActivationReferenceType;
 import io.gravitee.rest.api.service.*;
+import io.gravitee.rest.api.service.cockpit.command.CockpitCommandService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.configuration.identity.IdentityProviderActivationService;
 import io.gravitee.rest.api.service.exceptions.OrganizationNotFoundException;
@@ -39,11 +42,11 @@ import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import io.gravitee.rest.api.service.search.SearchEngineService;
 import io.reactivex.rxjava3.core.Single;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
-@Slf4j
+@CustomLog
 @Component
 public class DeleteOrganizationCommandHandler implements CommandHandler<DeleteOrganizationCommand, DeleteOrganizationReply> {
 
@@ -51,6 +54,7 @@ public class DeleteOrganizationCommandHandler implements CommandHandler<DeleteOr
     private final AccessPointRepository accessPointRepository;
     private final AuditRepository auditRepository;
     private final CommandRepository commandRepository;
+    private final CustomDashboardRepository customDashboardRepository;
     private final CustomUserFieldsRepository customUserFieldsRepository;
     private final EntrypointRepository entrypointRepository;
     private final EnvironmentService environmentService;
@@ -72,11 +76,15 @@ public class DeleteOrganizationCommandHandler implements CommandHandler<DeleteOr
     private final TenantRepository tenantRepository;
     private final TokenRepository tokenRepository;
     private final UserRepository userRepository;
+    private final ClusterRepository clusterRepository;
+    private final DashboardRepository dashboardRepository;
+    private final DeleteEnvironmentCommandHandler deleteEnvironmentCommandHandler;
 
     public DeleteOrganizationCommandHandler(
         @Lazy AccessPointRepository accessPointRepository,
         @Lazy AuditRepository auditRepository,
         @Lazy CommandRepository commandRepository,
+        @Lazy CustomDashboardRepository customDashboardRepository,
         @Lazy CustomUserFieldsRepository customUserFieldsRepository,
         @Lazy EntrypointRepository entrypointRepository,
         @Lazy FlowRepository flowRepository,
@@ -94,16 +102,20 @@ public class DeleteOrganizationCommandHandler implements CommandHandler<DeleteOr
         @Lazy TenantRepository tenantRepository,
         @Lazy TokenRepository tokenRepository,
         @Lazy UserRepository userRepository,
+        @Lazy ClusterRepository clusterRepository,
+        @Lazy DashboardRepository dashboardRepository,
         AccessPointCrudService accessPointService,
         EnvironmentService environmentService,
         IdentityProviderActivationService identityProviderActivationService,
         OrganizationService organizationService,
-        SearchEngineService searchEngineService
+        SearchEngineService searchEngineService,
+        DeleteEnvironmentCommandHandler deleteEnvironmentCommandHandler
     ) {
         this.accessPointRepository = accessPointRepository;
         this.accessPointService = accessPointService;
         this.auditRepository = auditRepository;
         this.commandRepository = commandRepository;
+        this.customDashboardRepository = customDashboardRepository;
         this.customUserFieldsRepository = customUserFieldsRepository;
         this.entrypointRepository = entrypointRepository;
         this.environmentService = environmentService;
@@ -125,6 +137,9 @@ public class DeleteOrganizationCommandHandler implements CommandHandler<DeleteOr
         this.tenantRepository = tenantRepository;
         this.tokenRepository = tokenRepository;
         this.userRepository = userRepository;
+        this.clusterRepository = clusterRepository;
+        this.dashboardRepository = dashboardRepository;
+        this.deleteEnvironmentCommandHandler = deleteEnvironmentCommandHandler;
     }
 
     @Override
@@ -142,15 +157,10 @@ public class DeleteOrganizationCommandHandler implements CommandHandler<DeleteOr
             var executionContext = new ExecutionContext(organization);
             List<EnvironmentEntity> environments = environmentService.findByOrganization(organization.getId());
 
-            if (!environments.isEmpty()) {
-                String errorDetails =
-                    "Error occurred when deleting organization with id [%s] have [%s] environment(s)".formatted(
-                            payload.id(),
-                            environments.size()
-                        );
-                log.error(errorDetails);
-                return Single.just(new DeleteOrganizationReply(command.getId(), errorDetails));
+            for (EnvironmentEntity environment : environments) {
+                deleteEnvironmentCommandHandler.processDeletionWorkflow(environment.getCockpitId(), payload.userId());
             }
+
             disableOrganization(executionContext);
             deleteOrganization(executionContext, organization);
 
@@ -159,6 +169,10 @@ public class DeleteOrganizationCommandHandler implements CommandHandler<DeleteOr
         } catch (OrganizationNotFoundException e) {
             log.warn("Organization with cockpitId [{}] has not been found.", payload.cockpitId());
             return Single.just(new DeleteOrganizationReply(command.getId()));
+        } catch (TechnicalException e) {
+            String errorDetails = "Error occurred when deleting environments for organization id [%s].".formatted(payload.id());
+            log.error(errorDetails, e);
+            return Single.just(new DeleteOrganizationReply(command.getId(), errorDetails));
         } catch (Exception e) {
             String errorDetails = "Error occurred when deleting organization with id [%s].".formatted(payload.id());
             log.error(errorDetails, e);
@@ -174,12 +188,12 @@ public class DeleteOrganizationCommandHandler implements CommandHandler<DeleteOr
 
         // Deactivate all identity providers
         this.identityProviderActivationService.removeAllIdpsFromTarget(
-                context,
-                new IdentityProviderActivationService.ActivationTarget(
-                    executionContext.getOrganizationId(),
-                    IdentityProviderActivationReferenceType.ORGANIZATION
-                )
-            );
+            context,
+            new IdentityProviderActivationService.ActivationTarget(
+                executionContext.getOrganizationId(),
+                IdentityProviderActivationReferenceType.ORGANIZATION
+            )
+        );
     }
 
     private void deleteOrganization(ExecutionContext executionContext, OrganizationEntity organization) throws TechnicalException {
@@ -221,5 +235,7 @@ public class DeleteOrganizationCommandHandler implements CommandHandler<DeleteOr
             NotificationTemplateReferenceType.ORGANIZATION
         );
         entrypointRepository.deleteByReferenceIdAndReferenceType(organization.getId(), EntrypointReferenceType.ORGANIZATION);
+        clusterRepository.deleteByOrganizationId(organization.getId());
+        customDashboardRepository.deleteByOrganizationId(organization.getId());
     }
 }

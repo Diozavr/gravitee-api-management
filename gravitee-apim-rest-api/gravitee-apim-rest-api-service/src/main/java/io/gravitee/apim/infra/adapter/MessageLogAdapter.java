@@ -16,7 +16,9 @@
 package io.gravitee.apim.infra.adapter;
 
 import io.gravitee.apim.core.log.model.AggregatedMessageLog;
+import io.gravitee.apim.core.log.model.MessageLog;
 import io.gravitee.apim.core.log.model.MessageOperation;
+import io.gravitee.repository.log.v4.model.message.MessageMetrics;
 import java.util.List;
 import java.util.Objects;
 import org.mapstruct.Mapper;
@@ -35,7 +37,9 @@ public interface MessageLogAdapter {
     @Mapping(target = "operation", expression = "java(mapOperation(messageLog))")
     AggregatedMessageLog toEntity(io.gravitee.repository.log.v4.model.message.AggregatedMessageLog messageLog);
 
-    List<AggregatedMessageLog> toEntities(List<io.gravitee.repository.log.v4.model.message.AggregatedMessageLog> messageLogs);
+    List<AggregatedMessageLog> mapToAggregatedMessageLogs(
+        List<io.gravitee.repository.log.v4.model.message.AggregatedMessageLog> messageLogs
+    );
 
     @Named("mapOperation")
     default MessageOperation mapOperation(io.gravitee.repository.log.v4.model.message.AggregatedMessageLog messageLog) {
@@ -44,4 +48,6 @@ public interface MessageLogAdapter {
         }
         return MessageOperation.fromLabel(messageLog.getOperation());
     }
+
+    List<MessageLog> mapToMessageMetrics(List<MessageMetrics> data);
 }

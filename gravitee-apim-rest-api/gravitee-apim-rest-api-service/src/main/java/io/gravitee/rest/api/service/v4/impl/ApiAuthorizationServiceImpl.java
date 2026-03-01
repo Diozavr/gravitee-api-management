@@ -70,7 +70,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -78,7 +78,7 @@ import org.springframework.stereotype.Component;
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @Component("ApiAuthzServiceImplV4")
 public class ApiAuthorizationServiceImpl extends AbstractService implements ApiAuthorizationService {
 
@@ -132,8 +132,7 @@ public class ApiAuthorizationServiceImpl extends AbstractService implements ApiA
     }
 
     private boolean isApiManagementPermission(String permissionAsString) {
-        return Arrays
-            .stream(ApiPermission.values())
+        return Arrays.stream(ApiPermission.values())
             .filter(permission -> permission != ApiPermission.RATING && permission != ApiPermission.RATING_ANSWER)
             .anyMatch(permission -> permission.name().equals(permissionAsString));
     }
@@ -226,8 +225,7 @@ public class ApiAuthorizationServiceImpl extends AbstractService implements ApiA
         }
         if (query.getDefinitionVersions() != null && !query.getDefinitionVersions().isEmpty()) {
             var allPossibleDefinitionVersions = DefinitionVersion.values();
-            List<String> definitionVersionsToExclude = Arrays
-                .stream(allPossibleDefinitionVersions)
+            List<String> definitionVersionsToExclude = Arrays.stream(allPossibleDefinitionVersions)
                 .filter(definitionVersion -> !query.getDefinitionVersions().contains(definitionVersion))
                 .map(DefinitionVersion::getLabel)
                 .collect(toList());

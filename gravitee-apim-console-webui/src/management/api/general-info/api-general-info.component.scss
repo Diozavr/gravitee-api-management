@@ -131,6 +131,10 @@ $typography: map.get(gio.$mat-theme, typography);
     &_btn {
       margin-right: 8px;
     }
+
+    &__btn_align_right {
+      margin-left: auto;
+    }
   }
 
   &__update-banner {
@@ -143,6 +147,16 @@ $typography: map.get(gio.$mat-theme, typography);
       animation-timing-function: linear;
     }
   }
+}
+
+.included-in-more-link {
+  color: mat.m2-get-color-from-palette(gio.$mat-error-palette, 'default');
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
 }
 
 .api-quality {

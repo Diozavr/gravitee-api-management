@@ -136,8 +136,7 @@ public class HealthCheckManagedEndpoint implements ManagedEndpoint {
         reporterService.report(endpointStatus);
 
         if (endpointStatus.isTransition() && alertEventProducer != null && !alertEventProducer.isEmpty()) {
-            final Event event = Event
-                .at(endpointStatus.getTimestamp())
+            final Event event = Event.at(endpointStatus.getTimestamp())
                 .context(CONTEXT_NODE_ID, node.id())
                 .context(CONTEXT_NODE_HOSTNAME, node.hostname())
                 .context(CONTEXT_NODE_APPLICATION, node.application())
@@ -152,6 +151,7 @@ public class HealthCheckManagedEndpoint implements ManagedEndpoint {
                 .property(PROP_MESSAGE, endpointStatus.getSteps().get(0).getMessage())
                 .organization(api.getOrganizationId())
                 .environment(api.getEnvironmentId())
+                .installation((String) node.metadata().get(Node.META_INSTALLATION))
                 .build();
 
             alertEventProducer.send(event);

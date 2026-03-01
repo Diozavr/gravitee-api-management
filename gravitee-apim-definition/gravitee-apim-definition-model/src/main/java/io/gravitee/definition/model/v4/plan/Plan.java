@@ -22,6 +22,7 @@ import io.gravitee.definition.model.v4.flow.Flow;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
@@ -41,11 +42,24 @@ public class Plan extends AbstractPlan {
 
     private List<Flow> flows;
 
+    public Plan(
+        String id,
+        String name,
+        PlanSecurity security,
+        PlanMode mode,
+        String selectionRule,
+        Set<String> tags,
+        PlanStatus status,
+        List<Flow> flows
+    ) {
+        super(id, name, security, mode, selectionRule, tags, status);
+        this.flows = flows;
+    }
+
     @JsonIgnore
     @Override
     public List<Plugin> getPlugins() {
-        return Optional
-            .ofNullable(this.flows)
+        return Optional.ofNullable(this.flows)
             .map(f -> f.stream().filter(AbstractFlow::isEnabled).map(AbstractFlow::getPlugins).flatMap(List::stream).toList())
             .orElse(List.of());
     }

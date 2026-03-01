@@ -15,46 +15,25 @@
  */
 package io.gravitee.rest.api.service.impl;
 
-import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.entry;
-import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyList;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.isA;
-import static org.mockito.Mockito.isNull;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.common.collect.Sets;
-import io.gravitee.common.data.domain.Page;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.ApiRepository;
 import io.gravitee.repository.management.api.ApplicationRepository;
 import io.gravitee.repository.management.api.MembershipRepository;
 import io.gravitee.repository.management.api.search.ApiCriteria;
-import io.gravitee.repository.management.api.search.Pageable;
 import io.gravitee.repository.management.model.Api;
 import io.gravitee.repository.management.model.Application;
-import io.gravitee.repository.management.model.Membership;
-import io.gravitee.repository.management.model.MembershipMemberType;
 import io.gravitee.repository.management.model.Visibility;
-import io.gravitee.rest.api.model.GroupEntity;
 import io.gravitee.rest.api.model.MembershipReferenceType;
-import io.gravitee.rest.api.model.RoleEntity;
 import io.gravitee.rest.api.model.UserMembership;
-import io.gravitee.rest.api.model.pagedresult.Metadata;
-import io.gravitee.rest.api.model.permissions.RoleScope;
 import io.gravitee.rest.api.service.GroupService;
 import io.gravitee.rest.api.service.MembershipService;
 import io.gravitee.rest.api.service.RoleService;
-import io.gravitee.rest.api.service.common.GraviteeContext;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -96,26 +75,30 @@ public class MembershipService_FindUserMembershipMetadataTest {
 
     @BeforeEach
     public void setUp() throws Exception {
-        membershipService =
-            new MembershipServiceImpl(
-                null,
-                null,
-                mockApplicationRepository,
-                null,
-                null,
-                null,
-                mockMembershipRepository,
-                mockRoleService,
-                null,
-                null,
-                null,
-                null,
-                mockApiRepository,
-                mockGroupService,
-                null,
-                null,
-                null
-            );
+        membershipService = new MembershipServiceImpl(
+            null,
+            null,
+            mockApplicationRepository,
+            null,
+            null,
+            null,
+            mockMembershipRepository,
+            mockRoleService,
+            null,
+            null,
+            null,
+            null,
+            mockApiRepository,
+            mockGroupService,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
         USER_MEMBERSHIP = new UserMembership();
         USER_MEMBERSHIP.setReference(USER_MEMBERSHIP_REFERENCE);
     }
@@ -124,7 +107,9 @@ public class MembershipService_FindUserMembershipMetadataTest {
     @MethodSource({ "emptyMetadataInputs" })
     void shouldBeEmpty(List<UserMembership> memberships, MembershipReferenceType type) {
         var result = membershipService.findUserMembershipMetadata(memberships, type);
-        assertThat(result).isNotNull().satisfies(res -> assertThat(res.toMap()).isEmpty());
+        assertThat(result)
+            .isNotNull()
+            .satisfies(res -> assertThat(res.toMap()).isEmpty());
     }
 
     static Stream<Arguments> emptyMetadataInputs() {
@@ -146,19 +131,19 @@ public class MembershipService_FindUserMembershipMetadataTest {
 
     @Test
     void shouldReturnApiMetadata() {
-        when(mockApiRepository.search(eq(new ApiCriteria.Builder().ids(List.of(USER_MEMBERSHIP_REFERENCE)).build()), any(), any()))
-            .thenReturn(
-                Stream.of(
-                    Api
-                        .builder()
-                        .id(USER_MEMBERSHIP_REFERENCE)
-                        .name("api-name")
-                        .version("v11")
-                        .visibility(Visibility.PUBLIC)
-                        .environmentId("env-id")
-                        .build()
-                )
-            );
+        when(
+            mockApiRepository.search(eq(new ApiCriteria.Builder().ids(List.of(USER_MEMBERSHIP_REFERENCE)).build()), any(), any())
+        ).thenReturn(
+            Stream.of(
+                Api.builder()
+                    .id(USER_MEMBERSHIP_REFERENCE)
+                    .name("api-name")
+                    .version("v11")
+                    .visibility(Visibility.PUBLIC)
+                    .environmentId("env-id")
+                    .build()
+            )
+        );
         var result = membershipService.findUserMembershipMetadata(List.of(USER_MEMBERSHIP), MembershipReferenceType.API);
         assertThat(result)
             .isNotNull()
@@ -175,10 +160,9 @@ public class MembershipService_FindUserMembershipMetadataTest {
 
     @Test
     void shouldReturnApplicationMetadata() throws TechnicalException {
-        when(mockApplicationRepository.findByIds(eq(List.of(USER_MEMBERSHIP_REFERENCE))))
-            .thenReturn(
-                Set.of(Application.builder().id(USER_MEMBERSHIP_REFERENCE).name("application-name").environmentId("env-id").build())
-            );
+        when(mockApplicationRepository.findByIds(eq(List.of(USER_MEMBERSHIP_REFERENCE)))).thenReturn(
+            Set.of(Application.builder().id(USER_MEMBERSHIP_REFERENCE).name("application-name").environmentId("env-id").build())
+        );
         var result = membershipService.findUserMembershipMetadata(List.of(USER_MEMBERSHIP), MembershipReferenceType.APPLICATION);
         assertThat(result)
             .isNotNull()

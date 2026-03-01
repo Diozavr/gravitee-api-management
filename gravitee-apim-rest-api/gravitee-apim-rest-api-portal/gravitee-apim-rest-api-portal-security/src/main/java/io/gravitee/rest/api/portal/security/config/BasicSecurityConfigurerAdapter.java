@@ -26,10 +26,9 @@ import io.gravitee.rest.api.model.parameters.ParameterReferenceType;
 import io.gravitee.rest.api.security.authentication.AuthenticationProvider;
 import io.gravitee.rest.api.security.authentication.AuthenticationProviderManager;
 import io.gravitee.rest.api.security.authentication.GraviteeAuthenticationDetails;
+import io.gravitee.rest.api.security.config.SecureHeadersConfigurer;
 import io.gravitee.rest.api.security.cookies.CookieGenerator;
 import io.gravitee.rest.api.security.csrf.CookieCsrfSignedTokenRepository;
-import io.gravitee.rest.api.security.csrf.CsrfRequestMatcher;
-import io.gravitee.rest.api.security.filter.CsrfIncludeFilter;
 import io.gravitee.rest.api.security.filter.GraviteeContextAuthorizationFilter;
 import io.gravitee.rest.api.security.filter.GraviteeContextFilter;
 import io.gravitee.rest.api.security.filter.RecaptchaFilter;
@@ -46,8 +45,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -59,15 +57,10 @@ import org.springframework.security.config.annotation.SecurityConfigurer;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-import org.springframework.security.web.csrf.CsrfFilter;
-import org.springframework.security.web.csrf.CsrfToken;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
@@ -76,12 +69,11 @@ import org.springframework.web.filter.CorsFilter;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Configuration
 @Profile("basic")
 @EnableWebSecurity
-public class BasicSecurityConfigurerAdapter {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(BasicSecurityConfigurerAdapter.class);
+public class BasicSecurityConfigurerAdapter implements SecureHeadersConfigurer {
 
     @Autowired
     private ConfigurableEnvironment environment;
@@ -162,26 +154,25 @@ public class BasicSecurityConfigurerAdapter {
 
         //Warning if the secret is still the default one
         if ("myJWT4Gr4v1t33_S3cr3t".equals(jwtSecret)) {
-            LOGGER.warn("");
-            LOGGER.warn("##############################################################");
-            LOGGER.warn("#                      SECURITY WARNING                      #");
-            LOGGER.warn("##############################################################");
-            LOGGER.warn("");
-            LOGGER.warn("You still use the default jwt secret.");
-            LOGGER.warn("This known secret can be used to impersonate anyone.");
-            LOGGER.warn("Please change this value, or ask your administrator to do it !");
-            LOGGER.warn("");
-            LOGGER.warn("##############################################################");
-            LOGGER.warn("");
+            log.warn("");
+            log.warn("##############################################################");
+            log.warn("#                      SECURITY WARNING                      #");
+            log.warn("##############################################################");
+            log.warn("");
+            log.warn("You still use the default jwt secret.");
+            log.warn("This known secret can be used to impersonate anyone.");
+            log.warn("Please change this value, or ask your administrator to do it !");
+            log.warn("");
+            log.warn("##############################################################");
+            log.warn("");
         }
 
         authenticationManager(http);
         authentication(http);
         session(http);
         authorizations(http);
-        hsts(http);
-        csrf(http);
         cors(http);
+        configure(http, environment, cookieCsrfSignedTokenRepository());
 
         http.addFilterBefore(
             new TokenAuthenticationFilter(jwtSecret, cookieGenerator, null, null, authoritiesProvider),
@@ -200,9 +191,9 @@ public class BasicSecurityConfigurerAdapter {
     private void authenticationManager(HttpSecurity http) throws Exception {
         final AuthenticationManagerBuilder auth = http.getSharedObject(AuthenticationManagerBuilder.class);
 
-        LOGGER.info("--------------------------------------------------------------");
-        LOGGER.info("Portal API BasicSecurity Config");
-        LOGGER.info("Loading authentication identity providers for Basic authentication");
+        log.info("--------------------------------------------------------------");
+        log.info("Portal API BasicSecurity Config");
+        log.info("Loading authentication identity providers for Basic authentication");
 
         List<io.gravitee.rest.api.security.authentication.AuthenticationProvider> providers = authenticationProviderManager
             .getIdentityProviders()
@@ -212,7 +203,7 @@ public class BasicSecurityConfigurerAdapter {
 
         for (AuthenticationProvider provider : providers) {
             String providerType = provider.type();
-            LOGGER.info("Loading authentication provider of type {} at position {}", providerType, provider.index());
+            log.info("Loading authentication provider of type {} at position {}", providerType, provider.index());
 
             Collection<IdentityProvider> identityProviders = identityProviderManager.getAll();
             if (identityProviders != null) {
@@ -235,11 +226,11 @@ public class BasicSecurityConfigurerAdapter {
                         auth.apply((SecurityConfigurer) authenticationProvider);
                     }
                 } else {
-                    LOGGER.error("No authentication provider found for type: {}", providerType);
+                    log.error("No authentication provider found for type: {}", providerType);
                 }
             }
         }
-        LOGGER.info("--------------------------------------------------------------");
+        log.info("--------------------------------------------------------------");
     }
 
     private HttpSecurity authentication(HttpSecurity security) throws Exception {
@@ -298,8 +289,14 @@ public class BasicSecurityConfigurerAdapter {
             // Categories
             .requestMatchers(HttpMethod.GET, uriPrefix + "/categories/**")
             .permitAll()
+            // GMD pages
+            .requestMatchers(HttpMethod.GET, uriPrefix + "/portal-pages")
+            .permitAll()
             // Portal Menu Links
             .requestMatchers(HttpMethod.GET, uriPrefix + "/portal-menu-links")
+            .permitAll()
+            // Portal Navigation Items
+            .requestMatchers(HttpMethod.GET, uriPrefix + "/portal-navigation-items/**")
             .permitAll()
             /* Others requests
              * i.e. :
@@ -319,46 +316,6 @@ public class BasicSecurityConfigurerAdapter {
 
     private AuthenticationDetailsSource<HttpServletRequest, GraviteeAuthenticationDetails> authenticationDetailsSource() {
         return GraviteeAuthenticationDetails::new;
-    }
-
-    private HttpSecurity hsts(HttpSecurity security) throws Exception {
-        HeadersConfigurer<HttpSecurity>.HstsConfig hstsConfig = security.headers().httpStrictTransportSecurity();
-
-        Boolean hstsEnabled = environment.getProperty("http.hsts.enabled", Boolean.class, true);
-        if (hstsEnabled) {
-            return hstsConfig
-                .includeSubDomains(environment.getProperty("http.hsts.include-sub-domains", Boolean.class, true))
-                .maxAgeInSeconds(environment.getProperty("http.hsts.max-age", Long.class, 31536000L))
-                .and()
-                .and();
-        }
-
-        return hstsConfig.disable().and();
-    }
-
-    private HttpSecurity csrf(HttpSecurity security) throws Exception {
-        if (environment.getProperty("http.csrf.enabled", Boolean.class, false)) {
-            // Don't use deferred csrf (see https://docs.spring.io/spring-security/reference/5.8/migration/servlet/exploits.html#_i_need_to_opt_out_of_deferred_tokens_for_another_reason)
-            final CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
-            requestHandler.setCsrfRequestAttributeName(null);
-
-            final CookieCsrfSignedTokenRepository csrfTokenRepository = cookieCsrfSignedTokenRepository();
-            return security
-                .csrf(csrf ->
-                    csrf
-                        .csrfTokenRepository(csrfTokenRepository)
-                        .requireCsrfProtectionMatcher(new CsrfRequestMatcher())
-                        .csrfTokenRequestHandler(requestHandler)
-                        .sessionAuthenticationStrategy((authentication, request, response) -> {
-                            // Force the csrf cookie to be pushed back in the response cookies to keep it across subsequent request.
-                            csrfTokenRepository.saveToken((CsrfToken) request.getAttribute(CsrfToken.class.getName()), request, response);
-                        })
-                )
-                .addFilterAfter(new CsrfIncludeFilter(), CsrfFilter.class);
-        } else {
-            // deepcode ignore DisablesCSRFProtection: CSRF Protection is disabled here to match configuration set by the user (via gravitee.yml)
-            return security.csrf(AbstractHttpConfigurer::disable);
-        }
     }
 
     private HttpSecurity cors(HttpSecurity security) throws Exception {

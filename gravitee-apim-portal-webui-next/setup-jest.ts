@@ -1,4 +1,6 @@
 import '@angular/localize/init';
+import 'chart.js/auto';
+import 'jest-canvas-mock';
 import { setupZoneTestEnv } from 'jest-preset-angular/setup-env/zone';
 
 setupZoneTestEnv();
@@ -15,3 +17,33 @@ jest.useFakeTimers({ advanceTimers: 1, now: MOCK_DATE }); // advance 1ms every 1
 
 // Mock Date.now() so that it always returns the same date
 Date.now = jest.fn(() => MOCK_DATE.getTime());
+
+// Mock ResizeObserver to avoid errors in tests using canvas (Chartjs)
+globalThis.ResizeObserver =
+  globalThis.ResizeObserver ||
+  jest.fn().mockImplementation(() => ({
+    disconnect: jest.fn(),
+    observe: jest.fn(),
+    unobserve: jest.fn(),
+  }));
+
+window.HTMLElement.prototype.scrollIntoView = jest.fn();
+
+// Hide the following error:
+// "Could not parse CSS stylesheet"
+const originalError = console.error;
+beforeAll(() => {
+  jest.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+    const firstArg = args[0];
+    // jsdom CSS parsing
+    if (firstArg instanceof Error && firstArg.message.includes('Could not parse CSS stylesheet')) {
+      return;
+    }
+    // jsdom structured error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (typeof firstArg === 'object' && firstArg !== null && 'type' in firstArg && (firstArg as any).type === 'css parsing') {
+      return;
+    }
+    originalError.call(console, ...args);
+  });
+});

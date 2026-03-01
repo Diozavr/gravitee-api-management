@@ -58,10 +58,12 @@ class NativeApiV4DefinitionSecretRefsFinderTest {
     void should_get_definition() {
         NativeApi api = new NativeApi();
         api.setId("foo");
-        assertThat(underTest.toDefinitionDescriptor(api, new DefinitionMetadata(null)))
-            .isEqualTo(new DefinitionDescriptor(new Definition("native-api-v4", "foo"), Optional.empty()));
-        assertThat(underTest.toDefinitionDescriptor(api, new DefinitionMetadata("42")))
-            .isEqualTo(new DefinitionDescriptor(new Definition("native-api-v4", "foo"), Optional.of("42")));
+        assertThat(underTest.toDefinitionDescriptor(api, new DefinitionMetadata(null))).isEqualTo(
+            new DefinitionDescriptor(new Definition("native-api-v4", "foo"), Optional.empty())
+        );
+        assertThat(underTest.toDefinitionDescriptor(api, new DefinitionMetadata("42"))).isEqualTo(
+            new DefinitionDescriptor(new Definition("native-api-v4", "foo"), Optional.of("42"))
+        );
     }
 
     public static Stream<Arguments> apis() {
@@ -119,8 +121,9 @@ class NativeApiV4DefinitionSecretRefsFinderTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("apis")
     void should_no_fail_when_parts_of_the_api_is_null(String name, NativeApi api) {
-        assertThatCode(() -> underTest.findSecretRefs(api, (config, location, setter) -> setter.accept(processed(config))))
-            .doesNotThrowAnyException();
+        assertThatCode(() ->
+            underTest.findSecretRefs(api, (config, location, setter) -> setter.accept(processed(config)))
+        ).doesNotThrowAnyException();
     }
 
     @Test
@@ -132,11 +135,11 @@ class NativeApiV4DefinitionSecretRefsFinderTest {
         String resourceConfig = "resource config";
         String planPublishFlowConfig = "plan flow publish config";
         String planSubscribeFlowConfig = "plan flow subscribe config";
-        String planConnectFlowConfig = "plan flow connect config";
+        String planEntrypointConnectFlowConfig = "plan flow entrypoint connect config";
         String planInteractFlowConfig = "plan flow interact config";
         String definitionPublishFlowConfig = "definition flow publish config";
         String definitionSubscribeFlowConfig = "definition flow subscribe config";
-        String definitionConnectFlowConfig = "definition flow connect config";
+        String definitionEntrypointConnectFlowConfig = "definition flow entrypoint connect config";
         String definitionInteractFlowConfig = "definition flow interact config";
         String planSecurityConfig = "plan security config";
         String endpointGroupSharedConfig = "endpoint group shared config";
@@ -147,11 +150,11 @@ class NativeApiV4DefinitionSecretRefsFinderTest {
         expectedConfigs.add(resourceConfig);
         expectedConfigs.add(planPublishFlowConfig);
         expectedConfigs.add(planSubscribeFlowConfig);
-        expectedConfigs.add(planConnectFlowConfig);
+        expectedConfigs.add(planEntrypointConnectFlowConfig);
         expectedConfigs.add(planInteractFlowConfig);
         expectedConfigs.add(definitionPublishFlowConfig);
         expectedConfigs.add(definitionSubscribeFlowConfig);
-        expectedConfigs.add(definitionConnectFlowConfig);
+        expectedConfigs.add(definitionEntrypointConnectFlowConfig);
         expectedConfigs.add(definitionInteractFlowConfig);
         expectedConfigs.add(planSecurityConfig);
         expectedConfigs.add(endpointGroupSharedConfig);
@@ -163,11 +166,11 @@ class NativeApiV4DefinitionSecretRefsFinderTest {
         String resourceType = "test resource type";
         String planPublishFlowPolicy = "plan flow publish policy";
         String planSubscribeFlowPolicy = "plan flow subscribe policy";
-        String planConnectFlowPolicy = "plan flow connect policy";
+        String planEntrypointConnectFlowPolicy = "plan flow entrypoint connect policy";
         String planInteractFlowPolicy = "plan flow interact policy";
         String definitionPublishFlowPolicy = "definition flow publish policy";
         String definitionSubscribeFlowPolicy = "definition flow subscribe policy";
-        String definitionConnectFlowPolicy = "definition flow connect policy";
+        String definitionEntrypointConnectFlowPolicy = "definition flow entrypoint connect policy";
         String definitionInteractFlowPolicy = "definition flow interact policy";
         String planSecurityType = "plan security type";
         String endpointGroupType = "endpoint group type";
@@ -177,11 +180,11 @@ class NativeApiV4DefinitionSecretRefsFinderTest {
         expectedLocations.add(resourceType);
         expectedLocations.add(planPublishFlowPolicy);
         expectedLocations.add(planSubscribeFlowPolicy);
-        expectedLocations.add(planConnectFlowPolicy);
+        expectedLocations.add(planEntrypointConnectFlowPolicy);
         expectedLocations.add(planInteractFlowPolicy);
         expectedLocations.add(definitionPublishFlowPolicy);
         expectedLocations.add(definitionSubscribeFlowPolicy);
-        expectedLocations.add(definitionConnectFlowPolicy);
+        expectedLocations.add(definitionEntrypointConnectFlowPolicy);
         expectedLocations.add(definitionInteractFlowPolicy);
         expectedLocations.add(planSecurityType);
         expectedLocations.add(endpointGroupType);
@@ -210,12 +213,12 @@ class NativeApiV4DefinitionSecretRefsFinderTest {
         NativeFlow planFlow = new NativeFlow();
         planFlow.setPublish(List.of(newStep(planPublishFlowConfig, planPublishFlowPolicy)));
         planFlow.setSubscribe(List.of(newStep(planSubscribeFlowConfig, planSubscribeFlowPolicy)));
-        planFlow.setConnect(List.of(newStep(planConnectFlowConfig, planConnectFlowPolicy)));
+        planFlow.setEntrypointConnect(List.of(newStep(planEntrypointConnectFlowConfig, planEntrypointConnectFlowPolicy)));
         planFlow.setInteract(List.of(newStep(planInteractFlowConfig, planInteractFlowPolicy)));
         plan.setFlows(List.of(planFlow));
         api.setPlans(List.of(plan));
         NativeFlow flow = new NativeFlow();
-        flow.setConnect(List.of(newStep(definitionConnectFlowConfig, definitionConnectFlowPolicy)));
+        flow.setEntrypointConnect(List.of(newStep(definitionEntrypointConnectFlowConfig, definitionEntrypointConnectFlowPolicy)));
         flow.setInteract(List.of(newStep(definitionInteractFlowConfig, definitionInteractFlowPolicy)));
         flow.setPublish(List.of(newStep(definitionPublishFlowConfig, definitionPublishFlowPolicy)));
         flow.setSubscribe(List.of(newStep(definitionSubscribeFlowConfig, definitionSubscribeFlowPolicy)));
@@ -241,16 +244,13 @@ class NativeApiV4DefinitionSecretRefsFinderTest {
         Set<String> actualLocations = new HashSet<>();
 
         // execute test
-        underTest.findSecretRefs(
-            api,
-            (config, location, setter) -> {
-                actualConfigs.add(config);
-                actualLocations.add(location.id());
-                // simulate plugin has processed the config
-                String processed = processed(config);
-                setter.accept(processed);
-            }
-        );
+        underTest.findSecretRefs(api, (config, location, setter) -> {
+            actualConfigs.add(config);
+            actualLocations.add(location.id());
+            // simulate plugin has processed the config
+            String processed = processed(config);
+            setter.accept(processed);
+        });
 
         // assertions
         assertThat(actualConfigs).hasSameElementsAs(expectedConfigs);
@@ -259,17 +259,23 @@ class NativeApiV4DefinitionSecretRefsFinderTest {
         assertThat(api.getListeners().get(0).getEntrypoints().get(0).getConfiguration()).isEqualTo(processed(entrypointConfig));
         assertThat(api.getResources().get(0).getConfiguration()).isEqualTo(processed(resourceConfig));
         assertThat(api.getPlans().get(0).getSecurity().getConfiguration()).isEqualTo(processed(planSecurityConfig));
-        assertThat(api.getPlans().get(0).getFlows().get(0).getPublish().get(0).getConfiguration())
-            .isEqualTo(processed(planPublishFlowConfig));
-        assertThat(api.getPlans().get(0).getFlows().get(0).getSubscribe().get(0).getConfiguration())
-            .isEqualTo(processed(planSubscribeFlowConfig));
-        assertThat(api.getPlans().get(0).getFlows().get(0).getConnect().get(0).getConfiguration())
-            .isEqualTo(processed(planConnectFlowConfig));
-        assertThat(api.getPlans().get(0).getFlows().get(0).getInteract().get(0).getConfiguration())
-            .isEqualTo(processed(planInteractFlowConfig));
+        assertThat(api.getPlans().get(0).getFlows().get(0).getPublish().get(0).getConfiguration()).isEqualTo(
+            processed(planPublishFlowConfig)
+        );
+        assertThat(api.getPlans().get(0).getFlows().get(0).getSubscribe().get(0).getConfiguration()).isEqualTo(
+            processed(planSubscribeFlowConfig)
+        );
+        assertThat(api.getPlans().get(0).getFlows().get(0).getEntrypointConnect().get(0).getConfiguration()).isEqualTo(
+            processed(planEntrypointConnectFlowConfig)
+        );
+        assertThat(api.getPlans().get(0).getFlows().get(0).getInteract().get(0).getConfiguration()).isEqualTo(
+            processed(planInteractFlowConfig)
+        );
         assertThat(api.getFlows().get(0).getPublish().get(0).getConfiguration()).isEqualTo(processed(definitionPublishFlowConfig));
         assertThat(api.getFlows().get(0).getSubscribe().get(0).getConfiguration()).isEqualTo(processed(definitionSubscribeFlowConfig));
-        assertThat(api.getFlows().get(0).getConnect().get(0).getConfiguration()).isEqualTo(processed(definitionConnectFlowConfig));
+        assertThat(api.getFlows().get(0).getEntrypointConnect().get(0).getConfiguration()).isEqualTo(
+            processed(definitionEntrypointConnectFlowConfig)
+        );
         assertThat(api.getFlows().get(0).getInteract().get(0).getConfiguration()).isEqualTo(processed(definitionInteractFlowConfig));
         assertThat(api.getEndpointGroups().get(0).getSharedConfiguration()).isEqualTo(processed(endpointGroupSharedConfig));
         assertThat(api.getEndpointGroups().get(0).getEndpoints().get(0).getConfiguration()).isEqualTo(processed(endpointConfig));

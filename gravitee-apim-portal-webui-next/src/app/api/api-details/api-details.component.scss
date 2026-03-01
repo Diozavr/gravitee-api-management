@@ -18,8 +18,17 @@
 
   &__header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: space-between;
     gap: 16px;
+
+    &__api-info {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+    }
 
     &__content {
       display: flex;
@@ -30,9 +39,9 @@
     &__mcp-badge {
       display: flex;
       align-items: center;
-      border-width: var(--mdc-chip-outline-width, 1px);
+      border-width: var(--mat-chip-outline-width, 1px);
       border-style: solid;
-      border-radius: var(--mdc-chip-container-shape-radius, 8px);
+      border-radius: var(--mat-chip-container-shape-radius, 8px);
       margin-left: 8px;
       gap: 4px;
     }
@@ -41,7 +50,6 @@
   &__header-button {
     display: flex;
     align-items: center;
-    margin-left: auto;
     gap: 16px;
   }
 

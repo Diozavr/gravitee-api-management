@@ -24,6 +24,7 @@ import io.gravitee.definition.model.v4.plan.PlanMode;
 import io.gravitee.definition.model.v4.plan.PlanSecurity;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
 import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
+import io.gravitee.rest.api.model.v4.plan.PlanSecurityType;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
@@ -62,6 +63,7 @@ public class Plan implements GenericPlanEntity {
      * Plans promoted between environments will share the same crossId.
      */
     private String crossId;
+    private String hrid;
     private String name;
     private String description;
     private ZonedDateTime createdAt;
@@ -75,8 +77,10 @@ public class Plan implements GenericPlanEntity {
     private PlanValidationType validation;
 
     @Builder.Default
+    @Deprecated(since = "4.11.0", forRemoval = true)
     private PlanType type = PlanType.API;
 
+    @Deprecated(since = "4.11.0", forRemoval = true)
     private String apiId;
 
     private String environmentId;
@@ -92,12 +96,15 @@ public class Plan implements GenericPlanEntity {
     private boolean commentRequired;
     private String commentMessage;
     private String generalConditions;
+    private String generalConditionsHrid;
 
     private io.gravitee.definition.model.v4.plan.Plan planDefinitionHttpV4;
     private io.gravitee.definition.model.v4.nativeapi.NativePlan planDefinitionNativeV4;
     private io.gravitee.definition.model.Plan planDefinitionV2;
     private io.gravitee.definition.model.federation.FederatedPlan federatedPlanDefinition;
     private ApiType apiType;
+    private String referenceId;
+    private ReferenceType referenceType;
 
     public Plan(String apiId, io.gravitee.definition.model.v4.plan.Plan planDefinitionV4) {
         this.setPlanDefinitionHttpV4(planDefinitionV4);
@@ -108,8 +115,8 @@ public class Plan implements GenericPlanEntity {
         this.setPlanMode(planDefinitionV4.getMode());
         this.setPlanStatus(planDefinitionV4.getStatus());
         this.setPlanTags(planDefinitionV4.getTags());
-        this.setType(io.gravitee.apim.core.plan.model.Plan.PlanType.API);
-        this.setApiId(apiId);
+        this.setReferenceId(apiId);
+        this.setReferenceType(ReferenceType.API);
     }
 
     public AbstractPlan getPlanDefinitionV4() {
@@ -135,7 +142,8 @@ public class Plan implements GenericPlanEntity {
 
     @Override
     public PlanStatus getPlanStatus() {
-        return switch (definitionVersion) { // null
+        return switch (definitionVersion) {
+            // null
             case V4 -> getPlanDefinitionV4().getStatus();
             case V1, V2 -> PlanStatus.valueOf(planDefinitionV2.getStatus());
             case FEDERATED, FEDERATED_AGENT -> federatedPlanDefinition.getStatus();
@@ -193,6 +201,7 @@ public class Plan implements GenericPlanEntity {
         return this;
     }
 
+    @Deprecated
     public Plan setApiId(String apiId) {
         this.apiId = apiId;
         return this;
@@ -244,14 +253,17 @@ public class Plan implements GenericPlanEntity {
         };
     }
 
+    @Override
     public boolean isClosed() {
         return getPlanStatus() == PlanStatus.CLOSED;
     }
 
+    @Override
     public boolean isDeprecated() {
         return getPlanStatus() == PlanStatus.DEPRECATED;
     }
 
+    @Override
     public boolean isPublished() {
         return getPlanStatus() == PlanStatus.PUBLISHED;
     }
@@ -282,6 +294,7 @@ public class Plan implements GenericPlanEntity {
             .name(updated.name)
             .description(updated.description)
             .order(updated.order)
+            .hrid(updated.hrid)
             .updatedAt(TimeProvider.now())
             .planDefinitionHttpV4(updated.planDefinitionHttpV4)
             .planDefinitionNativeV4(updated.planDefinitionNativeV4)
@@ -294,10 +307,13 @@ public class Plan implements GenericPlanEntity {
             .commentRequired(updated.commentRequired)
             .commentMessage(updated.commentMessage)
             .generalConditions(updated.generalConditions)
+            .generalConditionsHrid(updated.generalConditionsHrid)
             .excludedGroups(updated.excludedGroups)
             .characteristics(updated.characteristics)
             .crossId(updated.crossId == null ? crossId : updated.crossId)
             .validation(updated.validation)
+            .referenceId(updated.referenceId)
+            .referenceType(updated.referenceType)
             .build();
     }
 

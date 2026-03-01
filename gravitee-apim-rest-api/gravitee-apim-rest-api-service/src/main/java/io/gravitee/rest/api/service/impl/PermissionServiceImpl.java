@@ -26,9 +26,8 @@ import io.gravitee.rest.api.service.UserService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import java.util.*;
 import java.util.stream.Stream;
+import lombok.CustomLog;
 import org.apache.commons.lang3.tuple.Pair;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,20 +37,21 @@ import org.springframework.stereotype.Component;
  * @author Nicolas GERAUD(nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class PermissionServiceImpl extends AbstractService implements PermissionService {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(PermissionServiceImpl.class);
 
     public static final String ORGANIZATION_ADMIN = RoleScope.ORGANIZATION.name() + ':' + SystemRole.ADMIN.name();
 
     public static final Map<RoleScope, MembershipReferenceType> ROLE_SCOPE_TO_REFERENCE_TYPE = Map.ofEntries(
         Pair.of(RoleScope.API, MembershipReferenceType.API),
+        Pair.of(RoleScope.API_PRODUCT, MembershipReferenceType.API_PRODUCT),
         Pair.of(RoleScope.APPLICATION, MembershipReferenceType.APPLICATION),
         Pair.of(RoleScope.ORGANIZATION, MembershipReferenceType.ORGANIZATION),
         Pair.of(RoleScope.ENVIRONMENT, MembershipReferenceType.ENVIRONMENT),
         Pair.of(RoleScope.GROUP, MembershipReferenceType.GROUP),
-        Pair.of(RoleScope.INTEGRATION, MembershipReferenceType.INTEGRATION)
+        Pair.of(RoleScope.INTEGRATION, MembershipReferenceType.INTEGRATION),
+        Pair.of(RoleScope.CLUSTER, MembershipReferenceType.CLUSTER)
     );
 
     @Autowired
@@ -82,7 +82,7 @@ public class PermissionServiceImpl extends AbstractService implements Permission
         RolePermissionAction... acls
     ) {
         if (isOrganizationAdmin()) {
-            LOGGER.debug("User [{}] has full access because of its ORGANIZATION ADMIN role", userId);
+            log.debug("User [{}] has full access because of its ORGANIZATION ADMIN role", userId);
             return true;
         }
 
@@ -101,7 +101,7 @@ public class PermissionServiceImpl extends AbstractService implements Permission
     @Override
     public boolean hasManagementRights(final ExecutionContext executionContext, String userId) {
         if (isOrganizationAdmin()) {
-            LOGGER.debug("User [{}] has full access because of its ORGANIZATION ADMIN role", userId);
+            log.debug("User [{}] has full access because of its ORGANIZATION ADMIN role", userId);
             return true;
         }
         UserEntity user = userService.findByIdWithRoles(executionContext, userId);
@@ -111,8 +111,7 @@ public class PermissionServiceImpl extends AbstractService implements Permission
     public static boolean isOrganizationAdmin() {
         return (
             SecurityContextHolder.getContext().getAuthentication() != null &&
-            SecurityContextHolder
-                .getContext()
+            SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getAuthorities()
                 .stream()
@@ -161,7 +160,9 @@ public class PermissionServiceImpl extends AbstractService implements Permission
     }
 
     private Stream<Map.Entry<String, char[]>> streamUserRolePermissions(UserEntity user, RoleScope scope) {
-        return streamUserRoles(user).filter(role -> scope == role.getScope()).flatMap(role -> role.getPermissions().entrySet().stream());
+        return streamUserRoles(user)
+            .filter(role -> scope == role.getScope())
+            .flatMap(role -> role.getPermissions().entrySet().stream());
     }
 
     private Stream<UserRoleEntity> streamUserRoles(UserEntity user) {

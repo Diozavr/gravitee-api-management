@@ -54,4 +54,14 @@ public class UpgraderOrder {
     public static final int SHARED_POLICY_GROUP_HRID_UPGRADER = 706;
     public static final int API_HRID_UPGRADER = 707;
     public static final int ADD_ORG_ID_NOTIFICATION_CONFIGS_UPGRADER = 708;
+    public static final int APPLICATION_HRID_UPGRADER = 709;
+    public static final int PLAN_HRID_UPGRADER = 709;
+    public static final int PAGE_HRID_UPGRADER = 710;
+    public static final int ENVIRONMENTS_DEFAULT_PORTAL_PAGE_UPGRADER = 711;
+    public static final int ENVIRONMENTS_DEFAULT_PORTAL_NAVIGATION_ITEMS_UPGRADER = 712;
+    public static final int APPLICATION_CLIENT_CERTIFICATE_MIGRATION_UPGRADER = 713;
+    public static final int ENVIRONMENTS_DEFAULT_SUBSCRIPTION_FORM_UPGRADER = 714;
+    public static final int CLUSTER_ROLES_UPGRADER = 900;
+    public static final int API_ENDPOINT_WEIGHT_UPGRADER = 560;
+    public static final int API_PRODUCT_ROLES_UPGRADER = 950;
 }

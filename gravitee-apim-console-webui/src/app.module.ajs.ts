@@ -21,11 +21,11 @@ import 'angular-material';
 import 'angular-sanitize';
 import { marked } from 'marked';
 
-import * as hljs from 'highlight.js';
+import hljs from 'highlight.js';
 // Codemirror
 import * as CodeMirror from 'codemirror';
 import moment from 'moment';
-import * as tinycolor from 'tinycolor2';
+import tinycolor from 'tinycolor2';
 import AutofocusDirective from './components/autofocus/autofocus.directive';
 import GvModelDirective from './libraries/gv-model.directive';
 import { ApiService } from './services/api.service';
@@ -107,9 +107,9 @@ import IdentityPictureDirective from './components/identityPicture/identityPictu
 import ImageDirective from './components/image/image.directive';
 import { EventService } from './services/event.service';
 import AnalyticsService from './services/analytics.service';
-import PlatformLogsController from './management/analytics/logs/platform-logs.controller';
-import PlatformLogsComponentAjs from './management/analytics/logs/platform-logs.component.ajs';
-import PlatformLogComponentAjs from './management/analytics/logs/platform-log.component.ajs';
+import PlatformLogsController from './management/analytics/legacy/logs/platform-logs.controller';
+import PlatformLogsComponentAjs from './management/analytics/legacy/logs/platform-logs.component.ajs';
+import PlatformLogComponentAjs from './management/analytics/legacy/logs/platform-log.component.ajs';
 
 import CategoryService from './services/category.service';
 import SubscriptionService from './services/subscription.service';
@@ -217,7 +217,7 @@ import CustomUserFieldsService from './services/custom-user-fields.service';
 import FlowService from './services/flow.service';
 import AlertsDashboardComponent from './components/alerts/dashboard/alerts-dashboard.component';
 import WidgetChartCountComponent from './components/dashboard/widget/count/widget-chart-count.component';
-import * as angular from 'angular';
+import angular from 'angular';
 
 import { ApiAlertsDashboardComponentAjs } from './management/api/analytics/alerts/api-alerts-dashboard.component.ajs';
 
@@ -234,8 +234,9 @@ import { GioPermissionService } from './shared/components/gio-permission/gio-per
 import { ApiAnalyticsOverviewComponentAjs } from './management/api/analytics/overview/analytics-overview.component.ajs';
 import { Router } from '@angular/router';
 import SettingsAnalyticsComponentAjs from './management/settings/analytics/settings-analytics.component.ajs';
-import AnalyticsDashboardComponentAjs from './management/analytics/analytics-dashboard/analytics-dashboard.component.ajs';
+import AnalyticsDashboardComponentAjs from './management/analytics/legacy/analytics-dashboard/analytics-dashboard.component.ajs';
 import { GroupV2Service } from './services-ngx/group-v2.service';
+import { ApiPlanV2Service } from './services-ngx/api-plan-v2.service';
 
 (<any>window).jQuery = jQuery;
 
@@ -308,6 +309,74 @@ require('highcharts/modules/map')(Highcharts);
 
 require('@highcharts/map-collection/custom/world');
 
+// Configure Highcharts to use Manrope font
+const PARAGRAPH_FONT_FAMILY = 'Manrope, sans-serif';
+const HEADER_FONT_FAMILY = 'Kanit, Roboto, Helvetica Neue, sans-serif';
+
+Highcharts.setOptions({
+  chart: {
+    style: {
+      fontFamily: PARAGRAPH_FONT_FAMILY,
+    },
+  },
+  title: {
+    style: {
+      fontFamily: HEADER_FONT_FAMILY,
+    },
+  },
+  subtitle: {
+    style: {
+      fontFamily: PARAGRAPH_FONT_FAMILY,
+    },
+  },
+  xAxis: {
+    labels: {
+      style: {
+        fontFamily: PARAGRAPH_FONT_FAMILY,
+      },
+    },
+    title: {
+      style: {
+        fontFamily: PARAGRAPH_FONT_FAMILY,
+      },
+    },
+  },
+  yAxis: {
+    labels: {
+      style: {
+        fontFamily: PARAGRAPH_FONT_FAMILY,
+      },
+    },
+    title: {
+      style: {
+        fontFamily: PARAGRAPH_FONT_FAMILY,
+      },
+    },
+  },
+  legend: {
+    itemStyle: {
+      fontFamily: PARAGRAPH_FONT_FAMILY,
+    },
+    itemHoverStyle: {
+      fontFamily: PARAGRAPH_FONT_FAMILY,
+    },
+  },
+  tooltip: {
+    style: {
+      fontFamily: PARAGRAPH_FONT_FAMILY,
+    },
+  },
+  plotOptions: {
+    series: {
+      dataLabels: {
+        style: {
+          fontFamily: PARAGRAPH_FONT_FAMILY,
+        },
+      },
+    },
+  },
+});
+
 (<any>window).moment = moment;
 require('angular-moment-picker');
 
@@ -340,7 +409,7 @@ angular.module('gravitee-management', [
 
 const graviteeManagementModule = angular.module('gravitee-management');
 
-const includeSpinnerConfig = (cfpLoadingBarProvider) => {
+const includeSpinnerConfig = cfpLoadingBarProvider => {
   cfpLoadingBarProvider.includeSpinner = false;
 };
 includeSpinnerConfig.$inject = ['cfpLoadingBarProvider'];
@@ -349,10 +418,10 @@ graviteeManagementModule.config(includeSpinnerConfig);
 graviteeManagementModule.config(interceptorConfig);
 
 // Hack to disable location provider. Now we only use angular
-const disableAjsLocationProvider = ($provide) => {
+const disableAjsLocationProvider = $provide => {
   $provide.decorator('$browser', [
     '$delegate',
-    ($delegate) => {
+    $delegate => {
       $delegate.onUrlChange = () => null;
       $delegate.url = () => '';
 
@@ -470,6 +539,7 @@ graviteeManagementModule.service('FlowService', FlowService);
 graviteeManagementModule.factory('ngApiV2Service', downgradeInjectable(ApiV2Service));
 graviteeManagementModule.factory('ngGioPermissionService', downgradeInjectable(GioPermissionService));
 graviteeManagementModule.factory('ngGroupV2Service', downgradeInjectable(GroupV2Service));
+graviteeManagementModule.factory('ngApiPlanV2Service', downgradeInjectable(ApiPlanV2Service));
 
 graviteeManagementModule.controller('DialogGenerateTokenController', DialogGenerateTokenController);
 

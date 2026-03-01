@@ -36,6 +36,7 @@ import io.gravitee.rest.api.model.v4.plan.BasePlanEntity;
 import io.gravitee.rest.api.service.common.GraviteeContext;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -49,13 +50,11 @@ class SearchApiV4ConnectionLogsUseCaseTest {
     private static final String API_ID = "f1608475-dd77-4603-a084-75dd775603e9";
     private static final Plan PLAN_1 = PlanFixtures.aPlanHttpV4().toBuilder().id("plan1").name("1st plan").build();
     private static final Plan PLAN_2 = PlanFixtures.aPlanHttpV4().toBuilder().id("plan2").name("2nd plan").build();
-    private static final BaseApplicationEntity APPLICATION_1 = BaseApplicationEntity
-        .builder()
+    private static final BaseApplicationEntity APPLICATION_1 = BaseApplicationEntity.builder()
         .id("app1")
         .name("an application name")
         .build();
-    private static final BaseApplicationEntity APPLICATION_2 = BaseApplicationEntity
-        .builder()
+    private static final BaseApplicationEntity APPLICATION_2 = BaseApplicationEntity.builder()
         .id("app2")
         .name("another application name")
         .build();
@@ -107,8 +106,7 @@ class SearchApiV4ConnectionLogsUseCaseTest {
                 .assertThat(result.data())
                 .isEqualTo(
                     List.of(
-                        ConnectionLogModel
-                            .builder()
+                        ConnectionLogModel.builder()
                             .requestId("req1")
                             .apiId(API_ID)
                             .application(APPLICATION_1)
@@ -119,6 +117,11 @@ class SearchApiV4ConnectionLogsUseCaseTest {
                             .clientIdentifier("client-identifier")
                             .transactionId("transaction-id")
                             .status(200)
+                            .uri("/my-api")
+                            .gatewayResponseTime(42)
+                            .endpoint("https://my-api-example.com")
+                            .warnings(List.of())
+                            .additionalMetrics(Map.of())
                             .build()
                     )
                 );
@@ -159,7 +162,9 @@ class SearchApiV4ConnectionLogsUseCaseTest {
         var pageNumber = 2;
         var pageSize = 5;
         logStorageService.initWithConnectionLogs(
-            IntStream.range(0, expectedTotal).mapToObj(i -> connectionLogFixtures.aConnectionLog(String.valueOf(i))).toList()
+            IntStream.range(0, expectedTotal)
+                .mapToObj(i -> connectionLogFixtures.aConnectionLog(String.valueOf(i)))
+                .toList()
         );
 
         var result = usecase.execute(
@@ -222,6 +227,19 @@ class SearchApiV4ConnectionLogsUseCaseTest {
         assertThat(result.data())
             .extracting(ConnectionLogModel::getApplication)
             .isEqualTo(List.of(BaseApplicationEntity.builder().id(unknownApp).name(UNKNOWN).build()));
+    }
+
+    @Test
+    void should_return_api_connection_logs_with_no_application_id_if_application_cannot_be_found() {
+        logStorageService.initWithConnectionLogs(List.of(connectionLogFixtures.aConnectionLog().toBuilder().applicationId(null).build()));
+
+        var result = usecase.execute(
+            GraviteeContext.getExecutionContext(),
+            new Input(API_ID, SearchLogsFilters.builder().from(FIRST_FEBRUARY_2020).to(SECOND_FEBRUARY_2020).build())
+        );
+        assertThat(result.data())
+            .extracting(ConnectionLogModel::getApplication)
+            .isEqualTo(List.of(BaseApplicationEntity.builder().id(UNKNOWN.toLowerCase()).name(UNKNOWN).build()));
     }
 
     @Test

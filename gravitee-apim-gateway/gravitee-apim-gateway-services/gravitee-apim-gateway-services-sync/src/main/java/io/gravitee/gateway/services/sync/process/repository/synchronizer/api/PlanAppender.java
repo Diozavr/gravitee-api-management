@@ -21,11 +21,11 @@ import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.Rule;
 import io.gravitee.definition.model.v4.ApiType;
 import io.gravitee.definition.model.v4.nativeapi.NativeApi;
-import io.gravitee.definition.model.v4.nativeapi.NativePlan;
 import io.gravitee.definition.model.v4.plan.AbstractPlan;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
 import io.gravitee.gateway.env.GatewayConfiguration;
 import io.gravitee.gateway.handlers.api.definition.Api;
+import io.gravitee.gateway.handlers.api.registry.ApiProductRegistry;
 import io.gravitee.gateway.reactor.ReactableApi;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.PlanRepository;
@@ -38,16 +38,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class PlanAppender {
 
     private final ObjectMapper objectMapper;
     private final PlanRepository planRepository;
     private final GatewayConfiguration gatewayConfiguration;
+    private final ApiProductRegistry apiProductRegistry;
 
     /**
      * Fetching plans for given deployables
@@ -85,10 +86,14 @@ public class PlanAppender {
                     hasPlan = api.getPlans() != null && !api.getPlans().isEmpty();
                 }
 
+                if (!hasPlan && apiProductRegistry != null && reactableApi.getEnvironmentId() != null) {
+                    var entries = apiProductRegistry.getApiProductPlanEntriesForApi(deployable.apiId(), reactableApi.getEnvironmentId());
+                    hasPlan = !entries.isEmpty();
+                }
+
                 if (!hasPlan) {
                     log.warn("No plan found, skipping deployment for api: {}", deployable.apiId());
                 }
-
                 return hasPlan;
             })
             .collect(Collectors.toList());
@@ -107,7 +112,7 @@ public class PlanAppender {
             final Map<String, List<Plan>> plansByApi = planRepository
                 .findByApisAndEnvironments(apiV1Ids, environments)
                 .stream()
-                .collect(Collectors.groupingBy(Plan::getApi));
+                .collect(Collectors.groupingBy(Plan::getReferenceId));
 
             plansByApi.forEach((apiId, plans) -> {
                 final Api api = apiById.get(apiId);
@@ -116,8 +121,8 @@ public class PlanAppender {
                     .setPlans(
                         plans
                             .stream()
-                            .filter(plan ->
-                                Plan.Status.PUBLISHED.equals(plan.getStatus()) || Plan.Status.DEPRECATED.equals(plan.getStatus())
+                            .filter(
+                                plan -> Plan.Status.PUBLISHED.equals(plan.getStatus()) || Plan.Status.DEPRECATED.equals(plan.getStatus())
                             )
                             .map(this::convert)
                             .collect(Collectors.toList())
@@ -137,7 +142,8 @@ public class PlanAppender {
         plan.setSelectionRule(repoPlan.getSelectionRule());
         plan.setTags(repoPlan.getTags());
         plan.setStatus(repoPlan.getStatus().name());
-        plan.setApi(repoPlan.getApi());
+        plan.setReferenceId(repoPlan.getReferenceId());
+        plan.setReferenceType(repoPlan.getReferenceType().name());
 
         if (repoPlan.getSecurity() != null) {
             plan.setSecurity(repoPlan.getSecurity().name());

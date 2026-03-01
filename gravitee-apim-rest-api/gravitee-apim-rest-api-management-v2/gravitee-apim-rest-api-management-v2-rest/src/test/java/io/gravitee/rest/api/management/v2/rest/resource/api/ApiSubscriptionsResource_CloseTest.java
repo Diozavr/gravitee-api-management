@@ -26,6 +26,7 @@ import static org.mockito.Mockito.when;
 import inmemory.ApplicationCrudServiceInMemory;
 import inmemory.SubscriptionCrudServiceInMemory;
 import io.gravitee.apim.core.subscription.model.SubscriptionEntity;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.apim.core.subscription.use_case.CloseSubscriptionUseCase;
 import io.gravitee.rest.api.management.v2.rest.model.Subscription;
 import io.gravitee.rest.api.management.v2.rest.model.SubscriptionStatus;
@@ -95,10 +96,11 @@ public class ApiSubscriptionsResource_CloseTest extends AbstractResourceTest {
     public void should_return_404_if_subscription_associated_to_another_api() {
         subscriptionCrudServiceInMemory.initWith(
             List.of(
-                SubscriptionEntity
-                    .builder()
+                SubscriptionEntity.builder()
                     .id(SUBSCRIPTION)
                     .apiId("ANOTHER_API")
+                    .referenceId("ANOTHER_API")
+                    .referenceType(SubscriptionReferenceType.API)
                     .planId(PLAN)
                     .applicationId(APPLICATION)
                     .status(SubscriptionEntity.Status.ACCEPTED)
@@ -119,8 +121,7 @@ public class ApiSubscriptionsResource_CloseTest extends AbstractResourceTest {
                 eq(API),
                 eq(RolePermissionAction.UPDATE)
             )
-        )
-            .thenReturn(false);
+        ).thenReturn(false);
 
         final Response response = rootTarget().request().post(Entity.json(null));
         assertThat(response).hasStatus(FORBIDDEN_403).asError().hasMessage("You do not have sufficient rights to access this resource");
@@ -130,10 +131,11 @@ public class ApiSubscriptionsResource_CloseTest extends AbstractResourceTest {
     public void should_return_subscription_when_subscription_closed() {
         subscriptionCrudServiceInMemory.initWith(
             List.of(
-                SubscriptionEntity
-                    .builder()
+                SubscriptionEntity.builder()
                     .id(SUBSCRIPTION)
                     .apiId(API)
+                    .referenceId(API)
+                    .referenceType(SubscriptionReferenceType.API)
                     .planId(PLAN)
                     .applicationId(APPLICATION)
                     .status(SubscriptionEntity.Status.ACCEPTED)

@@ -54,6 +54,7 @@
         <module>gravitee-apim-rest-api-spec-converter</module>
         <module>gravitee-apim-rest-api-test-fixtures</module>
         <module>gravitee-apim-rest-api-coverage</module>
+        <module>gravitee-apim-rest-api-kafka-explorer</module>
     </modules>
 
     <dependencyManagement>
@@ -70,6 +71,12 @@
         <dependency>
             <groupId>io.gravitee.common</groupId>
             <artifactId>gravitee-common</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.gravitee.node</groupId>
+            <artifactId>gravitee-node-logging</artifactId>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>

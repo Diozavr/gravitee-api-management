@@ -17,40 +17,49 @@ package io.gravitee.apim.core.subscription.domain_service;
 
 import io.gravitee.apim.core.DomainService;
 import io.gravitee.apim.core.api.crud_service.ApiCrudService;
-import io.gravitee.apim.core.api.domain_service.ApiPrimaryOwnerDomainService;
 import io.gravitee.apim.core.api_key.domain_service.GenerateApiKeyDomainService;
 import io.gravitee.apim.core.application.crud_service.ApplicationCrudService;
 import io.gravitee.apim.core.audit.domain_service.AuditDomainService;
 import io.gravitee.apim.core.audit.model.ApiAuditLogEntity;
+import io.gravitee.apim.core.audit.model.ApiProductAuditLogEntity;
 import io.gravitee.apim.core.audit.model.ApplicationAuditLogEntity;
 import io.gravitee.apim.core.audit.model.AuditInfo;
 import io.gravitee.apim.core.audit.model.AuditProperties;
 import io.gravitee.apim.core.audit.model.event.SubscriptionAuditEvent;
+import io.gravitee.apim.core.integration.crud_service.IntegrationCrudService;
+import io.gravitee.apim.core.integration.exception.IntegrationNotFoundException;
+import io.gravitee.apim.core.integration.model.Integration;
 import io.gravitee.apim.core.integration.model.IntegrationSubscription;
 import io.gravitee.apim.core.integration.service_provider.IntegrationAgent;
 import io.gravitee.apim.core.membership.domain_service.ApplicationPrimaryOwnerDomainService;
+import io.gravitee.apim.core.metadata.crud_service.MetadataCrudService;
+import io.gravitee.apim.core.metadata.model.Metadata;
 import io.gravitee.apim.core.notification.domain_service.TriggerNotificationDomainService;
 import io.gravitee.apim.core.notification.model.Recipient;
-import io.gravitee.apim.core.notification.model.hook.HookContextEntry;
 import io.gravitee.apim.core.notification.model.hook.SubscriptionAcceptedApiHookContext;
 import io.gravitee.apim.core.notification.model.hook.SubscriptionAcceptedApplicationHookContext;
 import io.gravitee.apim.core.plan.crud_service.PlanCrudService;
 import io.gravitee.apim.core.plan.model.Plan;
 import io.gravitee.apim.core.subscription.crud_service.SubscriptionCrudService;
 import io.gravitee.apim.core.subscription.model.SubscriptionEntity;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.apim.core.user.crud_service.UserCrudService;
 import io.gravitee.apim.core.user.model.BaseUserEntity;
 import io.gravitee.common.utils.TimeProvider;
+import io.gravitee.definition.model.federation.FederatedApi;
 import io.gravitee.definition.model.federation.SubscriptionParameter;
 import io.gravitee.rest.api.model.context.OriginContext;
 import java.time.ZonedDateTime;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @DomainService
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class AcceptSubscriptionDomainService {
 
@@ -67,15 +76,18 @@ public class AcceptSubscriptionDomainService {
     private final TriggerNotificationDomainService triggerNotificationDomainService;
     private final UserCrudService userCrudService;
     private final ApplicationPrimaryOwnerDomainService applicationPrimaryOwnerDomainService;
+    private final MetadataCrudService metadataCrudService;
+    private final IntegrationCrudService integrationCrudService;
 
     /**
      * Auto accept a subscription when Plan is configured with AUTO validation.
+     *
      * @param subscriptionId The subscription to accept.
-     * @param startingAt The starting date of the subscription.
-     * @param endingAt The ending date of the subscription. Can be null for non expiring subscription.
-     * @param reason The optional reason of accepting the subscription.
-     * @param customKey The optional custom key to use for API Key subscription.
-     * @param auditInfo Audit information about whom accepting the subscription.
+     * @param startingAt     The starting date of the subscription.
+     * @param endingAt       The ending date of the subscription. Can be null for non expiring subscription.
+     * @param reason         The optional reason of accepting the subscription.
+     * @param customKey      The optional custom key to use for API Key subscription.
+     * @param auditInfo      Audit information about whom accepting the subscription.
      * @return The accepted subscription.
      */
     public SubscriptionEntity autoAccept(
@@ -95,13 +107,14 @@ public class AcceptSubscriptionDomainService {
 
     /**
      * Accept a subscription.
+     *
      * @param subscription The subscription to accept.
-     * @param plan The subscribed plan.
-     * @param startingAt The starting date of the subscription.
-     * @param endingAt The ending date of the subscription. Can be null for non expiring subscription.
-     * @param reason The optional reason of accepting the subscription.
-     * @param customKey The optional custom key to use for API Key subscription.
-     * @param auditInfo Audit information about whom accepting the subscription.
+     * @param plan         The subscribed plan.
+     * @param startingAt   The starting date of the subscription.
+     * @param endingAt     The ending date of the subscription. Can be null for non expiring subscription.
+     * @param reason       The optional reason of accepting the subscription.
+     * @param customKey    The optional custom key to use for API Key subscription.
+     * @param auditInfo    Audit information about whom accepting the subscription.
      * @return The accepted subscription.
      */
     public SubscriptionEntity accept(
@@ -120,7 +133,11 @@ public class AcceptSubscriptionDomainService {
         if (plan.isFederated()) {
             var api = apiCrudService.get(subscription.getApiId());
             var application = applicationCrudService.findById(subscription.getApplicationId(), api.getEnvironmentId());
-            var integrationId = api.getOriginContext() instanceof OriginContext.Integration inte ? inte.integrationId() : null;
+            var metadata = metadataCrudService.findByApiId(subscription.getApiId());
+            var integrationId = api.getOriginContext() instanceof OriginContext.Integration(Object a, String integId, Object c, Object d)
+                ? integId
+                : null;
+            var apiDefinition = api.getApiDefinitionValue() instanceof FederatedApi federatedApi ? federatedApi : null;
 
             SubscriptionParameter subscriptionParams;
             if (plan.isApiKey()) {
@@ -131,14 +148,25 @@ public class AcceptSubscriptionDomainService {
                 throw new IllegalArgumentException("Only OAuth and API KEY plans are supported");
             }
 
+            var provider = integrationCrudService
+                .findApiIntegrationById(integrationId)
+                .map(Integration.ApiIntegration::provider)
+                .orElseThrow(() -> new IntegrationNotFoundException(integrationId));
+            var providerMetadata = getProviderRelatedMetadata(metadata, provider);
             return integrationAgent
-                .subscribe(integrationId, api.getFederatedApiDefinition(), subscriptionParams, subscription.getId(), application)
+                .subscribe(integrationId, apiDefinition, subscriptionParams, subscription.getId(), application, providerMetadata)
                 .map(integrationSubscription -> acceptByIntegration(subscription.getId(), integrationSubscription, auditInfo))
                 .onErrorReturn(throwable -> rejectByIntegration(integrationId, subscription.getId(), auditInfo, throwable.getMessage()))
                 .blockingGet();
         }
 
-        var acceptedSubscription = subscription.acceptBy(auditInfo.actor().userId(), startingAt, endingAt, reason);
+        var acceptedSubscription = subscription.acceptBy(
+            auditInfo.actor().userId(),
+            startingAt,
+            endingAt,
+            reason,
+            subscription.getMetadata()
+        );
 
         if (plan.isApiKey()) {
             synchronized (this) {
@@ -154,11 +182,19 @@ public class AcceptSubscriptionDomainService {
         return acceptedSubscription;
     }
 
+    private Map<String, String> getProviderRelatedMetadata(Collection<Metadata> metadata, String provider) {
+        return metadata
+            .stream()
+            .filter(md -> md.getKey().contains(provider))
+            .collect(Collectors.toMap(Metadata::getKey, Metadata::getValue));
+    }
+
     /**
      * Accept a subscription once the integration successfully did its job.
-     * @param subscriptionId The subscription to accept.
+     *
+     * @param subscriptionId          The subscription to accept.
      * @param integrationSubscription The subscription coming from Integration.
-     * @param auditInfo Audit information about whom accepting the subscription.
+     * @param auditInfo               Audit information about whom accepting the subscription.
      */
     private SubscriptionEntity acceptByIntegration(
         String subscriptionId,
@@ -191,8 +227,9 @@ public class AcceptSubscriptionDomainService {
 
     /**
      * Reject a subscription once the integration fails to do its job.
+     *
      * @param subscriptionId The subscription to reject.
-     * @param auditInfo Audit information about whom accepting the subscription.
+     * @param auditInfo      Audit information about whom accepting the subscription.
      */
     private SubscriptionEntity rejectByIntegration(String integrationId, String subscriptionId, AuditInfo auditInfo, String errorMessage) {
         log.warn(
@@ -216,23 +253,43 @@ public class AcceptSubscriptionDomainService {
     }
 
     private void createAudit(SubscriptionEntity subscriptionEntity, SubscriptionEntity acceptedSubscriptionEntity, AuditInfo auditInfo) {
-        auditDomainService.createApiAuditLog(
-            ApiAuditLogEntity
-                .builder()
-                .actor(auditInfo.actor())
-                .organizationId(auditInfo.organizationId())
-                .environmentId(auditInfo.environmentId())
-                .apiId(subscriptionEntity.getApiId())
-                .event(SubscriptionAuditEvent.SUBSCRIPTION_UPDATED)
-                .oldValue(subscriptionEntity)
-                .newValue(acceptedSubscriptionEntity)
-                .createdAt(acceptedSubscriptionEntity.getProcessedAt())
-                .properties(Collections.singletonMap(AuditProperties.APPLICATION, subscriptionEntity.getApplicationId()))
-                .build()
-        );
+        String referenceId = subscriptionEntity.getReferenceId();
+        boolean isApiProduct = SubscriptionReferenceType.API_PRODUCT == subscriptionEntity.getReferenceType();
+        var createdAt = acceptedSubscriptionEntity.getProcessedAt() != null
+            ? acceptedSubscriptionEntity.getProcessedAt()
+            : acceptedSubscriptionEntity.getClosedAt();
+
+        if (isApiProduct) {
+            auditDomainService.createApiProductAuditLog(
+                ApiProductAuditLogEntity.builder()
+                    .actor(auditInfo.actor())
+                    .organizationId(auditInfo.organizationId())
+                    .environmentId(auditInfo.environmentId())
+                    .apiProductId(referenceId)
+                    .event(SubscriptionAuditEvent.SUBSCRIPTION_UPDATED)
+                    .oldValue(subscriptionEntity)
+                    .newValue(acceptedSubscriptionEntity)
+                    .createdAt(createdAt)
+                    .properties(Collections.singletonMap(AuditProperties.APPLICATION, subscriptionEntity.getApplicationId()))
+                    .build()
+            );
+        } else {
+            auditDomainService.createApiAuditLog(
+                ApiAuditLogEntity.builder()
+                    .actor(auditInfo.actor())
+                    .organizationId(auditInfo.organizationId())
+                    .environmentId(auditInfo.environmentId())
+                    .apiId(referenceId)
+                    .event(SubscriptionAuditEvent.SUBSCRIPTION_UPDATED)
+                    .oldValue(subscriptionEntity)
+                    .newValue(acceptedSubscriptionEntity)
+                    .createdAt(createdAt)
+                    .properties(Collections.singletonMap(AuditProperties.APPLICATION, subscriptionEntity.getApplicationId()))
+                    .build()
+            );
+        }
         auditDomainService.createApplicationAuditLog(
-            ApplicationAuditLogEntity
-                .builder()
+            ApplicationAuditLogEntity.builder()
                 .actor(auditInfo.actor())
                 .organizationId(auditInfo.organizationId())
                 .environmentId(auditInfo.environmentId())
@@ -240,8 +297,8 @@ public class AcceptSubscriptionDomainService {
                 .event(SubscriptionAuditEvent.SUBSCRIPTION_UPDATED)
                 .oldValue(subscriptionEntity)
                 .newValue(acceptedSubscriptionEntity)
-                .createdAt(acceptedSubscriptionEntity.getProcessedAt())
-                .properties(Collections.singletonMap(AuditProperties.API, subscriptionEntity.getApiId()))
+                .createdAt(createdAt)
+                .properties(Collections.singletonMap(isApiProduct ? AuditProperties.API_PRODUCT : AuditProperties.API, referenceId))
                 .build()
         );
     }
@@ -260,28 +317,33 @@ public class AcceptSubscriptionDomainService {
             acceptedSubscription.getApplicationId()
         );
 
-        triggerNotificationDomainService.triggerApiNotification(
-            organizationId,
-            environmentId,
-            new SubscriptionAcceptedApiHookContext(
-                acceptedSubscription.getApiId(),
-                acceptedSubscription.getApplicationId(),
-                acceptedSubscription.getPlanId(),
-                acceptedSubscription.getId(),
-                applicationPrimaryOwner.id()
-            )
-        );
-        triggerNotificationDomainService.triggerApplicationNotification(
-            organizationId,
-            environmentId,
-            new SubscriptionAcceptedApplicationHookContext(
-                acceptedSubscription.getApplicationId(),
-                acceptedSubscription.getApiId(),
-                acceptedSubscription.getPlanId(),
-                acceptedSubscription.getId(),
-                applicationPrimaryOwner.id()
-            ),
-            additionalRecipients
-        );
+        boolean isApiProduct = SubscriptionReferenceType.API_PRODUCT.equals(acceptedSubscription.getReferenceType());
+
+        // Notifications are not applicable for API Product subscriptions (TODO: implement notifications for API Product subscriptions)
+        if (!isApiProduct) {
+            triggerNotificationDomainService.triggerApiNotification(
+                organizationId,
+                environmentId,
+                new SubscriptionAcceptedApiHookContext(
+                    acceptedSubscription.getApiId(),
+                    acceptedSubscription.getApplicationId(),
+                    acceptedSubscription.getPlanId(),
+                    acceptedSubscription.getId(),
+                    applicationPrimaryOwner.id()
+                )
+            );
+            triggerNotificationDomainService.triggerApplicationNotification(
+                organizationId,
+                environmentId,
+                new SubscriptionAcceptedApplicationHookContext(
+                    acceptedSubscription.getApplicationId(),
+                    acceptedSubscription.getApiId(),
+                    acceptedSubscription.getPlanId(),
+                    acceptedSubscription.getId(),
+                    applicationPrimaryOwner.id()
+                ),
+                additionalRecipients
+            );
+        }
     }
 }

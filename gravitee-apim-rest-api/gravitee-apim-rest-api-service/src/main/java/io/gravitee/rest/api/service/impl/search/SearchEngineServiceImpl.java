@@ -19,9 +19,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.gravitee.apim.core.api.crud_service.ApiCrudService;
 import io.gravitee.apim.core.api.domain_service.ApiIndexerDomainService;
+import io.gravitee.apim.core.api_product.crud_service.ApiProductCrudService;
+import io.gravitee.apim.core.api_product.domain_service.ApiProductIndexerDomainService;
 import io.gravitee.apim.core.documentation.crud_service.PageCrudService;
+import io.gravitee.apim.core.exception.NotFoundDomainException;
 import io.gravitee.apim.core.search.Indexer;
 import io.gravitee.apim.core.search.model.IndexableApi;
+import io.gravitee.apim.core.search.model.IndexableApiProduct;
 import io.gravitee.apim.core.search.model.IndexablePage;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.model.MessageRecipient;
@@ -52,9 +56,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
@@ -66,6 +68,7 @@ import org.springframework.util.Assert;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class SearchEngineServiceImpl implements SearchEngineService {
 
@@ -74,7 +77,6 @@ public class SearchEngineServiceImpl implements SearchEngineService {
     /**
      * Logger.
      */
-    private final Logger logger = LoggerFactory.getLogger(SearchEngineServiceImpl.class);
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Autowired
@@ -114,6 +116,12 @@ public class SearchEngineServiceImpl implements SearchEngineService {
 
     @Autowired
     private ApiIndexerDomainService apiIndexerDomainService;
+
+    @Autowired
+    private ApiProductIndexerDomainService apiProductIndexerDomainService;
+
+    @Autowired
+    private ApiProductCrudService apiProductCrudService;
 
     @Async("indexerThreadPoolTaskExecutor")
     @Override
@@ -162,7 +170,7 @@ public class SearchEngineServiceImpl implements SearchEngineService {
         try {
             indexer.commit();
         } catch (TechnicalException te) {
-            logger.error("Unexpected error while Lucene commit", te);
+            log.error("Unexpected error while Lucene commit", te);
         }
     }
 
@@ -196,14 +204,14 @@ public class SearchEngineServiceImpl implements SearchEngineService {
             msg.setContent(mapper.writeValueAsString(content));
             commandService.send(executionContext, msg);
         } catch (JsonProcessingException e) {
-            logger.error("Unexpected error while sending a message", e);
+            log.error("Unexpected error while sending a message", e);
         }
     }
 
     private Indexable getSource(final ExecutionContext executionContext, String clazz, String id) {
         try {
             if (ApiEntity.class.getName().equals(clazz) || io.gravitee.rest.api.model.v4.api.ApiEntity.class.getName().equals(clazz)) {
-                GenericApiEntity genericApi = apiSearchService.findGenericById(executionContext, id);
+                GenericApiEntity genericApi = apiSearchService.findGenericById(executionContext, id, false, false, true);
                 return apiMetadataService.fetchMetadataForApi(executionContext, genericApi);
             } else if (PageEntity.class.getName().equals(clazz) || ApiPageEntity.class.getName().equals(clazz)) {
                 return pageService.findById(id);
@@ -217,9 +225,17 @@ public class SearchEngineServiceImpl implements SearchEngineService {
                     new Indexer.IndexationContext(executionContext.getOrganizationId(), executionContext.getEnvironmentId()),
                     api
                 );
+            } else if (IndexableApiProduct.class.getName().equals(clazz)) {
+                var apiProduct = apiProductCrudService.get(id);
+                return apiProductIndexerDomainService.toIndexableApiProduct(
+                    new Indexer.IndexationContext(executionContext.getOrganizationId(), executionContext.getEnvironmentId()),
+                    apiProduct
+                );
             }
         } catch (final AbstractNotFoundException nfe) {
             // ignore not found exception because may be due to synchronization not yet processed by DBs
+        } catch (final NotFoundDomainException nfe) {
+            // ignore not found (e.g. ApiProductNotFoundException) for same reason
         }
         return null;
     }
@@ -229,13 +245,16 @@ public class SearchEngineServiceImpl implements SearchEngineService {
             .stream()
             .filter(transformer -> transformer.handle(source.getClass()))
             .findFirst()
-            .ifPresent(transformer -> {
-                try {
-                    indexer.index(transformer.transform(source), commit);
-                } catch (TechnicalException te) {
-                    logger.error("Unexpected error while indexing a document", te);
-                }
-            });
+            .ifPresentOrElse(
+                transformer -> {
+                    try {
+                        indexer.index(transformer.transform(source), commit);
+                    } catch (TechnicalException te) {
+                        log.error("Unexpected error while indexing a document", te);
+                    }
+                },
+                () -> log.warn("No document transformer found for type [{}], document will not be indexed", source.getClass().getName())
+            );
     }
 
     private void deleteLocally(Indexable source) {
@@ -243,13 +262,20 @@ public class SearchEngineServiceImpl implements SearchEngineService {
             .stream()
             .filter(transformer -> transformer.handle(source.getClass()))
             .findFirst()
-            .ifPresent(transformer -> {
-                try {
-                    indexer.remove(transformer.transform(source));
-                } catch (TechnicalException te) {
-                    logger.error("Unexpected error while deleting a document", te);
-                }
-            });
+            .ifPresentOrElse(
+                transformer -> {
+                    try {
+                        indexer.remove(transformer.transform(source));
+                    } catch (TechnicalException te) {
+                        log.error("Unexpected error while deleting a document", te);
+                    }
+                },
+                () ->
+                    log.warn(
+                        "No document transformer found for type [{}], document will not be removed from index",
+                        source.getClass().getName()
+                    )
+            );
     }
 
     private Indexable createInstance(String className) throws Exception {
@@ -258,7 +284,7 @@ public class SearchEngineServiceImpl implements SearchEngineService {
             Assert.isAssignable(Indexable.class, clazz);
             return (Indexable) clazz.newInstance();
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException ex) {
-            logger.error("Unable to instantiate class: {}", className, ex);
+            log.error("Unable to instantiate class: {}", className, ex);
             throw ex;
         }
     }
@@ -285,7 +311,7 @@ public class SearchEngineServiceImpl implements SearchEngineService {
                     }
                     return Optional.of(searcher.search(executionContext, query));
                 } catch (TechnicalException te) {
-                    logger.error("Unexpected error while searching a document", te);
+                    log.error("Unexpected error while searching a document", te);
                     return Optional.empty();
                 }
             });

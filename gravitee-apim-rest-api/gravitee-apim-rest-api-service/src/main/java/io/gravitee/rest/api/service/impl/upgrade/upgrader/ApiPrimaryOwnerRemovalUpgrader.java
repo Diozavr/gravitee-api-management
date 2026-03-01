@@ -35,7 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -44,7 +44,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class ApiPrimaryOwnerRemovalUpgrader implements Upgrader {
 
     private final RoleRepository roleRepository;
@@ -85,14 +85,14 @@ public class ApiPrimaryOwnerRemovalUpgrader implements Upgrader {
     @Override
     public boolean upgrade() throws UpgraderException {
         return this.wrapException(() -> {
-                Set<Organization> organizations = organizationRepository.findAll();
-                for (Organization org : organizations) {
-                    if (!checkOrganization(org.getId())) {
-                        return false;
-                    }
+            Set<Organization> organizations = organizationRepository.findAll();
+            for (Organization org : organizations) {
+                if (!checkOrganization(org.getId())) {
+                    return false;
                 }
-                return true;
-            });
+            }
+            return true;
+        });
     }
 
     private boolean checkOrganization(String organizationId) throws TechnicalException {
@@ -112,10 +112,9 @@ public class ApiPrimaryOwnerRemovalUpgrader implements Upgrader {
         while (!apiIds.isEmpty()) {
             corruptedApiIds.addAll(findCorruptedApiIds(apiPrimaryOwnerRoleId, apiIds));
             pageable = new PageableBuilder().pageNumber(page++).pageSize(size).build();
-            apiIds =
-                apiRepository
-                    .searchIds(List.of(new ApiCriteria.Builder().environments(environmentIds).build()), pageable, sortable)
-                    .getContent();
+            apiIds = apiRepository
+                .searchIds(List.of(new ApiCriteria.Builder().environments(environmentIds).build()), pageable, sortable)
+                .getContent();
         }
 
         if (!corruptedApiIds.isEmpty()) {

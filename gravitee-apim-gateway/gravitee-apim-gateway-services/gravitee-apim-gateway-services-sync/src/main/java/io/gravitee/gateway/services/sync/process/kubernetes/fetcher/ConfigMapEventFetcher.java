@@ -16,8 +16,11 @@
 package io.gravitee.gateway.services.sync.process.kubernetes.fetcher;
 
 import static io.gravitee.repository.management.model.Event.EventProperties.API_ID;
+import static io.gravitee.repository.management.model.Event.EventProperties.DEPLOYMENT_NUMBER;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.gravitee.common.utils.IdGenerator;
+import io.gravitee.common.utils.UUID;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.v4.ApiType;
 import io.gravitee.kubernetes.client.KubernetesClient;
@@ -36,14 +39,14 @@ import io.reactivex.rxjava3.core.Maybe;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class ConfigMapEventFetcher {
 
@@ -74,17 +77,18 @@ public class ConfigMapEventFetcher {
     }
 
     public Flowable<List<io.gravitee.repository.management.model.Event>> fetchAll(String kind) {
-        return listConfigMaps(kind).flatMapMaybe(cm -> convertTo(new Event<>(EVENT_ADDED, cm))).buffer(bulkEvents());
+        return listConfigMaps(kind)
+            .flatMapMaybe(cm -> convertTo(new Event<>(EVENT_ADDED, cm)))
+            .buffer(bulkEvents());
     }
 
     public Flowable<List<io.gravitee.repository.management.model.Event>> fetchLatest(String kind) {
         return watchConfigMaps(kind)
             .flatMapMaybe(configMapEvent ->
-                convertTo(configMapEvent)
-                    .onErrorResumeNext(throwable -> {
-                        log.warn("Error occurred while handling event. Ignoring.", throwable);
-                        return Maybe.empty();
-                    })
+                convertTo(configMapEvent).onErrorResumeNext(throwable -> {
+                    log.warn("Error occurred while handling event. Ignoring.", throwable);
+                    return Maybe.empty();
+                })
             )
             .buffer(bulkEvents());
     }
@@ -94,14 +98,15 @@ public class ConfigMapEventFetcher {
         if (namespacesAsList.contains("ALL")) {
             return listConfigMaps(null, kind).toFlowable().flatMap(Flowable::fromIterable);
         }
-        return Flowable.fromIterable(namespacesAsList).flatMapMaybe(ns -> listConfigMaps(ns, kind)).flatMap(Flowable::fromIterable);
+        return Flowable.fromIterable(namespacesAsList)
+            .flatMapMaybe(ns -> listConfigMaps(ns, kind))
+            .flatMap(Flowable::fromIterable);
     }
 
     private Maybe<List<ConfigMap>> listConfigMaps(String namespace, String kind) {
         return client
             .get(
-                ResourceQuery
-                    .configMaps()
+                ResourceQuery.configMaps()
                     .namespace(namespace)
                     .labelSelector(LabelSelector.equals(LABEL_MANAGED_BY, RESOURCE_GROUP))
                     .labelSelector(LabelSelector.equals(LABEL_GIO_TYPE, kind))
@@ -130,8 +135,7 @@ public class ConfigMapEventFetcher {
     private Flowable<io.gravitee.kubernetes.client.model.v1.Event<ConfigMap>> watchConfigMaps(String namespace, String kind) {
         return client
             .watch(
-                WatchQuery
-                    .configMaps()
+                WatchQuery.configMaps()
                     .namespace(namespace)
                     .labelSelector(LabelSelector.equals(LABEL_MANAGED_BY, RESOURCE_GROUP))
                     .labelSelector(LabelSelector.equals(LABEL_GIO_TYPE, kind))
@@ -152,9 +156,9 @@ public class ConfigMapEventFetcher {
             final String definition = configMap.getData().get(DATA_DEFINITION);
 
             // Extract the API definition version from the data. Consider it to be V2 to keep backward compatibility.
-            final String apiDefinitionVersion = Optional
-                .ofNullable(configMap.getData().get(DATA_API_DEFINITION_VERSION))
-                .orElse(DefinitionVersion.V2.getLabel());
+            final String apiDefinitionVersion = Optional.ofNullable(configMap.getData().get(DATA_API_DEFINITION_VERSION)).orElse(
+                DefinitionVersion.V2.getLabel()
+            );
 
             if (definition != null) {
                 String apiId;
@@ -179,7 +183,13 @@ public class ConfigMapEventFetcher {
 
                 // Need to deserialize api definition in order to recreate a regular Event which can be handled by the ApiSynchronizer.
                 final io.gravitee.repository.management.model.Event event = new io.gravitee.repository.management.model.Event();
-                event.setProperties(Collections.singletonMap(API_ID.getValue(), apiId));
+                event.setProperties(
+                    Map.ofEntries(
+                        Map.entry(API_ID.getValue(), apiId),
+                        // simulate a deployment number to define a revision in the reactable
+                        Map.entry(DEPLOYMENT_NUMBER.getValue(), configMap.getMetadata().getResourceVersion())
+                    )
+                );
                 event.setCreatedAt(new Date());
 
                 final io.gravitee.repository.management.model.Api api = new io.gravitee.repository.management.model.Api();

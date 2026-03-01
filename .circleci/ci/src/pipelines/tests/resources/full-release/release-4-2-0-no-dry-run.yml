@@ -29,8 +29,35 @@ commands:
   cmd-install-yarn:
     steps:
       - run:
-          name: Yarn Set Version Stable
-          command: yarn set version 4.1.1
+          name: Enable Corepack and Set Yarn Version
+          command: |-
+            corepack enable || sudo corepack enable
+                    yarn set version 4.1.1
+  cmd-workspace-install:
+    steps:
+      - restore_cache:
+          name: Restore Yarn workspace cache
+          keys:
+            - gravitee-api-management-v14-workspace-{{ .Branch }}-{{ checksum "yarn.lock" }}
+            - gravitee-api-management-v14-workspace-{{ .Branch }}
+      - run:
+          name: Install workspace dependencies
+          command: yarn install --frozen-lockfile
+      - save_cache:
+          name: Save Yarn workspace cache
+          key: gravitee-api-management-v14-workspace-{{ .Branch }}-{{ checksum "yarn.lock" }}
+          paths:
+            - ./node_modules
+  cmd-notify-on-failure:
+    steps:
+      - keeper/env-export:
+          secret-url: keeper://ZOz4db245GNaETVwmPBk8w/field/password
+          var-name: SLACK_ACCESS_TOKEN
+      - slack/notify:
+          channel: C02JENTV2AX
+          branch_pattern: master,[0-9]+\.[0-9]+\.x
+          event: fail
+          template: basic_fail_1
   cmd-webui-install:
     parameters:
       apim-ui-project:
@@ -52,16 +79,6 @@ commands:
           key: << parameters.apim-ui-project >>-cache-v1-{{ .Branch }}-{{ checksum "<< parameters.apim-ui-project >>/yarn.lock" }}
           paths:
             - ./<< parameters.apim-ui-project >>/node_modules
-  cmd-notify-on-failure:
-    steps:
-      - keeper/env-export:
-          secret-url: keeper://ZOz4db245GNaETVwmPBk8w/field/password
-          var-name: SLACK_ACCESS_TOKEN
-      - slack/notify:
-          channel: C02JENTV2AX
-          branch_pattern: master,[0-9]+\.[0-9]+\.x
-          event: fail
-          template: basic_fail_1
   cmd-create-docker-context:
     steps:
       - run:
@@ -96,8 +113,8 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
-            - gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}
+            - gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
+            - gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}
     description: Restore Maven cache for a dedicated job
   cmd-prepare-gpg:
     steps:
@@ -122,7 +139,7 @@ commands:
           name: Exclude all APIM artefacts from cache.
           command: rm -rf ~/.m2/repository/io/gravitee/apim
       - save_cache:
-          key: gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
+          key: gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
           paths:
             - ~/.m2
           when: always
@@ -193,7 +210,7 @@ jobs:
             }
   job-console-webui-build:
     docker:
-      - image: cimg/node:20.11.1
+      - image: cimg/node:22.12.0
     resource_class: large
     steps:
       - checkout
@@ -202,17 +219,13 @@ jobs:
       - setup_remote_docker:
           version: default
       - cmd-install-yarn
-      - cmd-webui-install:
-          apim-ui-project: gravitee-apim-console-webui
+      - cmd-workspace-install
       - run:
           name: Update Build version
           command: "sed -i 's/\"version\": \".*\"/\"version\": \"4.2.0\"/' gravitee-apim-console-webui/build.json"
       - run:
-          name: Build
-          command: yarn build:prod
-          environment:
-            NODE_OPTIONS: --max_old_space_size=4086
-          working_directory: gravitee-apim-console-webui
+          name: Build Console
+          command: NODE_OPTIONS=--max_old_space_size=4086 yarn console:build:prod
       - cmd-notify-on-failure
       - persist_to_workspace:
           root: .
@@ -220,7 +233,7 @@ jobs:
             - gravitee-apim-console-webui/dist
   job-portal-webui-build:
     docker:
-      - image: cimg/node:20.11.1
+      - image: cimg/node:22.12.0
     resource_class: large
     steps:
       - checkout
@@ -240,17 +253,13 @@ jobs:
           environment:
             NODE_OPTIONS: --max_old_space_size=4086
           working_directory: gravitee-apim-portal-webui
-      - cmd-webui-install:
-          apim-ui-project: gravitee-apim-portal-webui-next
+      - cmd-workspace-install
       - run:
           name: Update Build version
           command: "sed -i 's/\"version\": \".*\"/\"version\": \"4.2.0\"/' gravitee-apim-portal-webui-next/build.json"
       - run:
-          name: Build
-          command: yarn build:prod
-          environment:
-            NODE_OPTIONS: --max_old_space_size=4086
-          working_directory: gravitee-apim-portal-webui-next
+          name: Build Portal Next
+          command: NODE_OPTIONS=--max_old_space_size=4086 yarn portal-next:build:prod
       - cmd-notify-on-failure
       - persist_to_workspace:
           root: .
@@ -402,7 +411,7 @@ jobs:
       - cmd-prepare-gpg
       - run:
           name: Maven build APIM backend
-          command: mvn --settings .gravitee.settings.xml -B -U -P all-modules,gio-release,bundle-default clean verify -DskipTests=true -Dskip.validation -T 4 --no-transfer-progress
+          command: mvn --settings .gravitee.settings.xml -B -U -P all-modules,gio-release,bundle-default clean verify -DskipTests=true -Dskip.validation -Dgravitee.archrules.skip=true -T 4 --no-transfer-progress
           environment:
             BUILD_ID: "1234"
             BUILD_NUMBER: "1234"
@@ -546,7 +555,7 @@ jobs:
           folder-to-sync: folder_to_sync
   job-release-helm:
     docker:
-      - image: cimg/node:20.11.1
+      - image: cimg/node:22.12.0
     resource_class: medium
     steps:
       - checkout
@@ -578,19 +587,59 @@ jobs:
           working_directory: ./helm
           command: |-
             helm dependency update
-            helm package -d charts .
+            cp -f "Chart.yaml" "../Chart.yaml.bak"
+            cp -f "values.yaml" "../values.yaml.bak"
 
-            sed "s/name.*/name: apim3/" -i Chart.yaml
+            mkdir -p charts/docker/io
+
             helm package -d charts .
+            mv charts/apim-*.tgz charts/docker/io/
+
+            sed "s/^name:.*/name: apim3/" -i Chart.yaml
+            helm package -d charts .
+            mv charts/apim3-*.tgz charts/docker/io/
+
+            mkdir -p charts/aws/io
+            cp -f "../Chart.yaml.bak" "Chart.yaml"
+            cp -f "../values.yaml.bak" "values.yaml"
+            sed -i -E "s|(repository: )graviteeio/apim-management-api|\1430630701098.dkr.ecr.eu-west-2.amazonaws.com/graviteeio/saas-apim-management-api|g" values.yaml
+            sed -i -E "s|(repository: )graviteeio/apim-gateway|\1430630701098.dkr.ecr.eu-west-2.amazonaws.com/graviteeio/saas-apim-gateway|g" values.yaml
+            sed -i -E "s|(repository: )graviteeio/apim-portal-ui|\1430630701098.dkr.ecr.eu-west-2.amazonaws.com/graviteeio/saas-apim-portal-ui|g" values.yaml
+            sed -i -E "s|(repository: )graviteeio/apim-management-ui|\1430630701098.dkr.ecr.eu-west-2.amazonaws.com/graviteeio/saas-apim-management-ui|g" values.yaml
+            helm package -d charts .
+            mv charts/apim-*.tgz charts/aws/io/
       - cmd-install-yarn
       - run:
           name: Install dependencies
           command: yarn
           working_directory: ./release
       - run:
+          name: Install AWS CLI
+          command: |-
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                        unzip awscliv2.zip
+                        sudo ./aws/install
+                        aws --version
+      - run:
           name: Open a PR to publish helm chart release into helm-charts repository
           working_directory: ./release
           command: yarn zx ci-steps/release-helm.mjs --version=4.2.0
+      - keeper/env-export:
+          secret-url: keeper://AEmKkeWZ4Zq758pvaPIE1A/custom_field/aws_access_key_id
+          var-name: AWS_ACCESS_KEY_ID
+      - keeper/env-export:
+          secret-url: keeper://AEmKkeWZ4Zq758pvaPIE1A/custom_field/aws_secret_access_key
+          var-name: AWS_SECRET_ACCESS_KEY
+      - keeper/env-export:
+          secret-url: keeper://AEmKkeWZ4Zq758pvaPIE1A/custom_field/aws_region
+          var-name: AWS_REGION
+      - run:
+          name: Login to AWS ECR for Helm OCI
+          command: aws ecr get-login-password --region $AWS_REGION | helm registry login --username AWS --password-stdin 430630701098.dkr.ecr.eu-west-2.amazonaws.com
+      - run:
+          name: Publish helm chart release in AWS ECR
+          working_directory: ./helm
+          command: helm push charts/aws/io/apim-*.tgz oci://430630701098.dkr.ecr.eu-west-2.amazonaws.com/graviteeio/helm/
   job-publish-rpm-packages:
     machine:
       image: ubuntu-2204:current
@@ -646,7 +695,7 @@ jobs:
                 push --yes --skip-errors --verbose graviteeio/rpms/el/7 /packages/*.rpm
   job-release-notes-apim:
     docker:
-      - image: cimg/node:20.11.1
+      - image: cimg/node:22.12.0
     resource_class: medium
     steps:
       - checkout
@@ -717,7 +766,7 @@ jobs:
       - cmd-prepare-gpg
       - run:
           name: Release on Nexus
-          command: mvn clean deploy --activate-profiles gravitee-release --batch-mode -T 4 -DskipTests -Dskip.validation=true --settings .gravitee.settings.xml --update-snapshots
+          command: mvn clean deploy --activate-profiles gravitee-release --batch-mode -T 4 -DskipTests -Dskip.validation=true -Dgravitee.archrules.skip=true --settings .gravitee.settings.xml --update-snapshots
       - cmd-save-maven-job-cache:
           jobName: job-nexus-staging
   job-trigger-saas-docker-images:
@@ -728,7 +777,7 @@ jobs:
       - run:
           name: Trigger SaaS Docker images pipeline
           command: |-
-            PIPELINE_ID=$(curl --request POST --url https://circleci.com/api/v2/project/github/gravitee-io/cloud-distributions/pipeline --header "Circle-Token: ${CIRCLE_TOKEN}" --header 'content-type: application/json' --data '{"parameters":{"project":"apim", "distribution":"prod", "branch-version":"4.2.x", "release-version":"4.2.0", "dry-run":false}}' | jq -r '.id')
+            PIPELINE_ID=$(curl --request POST --url https://circleci.com/api/v2/project/github/gravitee-io/cloud-distributions/pipeline --header "Circle-Token: ${CIRCLE_TOKEN}" --header 'content-type: application/json' --data '{"parameters":{"project":"apim", "distribution":"prod", "branch-version":"4.2.x", "sha1":"784ff35", "release-version":"4.2.0", "dry-run":false, "os-distribution":"debian"}}' | jq -r '.id')
             echo "Pipeline triggered with ID: $PIPELINE_ID"
             waitForPipelineCompletion() {
                 while true; do

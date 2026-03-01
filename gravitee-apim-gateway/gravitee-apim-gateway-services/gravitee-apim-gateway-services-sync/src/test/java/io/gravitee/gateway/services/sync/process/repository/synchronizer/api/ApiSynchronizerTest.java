@@ -120,18 +120,24 @@ class ApiSynchronizerTest {
 
     @BeforeEach
     public void beforeEach() {
-        cut =
-            new ApiSynchronizer(
-                eventsFetcher,
-                apiManager,
-                new ApiMapper(objectMapper, new EnvironmentService(environmentRepository, organizationRepository)),
-                new PlanAppender(objectMapper, planRepository, gatewayConfiguration),
-                new SubscriptionAppender(subscriptionRepository, new SubscriptionMapper(objectMapper)),
-                new ApiKeyAppender(apiKeyRepository, new ApiKeyMapper()),
-                deployerFactory,
-                new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>()),
-                new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>())
-            );
+        cut = new ApiSynchronizer(
+            eventsFetcher,
+            apiManager,
+            new ApiMapper(objectMapper, new EnvironmentService(environmentRepository, organizationRepository)),
+            new PlanAppender(objectMapper, planRepository, gatewayConfiguration, null),
+            new SubscriptionAppender(
+                subscriptionRepository,
+                new SubscriptionMapper(
+                    objectMapper,
+                    org.mockito.Mockito.mock(io.gravitee.gateway.handlers.api.registry.ApiProductRegistry.class)
+                ),
+                org.mockito.Mockito.mock(io.gravitee.gateway.handlers.api.registry.ApiProductRegistry.class)
+            ),
+            new ApiKeyAppender(apiKeyRepository, new ApiKeyMapper()),
+            deployerFactory,
+            new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>()),
+            new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>())
+        );
         when(eventsFetcher.bulkItems()).thenReturn(1);
         lenient().when(deployerFactory.createApiDeployer()).thenReturn(apiDeployer);
         lenient().when(apiDeployer.deploy(any())).thenReturn(Completable.complete());
@@ -183,22 +189,26 @@ class ApiSynchronizerTest {
         void should_fetch_init_events() throws InterruptedException {
             when(eventsFetcher.fetchLatest(any(), any(), any(), any(), any())).thenReturn(Flowable.empty());
             cut.synchronize(-1L, Instant.now().toEpochMilli(), Set.of("event")).test().await().assertComplete();
-            verify(eventsFetcher)
-                .fetchLatest(eq(-1L), any(), eq(API_ID), eq(Set.of("event")), eq(Set.of(EventType.PUBLISH_API, EventType.START_API)));
+            verify(eventsFetcher).fetchLatest(
+                eq(-1L),
+                any(),
+                eq(API_ID),
+                eq(Set.of("event")),
+                eq(Set.of(EventType.PUBLISH_API, EventType.START_API))
+            );
         }
 
         @Test
         void should_fetch_incremental_events() throws InterruptedException {
             when(eventsFetcher.fetchLatest(any(), any(), any(), any(), any())).thenReturn(Flowable.empty());
             cut.synchronize(Instant.now().toEpochMilli(), Instant.now().toEpochMilli(), Set.of("event")).test().await().assertComplete();
-            verify(eventsFetcher)
-                .fetchLatest(
-                    any(),
-                    any(),
-                    eq(API_ID),
-                    eq(Set.of("event")),
-                    eq(Set.of(EventType.PUBLISH_API, EventType.START_API, EventType.UNPUBLISH_API, EventType.STOP_API))
-                );
+            verify(eventsFetcher).fetchLatest(
+                any(),
+                any(),
+                eq(API_ID),
+                eq(Set.of("event")),
+                eq(Set.of(EventType.PUBLISH_API, EventType.START_API, EventType.UNPUBLISH_API, EventType.STOP_API))
+            );
         }
     }
 
@@ -280,8 +290,7 @@ class ApiSynchronizerTest {
             api.setDefinitionVersion(DefinitionVersion.V4);
             PlanSecurity planSecurity = new PlanSecurity();
             planSecurity.setType("api-key");
-            io.gravitee.definition.model.v4.plan.Plan plan = io.gravitee.definition.model.v4.plan.Plan
-                .builder()
+            io.gravitee.definition.model.v4.plan.Plan plan = io.gravitee.definition.model.v4.plan.Plan.builder()
                 .id("planId")
                 .security(planSecurity)
                 .status(PlanStatus.PUBLISHED)

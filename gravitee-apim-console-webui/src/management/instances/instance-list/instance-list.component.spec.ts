@@ -52,8 +52,11 @@ describe('InstanceListComponent', () => {
 
     const table = await loader.getHarness(MatTableHarness.with({ selector: '#instancesTable' }));
     const rows = await table.getRows();
-    const rowCells = await parallel(() => rows.map((row) => row.getCellTextByIndex()));
-    expect(rowCells).toStrictEqual([['There are no Gateway instances (yet).']]);
+    const rowCells = await parallel(() => rows.map(row => row.getCellTextByIndex()));
+    expect(rowCells).toHaveLength(0);
+
+    const tableElement = await table.host();
+    expect(await tableElement.text()).toContain('There are no Gateway instances (yet).');
   }));
 
   it('should display gateway instances', fakeAsync(async () => {
@@ -89,7 +92,7 @@ describe('InstanceListComponent', () => {
 
     const table = await loader.getHarness(MatTableHarness.with({ selector: '#instancesTable' }));
     const rows = await table.getRows();
-    const rowCells = await parallel(() => rows.map((row) => row.getCellTextByColumnName()));
+    const rowCells = await parallel(() => rows.map(row => row.getCellTextByColumnName()));
     expect(rowCells).toStrictEqual([
       {
         hostname: 'GW 1',
@@ -118,6 +121,56 @@ describe('InstanceListComponent', () => {
         lastHeartbeat: 'Nov 16, 2023, 9:24:59 AM',
         os: 'Linux',
         'ip-port': '10.0.0.1:8082',
+        tags: '',
+        tenant: '',
+      },
+    ]);
+  }));
+
+  it('should handle version parsing correctly', fakeAsync(async () => {
+    expectInstancesSearchRequest([
+      fakeInstanceListItem({
+        hostname: 'GW noBuildInfo',
+        state: 'STARTED',
+        ip: '1.1.1.1',
+        port: '8080',
+        last_heartbeat_at: 1700213066567,
+        operating_system_name: 'Linux',
+        version: '5.0.0-SNAPSHOT', // no "(" → should remain the same
+      }),
+      fakeInstanceListItem({
+        hostname: 'GW nullVersion',
+        state: 'STARTED',
+        ip: '2.2.2.2',
+        port: '8080',
+        last_heartbeat_at: 1700213066567,
+        operating_system_name: 'Linux',
+        version: null, // null → should be an empty string
+      }),
+    ]);
+
+    const table = await loader.getHarness(MatTableHarness.with({ selector: '#instancesTable' }));
+    const rows = await table.getRows();
+    const rowCells = await parallel(() => rows.map(row => row.getCellTextByColumnName()));
+
+    expect(rowCells).toStrictEqual([
+      {
+        hostname: 'GW noBuildInfo',
+        version: '5.0.0-SNAPSHOT', // stays the same
+        state: '',
+        lastHeartbeat: 'Nov 17, 2023, 9:24:26 AM',
+        os: 'Linux',
+        'ip-port': '1.1.1.1:8080',
+        tags: '',
+        tenant: '',
+      },
+      {
+        hostname: 'GW nullVersion',
+        version: '', // empty string
+        state: '',
+        lastHeartbeat: 'Nov 17, 2023, 9:24:26 AM',
+        os: 'Linux',
+        'ip-port': '2.2.2.2:8080',
         tags: '',
         tenant: '',
       },

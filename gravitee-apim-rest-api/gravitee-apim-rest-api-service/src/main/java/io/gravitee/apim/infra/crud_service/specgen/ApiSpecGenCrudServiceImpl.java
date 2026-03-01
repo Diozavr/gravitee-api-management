@@ -34,7 +34,7 @@ import io.gravitee.rest.api.model.api.ApiDeploymentEntity;
 import io.gravitee.rest.api.service.ApiService;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -44,7 +44,7 @@ import org.springframework.stereotype.Service;
  * @author GraviteeSource Team
  */
 @Service
-@Slf4j
+@CustomLog
 public class ApiSpecGenCrudServiceImpl implements ApiSpecGenCrudService {
 
     private final ApiRepository apiRepository;
@@ -100,14 +100,13 @@ public class ApiSpecGenCrudServiceImpl implements ApiSpecGenCrudService {
     }
 
     private void deploy(Api api, String userId) {
-        Completable
-            .defer(() ->
-                Completable.fromRunnable(() -> {
-                    var apiDeploymentEntity = new ApiDeploymentEntity();
-                    apiDeploymentEntity.setDeploymentLabel("Analytics enabled by spec-gen");
-                    apiService.deploy(getExecutionContext(), api.getId(), userId, PUBLISH_API, apiDeploymentEntity);
-                })
-            )
+        Completable.defer(() ->
+            Completable.fromRunnable(() -> {
+                var apiDeploymentEntity = new ApiDeploymentEntity();
+                apiDeploymentEntity.setDeploymentLabel("Analytics enabled by spec-gen");
+                apiService.deploy(getExecutionContext(), api.getId(), userId, PUBLISH_API, apiDeploymentEntity);
+            })
+        )
             .subscribeOn(Schedulers.io())
             .subscribe(
                 () -> log.debug("Api [{}] successfully deployed by user [{}]", api.getId(), userId),

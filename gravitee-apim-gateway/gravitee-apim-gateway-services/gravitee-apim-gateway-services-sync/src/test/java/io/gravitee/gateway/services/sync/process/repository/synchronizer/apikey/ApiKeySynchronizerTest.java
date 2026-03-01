@@ -21,8 +21,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.gravitee.definition.jackson.datatype.GraviteeMapper;
 import io.gravitee.gateway.api.service.Subscription;
 import io.gravitee.gateway.handlers.api.services.SubscriptionCacheService;
 import io.gravitee.gateway.services.sync.process.common.deployer.ApiKeyDeployer;
@@ -35,7 +33,6 @@ import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -76,15 +73,14 @@ class ApiKeySynchronizerTest {
 
     @BeforeEach
     public void beforeEach() {
-        cut =
-            new ApiKeySynchronizer(
-                apiKeyFetcher,
-                subscriptionService,
-                new ApiKeyMapper(),
-                deployerFactory,
-                new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>()),
-                new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>())
-            );
+        cut = new ApiKeySynchronizer(
+            apiKeyFetcher,
+            subscriptionService,
+            new ApiKeyMapper(),
+            deployerFactory,
+            new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>()),
+            new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>())
+        );
         lenient().when(deployerFactory.createApiKeyDeployer()).thenReturn(apiKeyDeployer);
         lenient().when(apiKeyDeployer.deploy(any())).thenReturn(Completable.complete());
         lenient().when(apiKeyDeployer.doAfterDeployment(any())).thenReturn(Completable.complete());
@@ -132,7 +128,7 @@ class ApiKeySynchronizerTest {
             subscription.setApi("api");
             subscription.setPlan("plan");
             subscription.setStatus(io.gravitee.repository.management.model.Subscription.Status.ACCEPTED.name());
-            when(subscriptionService.getById("subscription")).thenReturn(Optional.of(subscription));
+            when(subscriptionService.getAllById("subscription")).thenReturn(List.of(subscription));
 
             when(apiKeyFetcher.fetchLatest(any(), any(), any())).thenReturn(Flowable.just(List.of(apiKey)));
             cut.synchronize(Instant.now().toEpochMilli(), Instant.now().toEpochMilli(), Set.of()).test().await().assertComplete();
@@ -153,7 +149,7 @@ class ApiKeySynchronizerTest {
             subscription.setApi("api");
             subscription.setPlan("plan");
             subscription.setStatus(io.gravitee.repository.management.model.Subscription.Status.CLOSED.name());
-            when(subscriptionService.getById("subscription")).thenReturn(Optional.of(subscription));
+            when(subscriptionService.getAllById("subscription")).thenReturn(List.of(subscription));
 
             when(apiKeyFetcher.fetchLatest(any(), any(), any())).thenReturn(Flowable.just(List.of(apiKey)));
             cut.synchronize(Instant.now().toEpochMilli(), Instant.now().toEpochMilli(), Set.of()).test().await().assertComplete();

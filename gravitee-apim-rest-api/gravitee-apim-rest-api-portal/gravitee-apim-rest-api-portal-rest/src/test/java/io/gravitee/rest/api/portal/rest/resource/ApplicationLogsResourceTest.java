@@ -24,11 +24,11 @@ import static org.mockito.Mockito.when;
 import fixtures.core.log.model.MessageLogFixtures;
 import fixtures.repository.ConnectionLogDetailFixtures;
 import fixtures.repository.ConnectionLogFixtures;
+import inmemory.AggregatedMessageLogCrudServiceInMemory;
 import inmemory.ApiCrudServiceInMemory;
 import inmemory.ApplicationCrudServiceInMemory;
 import inmemory.ConnectionLogsCrudServiceInMemory;
 import inmemory.InMemoryAlternative;
-import inmemory.MessageLogCrudServiceInMemory;
 import inmemory.PlanCrudServiceInMemory;
 import io.gravitee.apim.core.api.model.Api;
 import io.gravitee.apim.core.plan.model.Plan;
@@ -66,7 +66,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  * @author Florent CHAMFROY (florent.chamfroy at graviteesource.com)
  * @author GraviteeSource Team
  */
-public class ApplicationLogsResourceTest extends AbstractResourceTest {
+class ApplicationLogsResourceTest extends AbstractResourceTest {
 
     private static Locale defaultLocale;
 
@@ -88,7 +88,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     ConnectionLogsCrudServiceInMemory connectionLogsCrudServiceInMemory;
 
     @Autowired
-    MessageLogCrudServiceInMemory messageLogCrudServiceInMemory;
+    AggregatedMessageLogCrudServiceInMemory messageLogCrudServiceInMemory;
 
     private static final String APPLICATION_ID = "my-application";
     private static final String LOG = "my-log";
@@ -96,8 +96,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
 
     private static final String API_1_ID = "api-1";
     private static final String API_2_ID = "api-2";
-    private static final Api API_1 = Api
-        .builder()
+    private static final Api API_1 = Api.builder()
         .id(API_1_ID)
         .name("API 1")
         .version("1.1")
@@ -132,7 +131,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @BeforeEach
-    public void init() {
+    void init() {
         resetAllMocks();
 
         ApplicationRequestItem appLogItem1 = new ApplicationRequestItem();
@@ -158,20 +157,18 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @AfterEach
-    public void cleanUp() {
-        Stream
-            .of(
-                applicationCrudServiceInMemory,
-                apiCrudServiceInMemory,
-                planCrudServiceInMemory,
-                connectionLogsCrudServiceInMemory,
-                messageLogCrudServiceInMemory
-            )
-            .forEach(InMemoryAlternative::reset);
+    void cleanUp() {
+        Stream.of(
+            applicationCrudServiceInMemory,
+            apiCrudServiceInMemory,
+            planCrudServiceInMemory,
+            connectionLogsCrudServiceInMemory,
+            messageLogCrudServiceInMemory
+        ).forEach(InMemoryAlternative::reset);
     }
 
     @Test
-    public void shouldGetLogs() {
+    void shouldGetLogs() {
         final Response response = target(APPLICATION_ID)
             .path("logs")
             .queryParam("page", 1)
@@ -186,9 +183,11 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
         assertEquals(HttpStatusCode.OK_200, response.getStatus());
 
         ArgumentCaptor<LogQuery> logQueryCaptor = ArgumentCaptor.forClass(LogQuery.class);
-        Mockito
-            .verify(logsService)
-            .findByApplication(eq(GraviteeContext.getExecutionContext()), eq(APPLICATION_ID), logQueryCaptor.capture());
+        Mockito.verify(logsService).findByApplication(
+            eq(GraviteeContext.getExecutionContext()),
+            eq(APPLICATION_ID),
+            logQueryCaptor.capture()
+        );
         final LogQuery logQuery = logQueryCaptor.getValue();
         assertEquals(APPLICATION_ID, logQuery.getField());
         assertEquals(0, logQuery.getFrom());
@@ -211,7 +210,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void shouldGetNoLogAndNoLink() {
+    void shouldGetNoLogAndNoLink() {
         SearchLogResponse<ApplicationRequestItem> emptySearchResponse = new SearchLogResponse<>(0);
         emptySearchResponse.setLogs(Collections.emptyList());
         doReturn(emptySearchResponse)
@@ -239,7 +238,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_return_log_with_request_and_response() {
+    void should_return_log_with_request_and_response() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(
             List.of(connectionLogFixtures.aConnectionLog(LOG).toBuilder().timestamp("2020-02-02T23:59:59.00Z").build())
@@ -269,7 +268,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_return_log_without_request_and_response() {
+    void should_return_log_without_request_and_response() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(
             List.of(connectionLogFixtures.aConnectionLog(LOG).toBuilder().timestamp("2020-02-02T23:59:59.00Z").build())
@@ -294,7 +293,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_not_return_log_with_incorrect_timestamp() {
+    void should_not_return_log_with_incorrect_timestamp() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(
             List.of(connectionLogFixtures.aConnectionLog(LOG).toBuilder().timestamp("2020-02-02T23:59:59.00Z").build())
@@ -316,7 +315,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_not_return_log_if_not_found() {
+    void should_not_return_log_if_not_found() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(List.of());
         connectionLogsCrudServiceInMemory.initWithConnectionLogDetails(List.of());
@@ -334,7 +333,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void shouldExportLogs() {
+    void shouldExportLogs() {
         doReturn("EXPORT").when(logsService).exportAsCsv(eq(GraviteeContext.getExecutionContext()), any());
         final Response response = target(APPLICATION_ID)
             .path("logs")
@@ -363,7 +362,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
      */
 
     @Test
-    public void should_not_allow_invalid_to_and_from_search() {
+    void should_not_allow_invalid_to_and_from_search() {
         var body = SearchApplicationLogsParam.builder().to(0).from(100).build();
         final Response response = target(APPLICATION_ID)
             .path("logs/_search")
@@ -380,7 +379,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_not_allow_status_less_than_100_in_search() {
+    void should_not_allow_status_less_than_100_in_search() {
         var body = SearchApplicationLogsParam.builder().to(100).from(0).statuses(Set.of(100, 1)).build();
         final Response response = target(APPLICATION_ID)
             .path("logs/_search")
@@ -400,7 +399,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_not_allow_status_greater_than_599_in_search() {
+    void should_not_allow_status_greater_than_599_in_search() {
         var body = SearchApplicationLogsParam.builder().to(100).from(0).statuses(Set.of(100, 900)).build();
         final Response response = target(APPLICATION_ID)
             .path("logs/_search")
@@ -420,7 +419,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_not_allow_page_less_than_1() {
+    void should_not_allow_page_less_than_1() {
         var body = SearchApplicationLogsParam.builder().to(100).from(0).build();
         final Response response = target(APPLICATION_ID)
             .path("logs/_search")
@@ -438,7 +437,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_not_allow_size_less_than_negative_1() {
+    void should_not_allow_size_less_than_negative_1() {
         var body = SearchApplicationLogsParam.builder().to(100).from(0).build();
         final Response response = target(APPLICATION_ID)
             .path("logs/_search")
@@ -456,7 +455,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_return_empty_list_of_logs_in_search() {
+    void should_return_empty_list_of_logs_in_search() {
         var body = SearchApplicationLogsParam.builder().to(100).from(0).build();
         final Response response = target(APPLICATION_ID)
             .path("logs/_search")
@@ -473,7 +472,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_return_list_of_logs_in_search() {
+    void should_return_list_of_logs_in_search() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(
             List.of(
@@ -511,7 +510,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_return_list_of_logs_in_search_with_unknown_api_and_unknown_plan() {
+    void should_return_list_of_logs_in_search_with_unknown_api_and_unknown_plan() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(
             List.of(
@@ -553,7 +552,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_return_filtered_list_of_logs_in_search() {
+    void should_return_filtered_list_of_logs_in_search() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(
             List.of(
@@ -568,8 +567,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
         );
 
         // When
-        var body = SearchApplicationLogsParam
-            .builder()
+        var body = SearchApplicationLogsParam.builder()
             .to(SECOND_FEBRUARY_2020)
             .from(FIRST_FEBRUARY_2020)
             .apiIds(Set.of(API_1_ID, API_2_ID))
@@ -610,7 +608,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_get_response_times_of_logs_in_search() {
+    void should_get_response_times_of_logs_in_search() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(
             List.of(
@@ -621,8 +619,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
         );
 
         // When
-        var body = SearchApplicationLogsParam
-            .builder()
+        var body = SearchApplicationLogsParam.builder()
             .to(SECOND_FEBRUARY_2020)
             .from(FIRST_FEBRUARY_2020)
             .responseTimeRanges(
@@ -656,7 +653,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_return_filtered_list_of_logs_with_body_text_in_search() {
+    void should_return_filtered_list_of_logs_with_body_text_in_search() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogDetails(
             List.of(
@@ -688,8 +685,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
         );
 
         // When
-        var body = SearchApplicationLogsParam
-            .builder()
+        var body = SearchApplicationLogsParam.builder()
             .to(SECOND_FEBRUARY_2020)
             .from(FIRST_FEBRUARY_2020)
             .apiIds(Set.of(API_1_ID, API_2_ID))
@@ -731,7 +727,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
      */
 
     @Test
-    public void should_throw_404_when_application_not_found() {
+    void should_throw_404_when_application_not_found() {
         final Response response = target("not-found")
             .path("logs/" + LOG + "/messages")
             .queryParam("page", 1)
@@ -748,7 +744,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_throw_404_when_log_by_log_id_not_found() {
+    void should_throw_404_when_log_by_log_id_not_found() {
         final Response response = target(APPLICATION_ID)
             .path("logs/" + "not-found" + "/messages")
             .queryParam("page", 1)
@@ -765,7 +761,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_return_empty_list_of_messages() {
+    void should_return_empty_list_of_messages() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(
             List.of(connectionLogFixtures.aConnectionLog(LOG).toBuilder().timestamp("2020-02-02T23:59:59.00Z").build())
@@ -788,7 +784,7 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
     }
 
     @Test
-    public void should_return_list_of_messages() {
+    void should_return_list_of_messages() {
         // Given
         connectionLogsCrudServiceInMemory.initWithConnectionLogs(
             List.of(connectionLogFixtures.aConnectionLog(LOG).toBuilder().timestamp("2020-02-02T23:59:59.00Z").build())
@@ -796,12 +792,10 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
 
         messageLogCrudServiceInMemory.initWith(
             List.of(
-                MessageLogFixtures
-                    .aMessageLog(API_1_ID, LOG)
+                MessageLogFixtures.aMessageLog(API_1_ID, LOG)
                     .toBuilder()
                     .endpoint(
-                        MessageLogFixtures
-                            .aMessageLog()
+                        MessageLogFixtures.aMessageLog()
                             .getEndpoint()
                             .toBuilder()
                             .connectorId("connector-endpoint")
@@ -809,12 +803,10 @@ public class ApplicationLogsResourceTest extends AbstractResourceTest {
                             .build()
                     )
                     .build(),
-                MessageLogFixtures
-                    .aMessageLog(API_1_ID, LOG)
+                MessageLogFixtures.aMessageLog(API_1_ID, LOG)
                     .toBuilder()
                     .entrypoint(
-                        MessageLogFixtures
-                            .aMessageLog()
+                        MessageLogFixtures.aMessageLog()
                             .getEntrypoint()
                             .toBuilder()
                             .connectorId("connector-entrypoint")

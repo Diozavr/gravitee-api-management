@@ -51,14 +51,14 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import lombok.CustomLog;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Yann TAVERNIER (yann.tavernier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @Getter
 public class HttpDynamicPropertiesService implements ManagementApiService {
 
@@ -108,11 +108,10 @@ public class HttpDynamicPropertiesService implements ManagementApiService {
         disposeExistingJob();
 
         try {
-            this.configuration =
-                pluginConfigurationHelper.readConfiguration(
-                    HttpDynamicPropertiesServiceConfiguration.class,
-                    this.dynamicPropertyService.getConfiguration()
-                );
+            this.configuration = pluginConfigurationHelper.readConfiguration(
+                HttpDynamicPropertiesServiceConfiguration.class,
+                this.dynamicPropertyService.getConfiguration()
+            );
         } catch (PluginConfigurationException e) {
             return Completable.error(
                 new IllegalArgumentException("Unable to start http-dynamic-properties service for api: [" + api.getId() + "]")
@@ -162,8 +161,7 @@ public class HttpDynamicPropertiesService implements ManagementApiService {
         cronTrigger = new CronTrigger(configuration.getSchedule());
         final AtomicLong errorCount = new AtomicLong(0);
 
-        return Observable
-            .defer(() -> Observable.timer(cronTrigger.nextExecutionIn(), TimeUnit.MILLISECONDS))
+        return Observable.defer(() -> Observable.timer(cronTrigger.nextExecutionIn(), TimeUnit.MILLISECONDS))
             .observeOn(Schedulers.computation())
             .filter(aLong -> clusterManager.self().primary())
             .switchMapCompletable(aLong -> fetchProperties())
@@ -223,15 +221,13 @@ public class HttpDynamicPropertiesService implements ManagementApiService {
     }
 
     private Completable evaluateAndDispatchProperties(Buffer bodyBuffer) {
-        return Completable
-            .fromRunnable(() -> {
-                final List<Property> properties = joltMapper.map(bodyBuffer.toString());
-                eventManager.publishEvent(
-                    ManagementApiServiceEvent.DYNAMIC_PROPERTY_UPDATE,
-                    new DynamicPropertiesEvent(api.getId(), this.id(), properties)
-                );
-            })
-            .subscribeOn(Schedulers.io());
+        return Completable.fromRunnable(() -> {
+            final List<Property> properties = joltMapper.map(bodyBuffer.toString());
+            eventManager.publishEvent(
+                ManagementApiServiceEvent.DYNAMIC_PROPERTY_UPDATE,
+                new DynamicPropertiesEvent(api.getId(), this.id(), properties)
+            );
+        }).subscribeOn(Schedulers.io());
     }
 
     /**

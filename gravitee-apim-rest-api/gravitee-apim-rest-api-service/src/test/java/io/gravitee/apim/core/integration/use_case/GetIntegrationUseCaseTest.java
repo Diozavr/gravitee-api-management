@@ -89,14 +89,13 @@ class GetIntegrationUseCaseTest {
             membershipQueryService,
             userCrudService
         );
-        usecase =
-            new GetIntegrationUseCase(
-                integrationCrudServiceInMemory,
-                asyncJobQueryService,
-                new LicenseDomainService(licenseCrudService, licenseManager),
-                integrationAgent,
-                integrationPrimaryOwnerDomainService
-            );
+        usecase = new GetIntegrationUseCase(
+            integrationCrudServiceInMemory,
+            asyncJobQueryService,
+            new LicenseDomainService(licenseCrudService, licenseManager),
+            integrationAgent,
+            integrationPrimaryOwnerDomainService
+        );
         var integration = List.<Integration>of(IntegrationFixture.anApiIntegration().withId(INTEGRATION_ID));
         integrationCrudServiceInMemory.initWith(integration);
 
@@ -106,8 +105,7 @@ class GetIntegrationUseCaseTest {
         );
         givenExistingMemberships(
             List.of(
-                Membership
-                    .builder()
+                Membership.builder()
                     .referenceType(Membership.ReferenceType.INTEGRATION)
                     .referenceId(INTEGRATION_ID)
                     .memberType(Membership.Type.USER)
@@ -122,26 +120,24 @@ class GetIntegrationUseCaseTest {
 
     @AfterEach
     void tearDown() {
-        Stream
-            .of(
-                integrationCrudServiceInMemory,
-                asyncJobQueryService,
-                licenseCrudService,
-                integrationAgent,
-                membershipCrudServiceInMemory,
-                roleQueryServiceInMemory,
-                membershipQueryService,
-                groupQueryService,
-                userCrudService
-            )
-            .forEach(InMemoryAlternative::reset);
+        Stream.of(
+            integrationCrudServiceInMemory,
+            asyncJobQueryService,
+            licenseCrudService,
+            integrationAgent,
+            membershipCrudServiceInMemory,
+            roleQueryServiceInMemory,
+            membershipQueryService,
+            groupQueryService,
+            userCrudService
+        ).forEach(InMemoryAlternative::reset);
     }
 
     @Test
     void should_get_integration() {
         //Given
         integrationAgent.configureAgentFor(INTEGRATION_ID, IntegrationAgent.Status.DISCONNECTED);
-        var input = new Input(INTEGRATION_ID, ORGANIZATION_ID);
+        var input = new Input(INTEGRATION_ID, ORGANIZATION_ID, ENV_ID);
 
         //When
         GetIntegrationUseCase.Output output = usecase.execute(input);
@@ -179,7 +175,7 @@ class GetIntegrationUseCaseTest {
         var job = givenAnAsyncJob(AsyncJobFixture.aPendingFederatedApiIngestionJob().withSourceId(INTEGRATION_ID));
 
         // When
-        var output = usecase.execute(new Input(INTEGRATION_ID, ORGANIZATION_ID));
+        var output = usecase.execute(new Input(INTEGRATION_ID, ORGANIZATION_ID, ENV_ID));
 
         // Then
         assertThat(output.integration().getPendingJob()).isEqualTo(job);
@@ -187,7 +183,7 @@ class GetIntegrationUseCaseTest {
 
     @Test
     void should_throw_error_when_integration_not_found() {
-        var input = new Input("not-existing-integration-id", ORGANIZATION_ID);
+        var input = new Input("not-existing-integration-id", ORGANIZATION_ID, ENV_ID);
 
         assertThatExceptionOfType(IntegrationNotFoundException.class)
             .isThrownBy(() -> usecase.execute(input))
@@ -200,7 +196,7 @@ class GetIntegrationUseCaseTest {
         when(licenseManager.getOrganizationLicenseOrPlatform(ORGANIZATION_ID)).thenReturn(LicenseFixtures.anOssLicense());
 
         // When
-        var throwable = Assertions.catchThrowable(() -> usecase.execute(new Input(INTEGRATION_ID, ORGANIZATION_ID)));
+        var throwable = Assertions.catchThrowable(() -> usecase.execute(new Input(INTEGRATION_ID, ORGANIZATION_ID, ENV_ID)));
 
         // Then
         assertThat(throwable).isInstanceOf(NotAllowedDomainException.class);

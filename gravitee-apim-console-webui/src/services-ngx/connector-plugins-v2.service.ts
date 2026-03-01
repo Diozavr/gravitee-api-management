@@ -38,9 +38,9 @@ export class ConnectorPluginsV2Service {
 
   listEndpointPluginsByApiType(apiType: ApiType): Observable<ConnectorPlugin[]> {
     return this.listEndpointPlugins().pipe(
-      map((endpointPlugins) =>
+      map(endpointPlugins =>
         endpointPlugins
-          .filter((endpoint) => endpoint.supportedApiType === apiType)
+          .filter(endpoint => endpoint.supportedApiType === apiType)
           .sort((endpoint1, endpoint2) => {
             const name1 = endpoint1.name.toUpperCase();
             const name2 = endpoint2.name.toUpperCase();
@@ -56,13 +56,23 @@ export class ConnectorPluginsV2Service {
 
   listSyncEntrypointPlugins(): Observable<ConnectorPlugin[]> {
     return this.listEntrypointPlugins().pipe(
-      map((entrypointPlugins) => entrypointPlugins.filter((entrypoint) => entrypoint.supportedApiType === 'PROXY')),
+      map(entrypointPlugins => entrypointPlugins.filter(entrypoint => entrypoint.supportedApiType === 'PROXY')),
     );
   }
 
   listAsyncEntrypointPlugins(): Observable<ConnectorPlugin[]> {
     return this.listEntrypointPlugins().pipe(
-      map((entrypointPlugins) => entrypointPlugins.filter((entrypoint) => entrypoint.supportedApiType === 'MESSAGE')),
+      map(entrypointPlugins => entrypointPlugins.filter(entrypoint => entrypoint.supportedApiType === 'MESSAGE')),
+    );
+  }
+
+  listAIEntrypointPlugins(): Observable<ConnectorPlugin[]> {
+    return this.listEntrypointPlugins().pipe(
+      map(entrypointPlugins =>
+        entrypointPlugins.filter(entrypoint => {
+          return ['LLM_PROXY', 'MCP_PROXY', 'A2A_PROXY'].includes(entrypoint.supportedApiType);
+        }),
+      ),
     );
   }
 
@@ -103,7 +113,7 @@ export class ConnectorPluginsV2Service {
       return false;
     }
     return selectedIds
-      .map((id) => connectorPlugins.find((connectorPlugin) => connectorPlugin.id === id))
-      .some((connectorPlugin) => !connectorPlugin.deployed);
+      .map(id => connectorPlugins.find(connectorPlugin => connectorPlugin.id === id))
+      .some(connectorPlugin => !connectorPlugin.deployed);
   }
 }

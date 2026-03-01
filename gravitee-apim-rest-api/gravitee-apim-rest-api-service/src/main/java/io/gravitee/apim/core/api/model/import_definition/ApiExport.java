@@ -17,6 +17,7 @@ package io.gravitee.apim.core.api.model.import_definition;
 
 import io.gravitee.apim.core.api.model.Api;
 import io.gravitee.apim.core.api.model.Api.ApiBuilder;
+import io.gravitee.apim.core.membership.model.PrimaryOwnerEntity;
 import io.gravitee.common.component.Lifecycle;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.ResponseTemplate;
@@ -75,7 +76,7 @@ public class ApiExport {
 
     private List<? extends AbstractListener<? extends AbstractEntrypoint>> listeners;
     private List<? extends AbstractEndpointGroup<? extends AbstractEndpoint>> endpointGroups;
-    private Analytics analytics;
+    private Analytics analytics = new Analytics();
     private Failover failover;
 
     @Builder.Default
@@ -115,9 +116,12 @@ public class ApiExport {
     private Instant deployedAt;
     private Instant updatedAt;
 
+    PrimaryOwnerEntity primaryOwner;
+
+    private Boolean allowedInApiProducts;
+
     public ApiBuilder toApiBuilder() {
-        return Api
-            .builder()
+        return Api.builder()
             .id(id)
             .crossId(crossId)
             .name(name)
@@ -138,8 +142,7 @@ public class ApiExport {
         if (ApiType.NATIVE.equals(type)) {
             return null;
         }
-        return io.gravitee.definition.model.v4.Api
-            .builder()
+        return io.gravitee.definition.model.v4.Api.builder()
             .analytics(analytics)
             .apiVersion(apiVersion)
             .definitionVersion(DefinitionVersion.V4)
@@ -147,21 +150,22 @@ public class ApiExport {
             .failover(failover)
             .flows((List<Flow>) flows)
             .listeners((List<Listener>) listeners)
+            .flowExecution(flowExecution)
             .name(name)
             .properties(properties)
             .resources(resources)
             .responseTemplates(responseTemplates)
             .tags(tags)
             .type(type)
-            .services((ApiServices) services);
+            .services((ApiServices) services)
+            .allowedInApiProducts(allowedInApiProducts);
     }
 
     public io.gravitee.definition.model.v4.nativeapi.NativeApi.NativeApiBuilder<?, ?> toNativeApiDefinitionBuilder() {
         if (!ApiType.NATIVE.equals(type)) {
             return null;
         }
-        return io.gravitee.definition.model.v4.nativeapi.NativeApi
-            .builder()
+        return io.gravitee.definition.model.v4.nativeapi.NativeApi.builder()
             .apiVersion(apiVersion)
             .definitionVersion(DefinitionVersion.V4)
             .endpointGroups((List<NativeEndpointGroup>) endpointGroups)

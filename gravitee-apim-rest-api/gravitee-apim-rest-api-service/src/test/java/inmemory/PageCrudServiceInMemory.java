@@ -52,7 +52,10 @@ public class PageCrudServiceInMemory implements InMemoryAlternative<Page>, PageC
 
     @Override
     public Optional<Page> findById(String id) {
-        return pages.stream().filter(p -> p.getId().equals(id)).findFirst();
+        return pages
+            .stream()
+            .filter(p -> p.getId().equals(id))
+            .findFirst();
     }
 
     @Override
@@ -62,7 +65,33 @@ public class PageCrudServiceInMemory implements InMemoryAlternative<Page>, PageC
 
     @Override
     public void unsetHomepage(Collection<String> ids) {
-        pages.stream().filter(page -> ids.contains(page.getId())).forEach(page -> page.setHomepage(false));
+        pages
+            .stream()
+            .filter(page -> ids.contains(page.getId()))
+            .forEach(page -> page.setHomepage(false));
+    }
+
+    @Override
+    public List<Page> findByApiId(String apiId) {
+        return pages
+            .stream()
+            .filter(page -> apiId.equals(page.getReferenceId()) && Page.ReferenceType.API.equals(page.getReferenceType()))
+            .toList();
+    }
+
+    @Override
+    public void updateCrossIds(List<Page> pages) {
+        if (pages == null || pages.isEmpty()) {
+            return;
+        }
+
+        for (Page updatedPage : pages) {
+            pages
+                .stream()
+                .filter(existing -> existing.getId().equals(updatedPage.getId()))
+                .findFirst()
+                .ifPresent(existing -> existing.setCrossId(updatedPage.getCrossId()));
+        }
     }
 
     @Override

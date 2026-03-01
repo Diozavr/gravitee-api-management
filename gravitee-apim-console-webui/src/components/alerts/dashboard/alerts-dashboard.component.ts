@@ -15,7 +15,6 @@
  */
 
 import { IPromise, IScope } from 'angular';
-
 import { ActivatedRoute, Router } from '@angular/router';
 import '@gravitee/ui-components/wc/gv-chart-bar';
 
@@ -86,7 +85,7 @@ class AlertsDashboardComponent implements ng.IComponentController {
         this.customTimeframe.to,
         contextualInformationFromReferenceType.scope,
         this.referenceId,
-      ).then((response) => {
+      ).then(response => {
         this.alerts = response.data.alerts;
         this.eventsBySeverity = response.data.bySeverity;
 

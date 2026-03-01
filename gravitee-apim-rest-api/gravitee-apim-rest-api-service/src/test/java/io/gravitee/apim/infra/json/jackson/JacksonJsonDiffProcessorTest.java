@@ -21,6 +21,9 @@ import fixtures.core.model.PlanFixtures;
 import io.gravitee.definition.model.v4.plan.Plan;
 import io.gravitee.definition.model.v4.plan.PlanSecurity;
 import io.gravitee.rest.api.model.v4.plan.PlanSecurityType;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,18 +38,17 @@ class JacksonJsonDiffProcessorTest {
 
     @Test
     void should_process_diff_of_model_using_JsonRawValue_annotation() {
-        var oldPlan = PlanFixtures
-            .aPlanHttpV4()
+        var oldPlan = PlanFixtures.aPlanHttpV4()
             .toBuilder()
             .planDefinitionHttpV4(
-                Plan
-                    .builder()
+                Plan.builder()
                     .security(
-                        PlanSecurity
-                            .builder()
+                        PlanSecurity.builder()
                             .type(PlanSecurityType.OAUTH2.getLabel())
-                            .configuration("""
-                                {"modeStrict": true}""")
+                            .configuration(
+                                """
+                                {"modeStrict": true}"""
+                            )
                             .build()
                     )
                     .build()
@@ -57,7 +59,39 @@ class JacksonJsonDiffProcessorTest {
 
         var diff = processor.diff(oldPlan, newPlan);
 
-        assertEquals("""
-            [{"op":"replace","path":"/name","value":"updated name"}]""", diff);
+        assertEquals(
+            """
+            [{"op":"replace","path":"/name","value":"updated name"}]""",
+            diff
+        );
+    }
+
+    @Test
+    void should_process_diff_of_array() {
+        String[] oldArray = new String[] { "value1", "value2" };
+        String[] newArray = new String[] { "value1", "value3", "value4" };
+
+        var diff = processor.diff(oldArray, newArray);
+
+        assertEquals(
+            """
+            [{"op":"replace","path":"/1","value":"value3"},{"op":"add","path":"/-","value":"value4"}]""",
+            diff
+        );
+    }
+
+    @Test
+    void should_process_diff_of_Set() {
+        // Using LinkedHashSet to keep insertion order
+        var oldSet = new LinkedHashSet<>(List.of("value1", "value2"));
+        var newSet = new LinkedHashSet<>(List.of("value3", "value4", "value1"));
+
+        var diff = processor.diff(oldSet, newSet);
+
+        assertEquals(
+            """
+            [{"op":"replace","path":"/0","value":"value3"},{"op":"replace","path":"/1","value":"value4"},{"op":"add","path":"/-","value":"value1"}]""",
+            diff
+        );
     }
 }

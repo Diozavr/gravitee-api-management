@@ -16,6 +16,7 @@
 package io.gravitee.apim.rest.api.automation.resource.base;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
@@ -42,9 +43,11 @@ import io.gravitee.apim.rest.api.automation.spring.ResourceContextConfiguration;
 import io.gravitee.repository.management.api.ApiRepository;
 import io.gravitee.repository.management.api.ApplicationRepository;
 import io.gravitee.rest.api.model.EnvironmentEntity;
+import io.gravitee.rest.api.model.permissions.RolePermissionAction;
 import io.gravitee.rest.api.service.ApiDuplicatorService;
 import io.gravitee.rest.api.service.ApiMetadataService;
 import io.gravitee.rest.api.service.ApiService;
+import io.gravitee.rest.api.service.ApplicationService;
 import io.gravitee.rest.api.service.EnvironmentService;
 import io.gravitee.rest.api.service.GroupService;
 import io.gravitee.rest.api.service.MediaService;
@@ -91,6 +94,9 @@ public abstract class AbstractResourceTest extends JerseySpringTest {
 
     @Autowired
     protected ApiService apiService;
+
+    @Autowired
+    protected ApplicationService applicationService;
 
     @Autowired
     protected io.gravitee.rest.api.service.v4.ApiService apiServiceV4;
@@ -217,9 +223,10 @@ public abstract class AbstractResourceTest extends JerseySpringTest {
 
     @BeforeEach
     void setUp() {
-        when(permissionService.hasPermission(any(), any(), any(), any())).thenReturn(true);
-        when(environmentService.findByOrgAndIdOrHrid(ORGANIZATION, ENVIRONMENT))
-            .thenReturn(EnvironmentEntity.builder().id(ENVIRONMENT).build());
+        when(permissionService.hasPermission(any(), any(), any(), any(RolePermissionAction[].class))).thenReturn(true);
+        when(environmentService.findByOrgAndIdOrHrid(ORGANIZATION, ENVIRONMENT)).thenReturn(
+            EnvironmentEntity.builder().id(ENVIRONMENT).build()
+        );
     }
 
     @AfterEach

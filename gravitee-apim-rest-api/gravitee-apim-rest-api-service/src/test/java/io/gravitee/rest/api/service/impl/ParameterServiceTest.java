@@ -29,12 +29,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.gravitee.common.event.EventManager;
+import io.gravitee.node.api.Node;
 import io.gravitee.repository.exceptions.TechnicalException;
+import io.gravitee.repository.management.api.CommandRepository;
 import io.gravitee.repository.management.api.ParameterRepository;
+import io.gravitee.repository.management.model.Command;
 import io.gravitee.repository.management.model.Parameter;
 import io.gravitee.repository.management.model.ParameterReferenceType;
 import io.gravitee.rest.api.model.EnvironmentEntity;
+import io.gravitee.rest.api.model.command.CommandTags;
 import io.gravitee.rest.api.model.parameters.Key;
 import io.gravitee.rest.api.service.AuditService;
 import io.gravitee.rest.api.service.EnvironmentService;
@@ -44,8 +49,10 @@ import java.util.*;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.core.env.ConfigurableEnvironment;
 
@@ -74,26 +81,101 @@ public class ParameterServiceTest {
     @Mock
     private EnvironmentService environmentService;
 
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
+
+    @Mock
+    private Node node;
+
+    @Mock
+    private CommandRepository commandRepository;
+
     @Before
     public void init() {
         GraviteeContext.getCurrentParameters().clear();
+        when(node.id()).thenReturn("test-node-id");
     }
 
     @Test
-    public void shouldFindAll() throws TechnicalException {
+    public void shouldFindAllWithCache() throws TechnicalException {
         final Parameter parameter = new Parameter();
         parameter.setKey(PORTAL_TOP_APIS.key());
         parameter.setValue("api1;api2");
 
         when(parameterRepository.findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT)).thenReturn(of(parameter));
 
-        final List<String> values = parameterService.findAll(
+        parameterService.findAll(
             GraviteeContext.getExecutionContext(),
             PORTAL_TOP_APIS,
             io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
         );
 
-        assertEquals(asList("api1", "api2"), values);
+        parameterService.findAll(
+            GraviteeContext.getExecutionContext(),
+            PORTAL_TOP_APIS,
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        verify(parameterRepository, times(1)).findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT);
+    }
+
+    @Test
+    public void shouldInvalidateCacheOnSave() throws TechnicalException {
+        final Parameter parameter = new Parameter();
+        parameter.setKey(PORTAL_TOP_APIS.key());
+        parameter.setValue("api1;api2");
+
+        when(parameterRepository.findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT)).thenReturn(of(parameter));
+        when(parameterRepository.update(any())).thenAnswer(i -> i.getArguments()[0]);
+
+        // First call to fill cache
+        parameterService.findAll(
+            GraviteeContext.getExecutionContext(),
+            PORTAL_TOP_APIS,
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        // Save to invalidate cache
+        parameterService.save(
+            GraviteeContext.getExecutionContext(),
+            PORTAL_TOP_APIS,
+            "api3",
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        // Call again, should call repository again
+        parameterService.findAll(
+            GraviteeContext.getExecutionContext(),
+            PORTAL_TOP_APIS,
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        verify(parameterRepository, times(3)).findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT);
+    }
+
+    @Test
+    public void shouldFindAllKeysWithCache() throws TechnicalException {
+        final Parameter parameter = new Parameter();
+        parameter.setKey(PORTAL_TOP_APIS.key());
+        parameter.setValue("api1;api2");
+
+        when(parameterRepository.findByKeys(anyList(), eq("DEFAULT"), eq(ParameterReferenceType.ENVIRONMENT))).thenReturn(
+            Collections.singletonList(parameter)
+        );
+
+        parameterService.findAll(
+            GraviteeContext.getExecutionContext(),
+            Collections.singletonList(PORTAL_TOP_APIS),
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        parameterService.findAll(
+            GraviteeContext.getExecutionContext(),
+            Collections.singletonList(PORTAL_TOP_APIS),
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        verify(parameterRepository, times(1)).findByKeys(anyList(), eq("DEFAULT"), eq(ParameterReferenceType.ENVIRONMENT));
     }
 
     @Test
@@ -118,8 +200,9 @@ public class ParameterServiceTest {
         parameter.setValue("api1;api2;api3");
 
         when(environment.containsProperty(PORTAL_TOP_APIS.key())).thenReturn(true);
-        when(parameterRepository.findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT))
-            .thenReturn(Optional.of(parameter));
+        when(parameterRepository.findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT)).thenReturn(
+            Optional.of(parameter)
+        );
 
         final List<String> values = parameterService.findAll(
             GraviteeContext.getExecutionContext(),
@@ -189,8 +272,7 @@ public class ParameterServiceTest {
                 "DEFAULT",
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(Arrays.asList(parameter1, parameter2, parameter3));
+        ).thenReturn(Arrays.asList(parameter1, parameter2, parameter3));
 
         final Map<String, List<String>> values = parameterService.findAll(
             GraviteeContext.getExecutionContext(),
@@ -227,8 +309,7 @@ public class ParameterServiceTest {
                 "DEFAULT",
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(Arrays.asList(parameter1, parameter2, parameter3));
+        ).thenReturn(Arrays.asList(parameter1, parameter2, parameter3));
 
         final Map<String, List<String>> values = parameterService.findAll(
             GraviteeContext.getExecutionContext(),
@@ -274,8 +355,7 @@ public class ParameterServiceTest {
                 "DEFAULT",
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(parametersFromRepository);
+        ).thenReturn(parametersFromRepository);
         when(environment.containsProperty(API_LABELS_DICTIONARY.key())).thenReturn(true);
         when(environment.getProperty(API_LABELS_DICTIONARY.key())).thenReturn("api1,api12");
         when(environment.containsProperty(PORTAL_APIKEY_HEADER.key())).thenReturn(true);
@@ -315,15 +395,16 @@ public class ParameterServiceTest {
 
         assertEquals("api1", result.getValue());
         verify(parameterRepository).create(parameter);
-        verify(auditService)
-            .createAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())),
-                eq(PARAMETER_CREATED),
-                any(),
-                eq(null),
-                eq(parameter)
-            );
+        verify(auditService).createAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getProperties().equals(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())) &&
+                    auditLogData.getEvent().equals(PARAMETER_CREATED) &&
+                    auditLogData.getOldValue() == null &&
+                    auditLogData.getNewValue().equals(parameter)
+            )
+        );
     }
 
     @Test
@@ -346,15 +427,16 @@ public class ParameterServiceTest {
 
         assertEquals("api1;api2", result.getValue());
         verify(parameterRepository).create(parameter);
-        verify(auditService)
-            .createAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())),
-                eq(PARAMETER_CREATED),
-                any(),
-                eq(null),
-                eq(parameter)
-            );
+        verify(auditService).createAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getProperties().equals(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())) &&
+                    auditLogData.getEvent().equals(PARAMETER_CREATED) &&
+                    auditLogData.getOldValue() == null &&
+                    auditLogData.getNewValue().equals(parameter)
+            )
+        );
     }
 
     @Test
@@ -378,7 +460,7 @@ public class ParameterServiceTest {
 
         assertEquals("api10", result.getValue());
         verify(parameterRepository, times(0)).create(any());
-        verify(auditService, times(0)).createAuditLog(eq(GraviteeContext.getExecutionContext()), any(), any(), any(), any(), any());
+        verify(auditService, times(0)).createAuditLog(eq(GraviteeContext.getExecutionContext()), any());
     }
 
     @Test
@@ -402,7 +484,7 @@ public class ParameterServiceTest {
 
         assertEquals("api1", result.getValue());
         verify(parameterRepository, times(1)).create(any());
-        verify(auditService, times(1)).createAuditLog(eq(GraviteeContext.getExecutionContext()), any(), any(), any(), any(), any());
+        verify(auditService, times(1)).createAuditLog(eq(GraviteeContext.getExecutionContext()), any());
     }
 
     @Test
@@ -426,7 +508,7 @@ public class ParameterServiceTest {
 
         assertEquals("api10;api11;api12", result.getValue());
         verify(parameterRepository, times(0)).create(any());
-        verify(auditService, times(0)).createAuditLog(eq(GraviteeContext.getExecutionContext()), any(), any(), any(), any(), any());
+        verify(auditService, times(0)).createAuditLog(eq(GraviteeContext.getExecutionContext()), any());
     }
 
     @Test
@@ -450,7 +532,7 @@ public class ParameterServiceTest {
 
         assertEquals("api1", result.getValue());
         verify(parameterRepository, times(1)).create(any());
-        verify(auditService, times(1)).createAuditLog(eq(GraviteeContext.getExecutionContext()), any(), any(), any(), any(), any());
+        verify(auditService, times(1)).createAuditLog(eq(GraviteeContext.getExecutionContext()), any());
     }
 
     @Test
@@ -476,15 +558,16 @@ public class ParameterServiceTest {
         );
 
         verify(parameterRepository).update(newParameter);
-        verify(auditService)
-            .createAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())),
-                eq(PARAMETER_UPDATED),
-                any(),
-                eq(parameter),
-                eq(newParameter)
-            );
+        verify(auditService).createAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getProperties().equals(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())) &&
+                    auditLogData.getEvent().equals(PARAMETER_UPDATED) &&
+                    auditLogData.getOldValue().equals(parameter) &&
+                    auditLogData.getNewValue().equals(newParameter)
+            )
+        );
     }
 
     @Test
@@ -506,15 +589,16 @@ public class ParameterServiceTest {
         );
 
         verify(parameterRepository).create(parameter);
-        verify(auditService)
-            .createAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())),
-                eq(PARAMETER_CREATED),
-                any(),
-                eq(null),
-                eq(parameter)
-            );
+        verify(auditService).createAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getProperties().equals(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())) &&
+                    auditLogData.getEvent().equals(PARAMETER_CREATED) &&
+                    auditLogData.getOldValue() == null &&
+                    auditLogData.getNewValue().equals(parameter)
+            )
+        );
     }
 
     @Test
@@ -540,7 +624,7 @@ public class ParameterServiceTest {
         );
 
         verify(parameterRepository, never()).update(newParameter);
-        verify(auditService, never()).createAuditLog(eq(GraviteeContext.getExecutionContext()), any(), any(), any(), any(), any());
+        verify(auditService, never()).createAuditLog(eq(GraviteeContext.getExecutionContext()), any());
     }
 
     @Test
@@ -568,15 +652,16 @@ public class ParameterServiceTest {
         );
 
         verify(parameterRepository).update(newParameter);
-        verify(auditService)
-            .createAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())),
-                eq(PARAMETER_UPDATED),
-                any(),
-                eq(parameter),
-                eq(newParameter)
-            );
+        verify(auditService).createAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getProperties().equals(singletonMap(PARAMETER, PORTAL_TOP_APIS.key())) &&
+                    auditLogData.getEvent().equals(PARAMETER_UPDATED) &&
+                    auditLogData.getOldValue().equals(parameter) &&
+                    auditLogData.getNewValue().equals(newParameter)
+            )
+        );
     }
 
     @Test
@@ -585,8 +670,9 @@ public class ParameterServiceTest {
         parameter.setKey(PORTAL_RATING_ENABLED.key());
         parameter.setValue("true");
 
-        when(parameterRepository.findById(PORTAL_RATING_ENABLED.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT))
-            .thenReturn(of(parameter));
+        when(parameterRepository.findById(PORTAL_RATING_ENABLED.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT)).thenReturn(
+            of(parameter)
+        );
 
         assertTrue(
             parameterService.findAsBoolean(
@@ -614,10 +700,12 @@ public class ParameterServiceTest {
 
     @Test
     public void shouldFindAsBooleanDefaultValue() throws TechnicalException {
-        when(parameterRepository.findById(PORTAL_USERCREATION_ENABLED.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT))
-            .thenReturn(empty());
-        when(parameterRepository.findById(PORTAL_USERCREATION_ENABLED.key(), "DEFAULT_ORG", ParameterReferenceType.ORGANIZATION))
-            .thenReturn(empty());
+        when(parameterRepository.findById(PORTAL_USERCREATION_ENABLED.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT)).thenReturn(
+            empty()
+        );
+        when(
+            parameterRepository.findById(PORTAL_USERCREATION_ENABLED.key(), "DEFAULT_ORG", ParameterReferenceType.ORGANIZATION)
+        ).thenReturn(empty());
         EnvironmentEntity defaultEnv = new EnvironmentEntity();
         defaultEnv.setOrganizationId("DEFAULT_ORG");
         when(environmentService.findById("DEFAULT")).thenReturn(defaultEnv);
@@ -654,8 +742,9 @@ public class ParameterServiceTest {
         parameter.setKey(API_LABELS_DICTIONARY.key());
         parameter.setValue("label1;label2");
 
-        when(parameterRepository.findById(API_LABELS_DICTIONARY.key(), "DEFAULT", ParameterReferenceType.ORGANIZATION))
-            .thenReturn(of(parameter));
+        when(parameterRepository.findById(API_LABELS_DICTIONARY.key(), "DEFAULT", ParameterReferenceType.ORGANIZATION)).thenReturn(
+            of(parameter)
+        );
 
         assertEquals(
             parameter.getValue(),
@@ -701,5 +790,126 @@ public class ParameterServiceTest {
             )
         );
         verify(parameterRepository, times(0)).findById(API_LABELS_DICTIONARY.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT);
+    }
+
+    @Test
+    public void should_invalidate_cache_by_key_and_reference() throws TechnicalException {
+        // given
+        final Parameter parameter = new Parameter();
+        parameter.setKey(PORTAL_TOP_APIS.key());
+        parameter.setValue("api1;api2");
+
+        when(parameterRepository.findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT)).thenReturn(of(parameter));
+
+        // First call to fill cache
+        parameterService.findAll(
+            GraviteeContext.getExecutionContext(),
+            PORTAL_TOP_APIS,
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        // Invalidate cache directly
+        parameterService.invalidateCache(PORTAL_TOP_APIS.key(), "DEFAULT", "ENVIRONMENT");
+
+        // Call again, should call repository again since cache was invalidated
+        parameterService.findAll(
+            GraviteeContext.getExecutionContext(),
+            PORTAL_TOP_APIS,
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        verify(parameterRepository, times(2)).findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT);
+    }
+
+    @Test
+    public void shouldSendInvalidateCacheCommandOnCreate() throws TechnicalException {
+        // given
+        final Parameter parameter = new Parameter();
+        parameter.setKey(PORTAL_TOP_APIS.key());
+        parameter.setReferenceId("DEFAULT");
+        parameter.setReferenceType(ParameterReferenceType.ENVIRONMENT);
+        parameter.setValue("api1");
+
+        when(parameterRepository.findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT)).thenReturn(empty());
+        when(parameterRepository.create(parameter)).thenReturn(parameter);
+
+        // when
+        parameterService.save(
+            GraviteeContext.getExecutionContext(),
+            PORTAL_TOP_APIS,
+            "api1",
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        // then
+        ArgumentCaptor<Command> commandCaptor = ArgumentCaptor.forClass(Command.class);
+        verify(commandRepository).create(commandCaptor.capture());
+
+        Command command = commandCaptor.getValue();
+        assertEquals(List.of(CommandTags.PARAMETER_CACHE_UPDATE.name()), command.getTags());
+        assertTrue(command.getContent().contains(PORTAL_TOP_APIS.key()));
+        assertTrue(command.getContent().contains("DEFAULT"));
+        assertTrue(command.getContent().contains("ENVIRONMENT"));
+    }
+
+    @Test
+    public void shouldSendInvalidateCacheCommandOnUpdate() throws TechnicalException {
+        // given
+        final Parameter parameter = new Parameter();
+        parameter.setKey(PORTAL_TOP_APIS.key());
+        parameter.setValue("api1");
+
+        final Parameter newParameter = new Parameter();
+        newParameter.setKey(PORTAL_TOP_APIS.key());
+        newParameter.setReferenceId("DEFAULT");
+        newParameter.setReferenceType(ParameterReferenceType.ENVIRONMENT);
+        newParameter.setValue("api2");
+
+        when(parameterRepository.findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT)).thenReturn(of(parameter));
+        when(parameterRepository.update(newParameter)).thenReturn(newParameter);
+
+        // when
+        parameterService.save(
+            GraviteeContext.getExecutionContext(),
+            PORTAL_TOP_APIS,
+            "api2",
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        // then
+        ArgumentCaptor<Command> commandCaptor = ArgumentCaptor.forClass(Command.class);
+        verify(commandRepository).create(commandCaptor.capture());
+
+        Command command = commandCaptor.getValue();
+        assertEquals(List.of(CommandTags.PARAMETER_CACHE_UPDATE.name()), command.getTags());
+        assertTrue(command.getContent().contains(PORTAL_TOP_APIS.key()));
+    }
+
+    @Test
+    public void shouldSendInvalidateCacheCommandOnDelete() throws TechnicalException {
+        // given
+        final Parameter parameter = new Parameter();
+        parameter.setKey(PORTAL_TOP_APIS.key());
+        parameter.setValue("api1");
+
+        when(parameterRepository.findById(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT)).thenReturn(of(parameter));
+
+        // when
+        parameterService.save(
+            GraviteeContext.getExecutionContext(),
+            PORTAL_TOP_APIS,
+            (String) null,
+            io.gravitee.rest.api.model.parameters.ParameterReferenceType.ENVIRONMENT
+        );
+
+        // then
+        verify(parameterRepository).delete(PORTAL_TOP_APIS.key(), "DEFAULT", ParameterReferenceType.ENVIRONMENT);
+
+        ArgumentCaptor<Command> commandCaptor = ArgumentCaptor.forClass(Command.class);
+        verify(commandRepository).create(commandCaptor.capture());
+
+        Command command = commandCaptor.getValue();
+        assertEquals(List.of(CommandTags.PARAMETER_CACHE_UPDATE.name()), command.getTags());
+        assertTrue(command.getContent().contains(PORTAL_TOP_APIS.key()));
     }
 }

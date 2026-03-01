@@ -30,12 +30,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class MongoAsyncJobRepository implements AsyncJobRepository {
 
     @Autowired
@@ -47,7 +47,10 @@ public class MongoAsyncJobRepository implements AsyncJobRepository {
     @Override
     public Optional<AsyncJob> findById(String s) throws TechnicalException {
         log.debug("Find asyncJob by id [{}]", s);
-        Optional<AsyncJob> result = internalRepository.findById(s).map(source -> mapper.map(source)).map(this::handleDeadLine);
+        Optional<AsyncJob> result = internalRepository
+            .findById(s)
+            .map(source -> mapper.map(source))
+            .map(this::handleDeadLine);
         log.debug("Find asyncJob by id [{}] - DONE", s);
         return result;
     }

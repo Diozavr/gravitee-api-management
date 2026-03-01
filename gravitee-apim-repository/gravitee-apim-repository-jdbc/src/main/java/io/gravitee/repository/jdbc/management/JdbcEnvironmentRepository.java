@@ -26,7 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.CollectionUtils;
@@ -36,7 +36,7 @@ import org.springframework.util.CollectionUtils;
  * @author njt
  */
 @Repository
-@Slf4j
+@CustomLog
 public class JdbcEnvironmentRepository extends JdbcAbstractCrudRepository<Environment, String> implements EnvironmentRepository {
 
     private final String ENVIRONMENT_HRIDS;
@@ -48,8 +48,7 @@ public class JdbcEnvironmentRepository extends JdbcAbstractCrudRepository<Enviro
 
     @Override
     protected JdbcObjectMapper<Environment> buildOrm() {
-        return JdbcObjectMapper
-            .builder(Environment.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(Environment.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("cockpit_id", Types.NVARCHAR, String.class)
             .addColumn("name", Types.NVARCHAR, String.class)

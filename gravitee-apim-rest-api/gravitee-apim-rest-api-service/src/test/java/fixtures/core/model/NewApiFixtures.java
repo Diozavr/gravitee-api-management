@@ -15,6 +15,7 @@
  */
 package fixtures.core.model;
 
+import io.gravitee.apim.core.api.model.Api;
 import io.gravitee.apim.core.api.model.NewHttpApi;
 import io.gravitee.apim.core.api.model.NewNativeApi;
 import io.gravitee.definition.model.DefinitionVersion;
@@ -43,14 +44,13 @@ public class NewApiFixtures {
         NewNativeApi.builder().name("My API").apiVersion("1.0");
 
     public static NewHttpApi aProxyApiV4() {
-        return BASE_HTTP
-            .get()
+        return BASE_HTTP.get()
             .definitionVersion(DefinitionVersion.V4)
             .type(ApiType.PROXY)
+            .visibility(Api.Visibility.PRIVATE)
             .listeners(
                 List.of(
-                    HttpListener
-                        .builder()
+                    HttpListener.builder()
                         .paths(List.of(Path.builder().path("/http_proxy").build()))
                         .entrypoints(List.of(Entrypoint.builder().type("http-proxy").configuration("{}").build()))
                         .build()
@@ -58,15 +58,13 @@ public class NewApiFixtures {
             )
             .endpointGroups(
                 List.of(
-                    EndpointGroup
-                        .builder()
+                    EndpointGroup.builder()
                         .name("default-group")
                         .type("http-proxy")
                         .sharedConfiguration("{}")
                         .endpoints(
                             List.of(
-                                Endpoint
-                                    .builder()
+                                Endpoint.builder()
                                     .name("default-endpoint")
                                     .type("http-proxy")
                                     .inheritConfiguration(true)
@@ -81,33 +79,106 @@ public class NewApiFixtures {
     }
 
     public static NewNativeApi aNativeApiV4() {
-        return BASE_NATIVE
-            .get()
+        return BASE_NATIVE.get()
             .definitionVersion(DefinitionVersion.V4)
             .type(ApiType.NATIVE)
+            .visibility(Api.Visibility.PRIVATE)
             .listeners(
                 List.of(
-                    KafkaListener
-                        .builder()
+                    KafkaListener.builder()
                         .entrypoints(List.of(NativeEntrypoint.builder().type("native-entrypoint-type").configuration("{}").build()))
                         .build()
                 )
             )
             .endpointGroups(
                 List.of(
-                    NativeEndpointGroup
-                        .builder()
+                    NativeEndpointGroup.builder()
                         .name("default-group")
                         .type("http-proxy")
                         .sharedConfiguration("{}")
                         .endpoints(
                             List.of(
-                                NativeEndpoint
-                                    .builder()
+                                NativeEndpoint.builder()
                                     .name("default-endpoint")
                                     .type("http-proxy")
                                     .inheritConfiguration(true)
                                     .configuration("{\"target\":\"https://api.gravitee.io/echo\"}")
+                                    .build()
+                            )
+                        )
+                        .build()
+                )
+            )
+            .build();
+    }
+
+    public static NewHttpApi aMcpProxyApiV4() {
+        return BASE_HTTP.get()
+            .definitionVersion(DefinitionVersion.V4)
+            .type(ApiType.MCP_PROXY)
+            .visibility(Api.Visibility.PRIVATE)
+            .listeners(
+                List.of(
+                    HttpListener.builder()
+                        .paths(List.of(Path.builder().path("/mcp_proxy").build()))
+                        .entrypoints(List.of(Entrypoint.builder().type("mcp-proxy").configuration("{}").build()))
+                        .build()
+                )
+            )
+            .endpointGroups(
+                List.of(
+                    EndpointGroup.builder()
+                        .name("default-group")
+                        .type("mcp-proxy")
+                        .sharedConfiguration("{}")
+                        .endpoints(
+                            List.of(
+                                Endpoint.builder()
+                                    .name("default-endpoint")
+                                    .type("mcp-proxy")
+                                    .inheritConfiguration(true)
+                                    .configuration("{\"target\":\"https://api.gravitee.io/echo\"}")
+                                    .build()
+                            )
+                        )
+                        .build()
+                )
+            )
+            .build();
+    }
+
+    public static NewHttpApi aLlmProxyApiV4() {
+        return BASE_HTTP.get()
+            .definitionVersion(DefinitionVersion.V4)
+            .type(ApiType.LLM_PROXY)
+            .visibility(Api.Visibility.PRIVATE)
+            .listeners(
+                List.of(
+                    HttpListener.builder()
+                        .paths(List.of(Path.builder().path("/llm_proxy").build()))
+                        .entrypoints(List.of(Entrypoint.builder().type("llm-proxy").configuration("{}").build()))
+                        .build()
+                )
+            )
+            .endpointGroups(
+                List.of(
+                    EndpointGroup.builder()
+                        .name("Azure")
+                        .type("llm-proxy")
+                        .sharedConfiguration("{}")
+                        .endpoints(
+                            List.of(
+                                Endpoint.builder()
+                                    .name("default-endpoint")
+                                    .type("llm-proxy")
+                                    .inheritConfiguration(true)
+                                    .configuration(
+                                        """
+                                        {
+                                          "target": "https://api.gravitee.io/echo"
+                                        }
+                                        """
+                                    )
                                     .build()
                             )
                         )

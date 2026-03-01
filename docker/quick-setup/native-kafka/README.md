@@ -17,6 +17,7 @@ Docker compose will create the following services :
 - `gio_apim_kafka` : Kafka broker which must be accessible via Gravitee Gateway
 - `gio_apim_kafka-ui` : Simple Kafka UI to see topics and messages. Useful for testing
 - `gio_apim_kafka-client` : Kafka client container to run kafka commands. This avoids to configure kafka-client on your local machine.
+- `kibana` : Kibana service to view runtime data from Elasticsearch e.g. event metrics, logs.
 
 Docker volumes :
 - `./.license` : License file
@@ -93,10 +94,10 @@ Since we have a keyless plan, no subscription is required, and we can use the `k
 
 Execute the following commands to produce and consume messages.
 ```bash
-docker exec -it gio_apim_kafka-client bash -c "kafka-console-producer.sh --bootstrap-server foo.kafka.local:9092 --producer.config config/kafka-keyless-plan-ssl.properties --topic client-topic-1"`
+docker exec -it gio_apim_kafka-client bash -c "/opt/kafka/bin/kafka-console-producer.sh --bootstrap-server foo.kafka.local:9092 --producer.config config/kafka-keyless-plan-ssl.properties --topic client-topic-1"`
 ```
 ```bash
-docker exec -it gio_apim_kafka-client bash -c "kafka-console-consumer.sh --bootstrap-server foo.kafka.local:9092 --consumer.config config/kafka-keyless-plan-ssl.properties --topic client-topic-1"`
+docker exec -it gio_apim_kafka-client bash -c "/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server foo.kafka.local:9092 --consumer.config config/kafka-keyless-plan-ssl.properties --topic client-topic-1"`
 ```
 
 ### See the API in the portal (next)

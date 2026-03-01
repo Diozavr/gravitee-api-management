@@ -28,29 +28,33 @@ import { TaskService } from '../../../services-ngx/task.service';
 })
 export class HomeLayoutComponent {
   public taskLabel = this.taskService.getTasks().pipe(
-    map((tasks) => `My Tasks <span class="gio-badge-accent">${tasks.page.total_elements}</span>`),
+    map(tasks => `My Tasks <span class="gio-badge-accent">${tasks.page.total_elements}</span>`),
     startWith('Tasks'),
     // If thrown, keep the label as is
     catchError(() => of('Tasks')),
     shareReplay(1),
   );
 
-  public tabs: { label: Observable<string>; routerLink: string }[] = [
+  public tabs: { label: Observable<string>; routerLink: string; dataTestId: string }[] = [
     {
       label: of('Overview'),
       routerLink: './overview',
+      dataTestId: 'home-tab-overview',
     },
     {
       label: of('API Health Check'),
       routerLink: './apiHealthCheck',
+      dataTestId: 'home-tab-api-health-check',
     },
     {
       label: this.taskLabel,
       routerLink: './tasks',
+      dataTestId: 'home-tab-tasks',
     },
     {
       label: of('Broadcasts'),
       routerLink: './broadcasts',
+      dataTestId: 'home-tab-broadcasts',
     },
   ];
 

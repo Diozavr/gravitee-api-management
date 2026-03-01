@@ -44,7 +44,7 @@ export class Step3Endpoints2ConfigComponent implements OnInit, OnDestroy {
   public license$: Observable<License>;
   public isOEM$: Observable<boolean>;
 
-  private apiType: ApiCreationPayload['type'];
+  public apiType: ApiCreationPayload['type'];
 
   constructor(
     private readonly connectorPluginsV2Service: ConnectorPluginsV2Service,
@@ -84,6 +84,7 @@ export class Step3Endpoints2ConfigComponent implements OnInit, OnDestroy {
         this.isOEM$ = this.licenseService.isOEM$();
 
         this.formGroup = new UntypedFormGroup({
+          epg_name: new UntypedFormControl(currentStepPayload?.customGroupName),
           ...(currentStepPayload.selectedEndpoints?.reduce(
             (map, { id, configuration, sharedConfiguration }) => ({
               ...map,
@@ -102,8 +103,9 @@ export class Step3Endpoints2ConfigComponent implements OnInit, OnDestroy {
   }
 
   save(): void {
-    this.stepService.validStep((previousPayload) => ({
+    this.stepService.validStep(previousPayload => ({
       ...previousPayload,
+      customGroupName: this.formGroup.get('epg_name')?.value,
       selectedEndpoints: previousPayload.selectedEndpoints.map(({ id, name, icon, deployed }) => ({
         id,
         name,
@@ -126,6 +128,16 @@ export class Step3Endpoints2ConfigComponent implements OnInit, OnDestroy {
       this.licenseService.openDialog({
         feature: ApimFeature.APIM_NATIVE_KAFKA_REACTOR,
         context: UTMTags.API_CREATION_NATIVE_KAFKA_ENDPOINT_CONFIG,
+      });
+    } else if (this.apiType === 'LLM_PROXY') {
+      this.licenseService.openDialog({
+        feature: ApimFeature.APIM_LLM_PROXY_REACTOR,
+        context: UTMTags.API_CREATION_LLM_ENDPOINT_CONFIG,
+      });
+    } else if (this.apiType === 'A2A_PROXY') {
+      this.licenseService.openDialog({
+        feature: ApimFeature.APIM_A2A_PROXY_REACTOR,
+        context: UTMTags.API_CREATION_A2A_ENDPOINT_CONFIG,
       });
     } else {
       this.licenseService.openDialog({

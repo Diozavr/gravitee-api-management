@@ -74,7 +74,7 @@ export class Step2Entrypoints2ConfigComponent implements OnInit, OnDestroy {
     this.kafkaDomains$ = this.portalConfigurationService.get().pipe(
       map(({ portal, accessPoints }) => {
         if (accessPoints?.kafkaDomains?.length) {
-          return accessPoints.kafkaDomains.map((domain) => `.${domain}`);
+          return accessPoints.kafkaDomains.map(domain => `.${domain}`);
         }
         return [`${portal.kafkaDomain?.length ? '.' + portal.kafkaDomain : ''}:${portal.kafkaPort}`];
       }),
@@ -87,9 +87,9 @@ export class Step2Entrypoints2ConfigComponent implements OnInit, OnDestroy {
     this.restrictedDomainService
       .get()
       .pipe(
-        tap((restrictedDomain) => {
-          this.domainRestrictions = restrictedDomain.map((value) => value.domain) || [];
-          this.enableVirtualHost = paths.find((path) => path.host !== undefined || path.overrideAccess !== undefined) != null;
+        tap(restrictedDomain => {
+          this.domainRestrictions = restrictedDomain.map(value => value.domain) || [];
+          this.enableVirtualHost = paths.find(path => path.host !== undefined || path.overrideAccess !== undefined) != null;
         }),
         takeUntil(this.unsubscribe$),
       )
@@ -121,27 +121,22 @@ export class Step2Entrypoints2ConfigComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.unsubscribe$))
       .subscribe((schemas: Record<string, GioJsonSchema>) => {
         // Remove schema with empty input
-        this.entrypointSchemas = omitBy(schemas, (schema) => !GioFormJsonSchemaComponent.isDisplayable(schema));
+        this.entrypointSchemas = omitBy(schemas, schema => !GioFormJsonSchemaComponent.isDisplayable(schema));
         this.selectedEntrypoints = currentStepPayload.selectedEntrypoints;
         this.changeDetectorRef.markForCheck();
       });
   }
 
-  public get isA2ASelected(): boolean {
-    return this.stepService.payload.isA2ASelected;
-  }
-
   private initFormForSyncEntrypoints(currentStepPayload: ApiCreationPayload, paths: PathV4[], tcpHosts: TcpHost[], kafkaHost: KafkaHost) {
-    this.hasHttpListeners =
-      currentStepPayload.selectedEntrypoints.find((entrypoint) => entrypoint.supportedListenerType === 'HTTP') != null;
+    this.hasHttpListeners = currentStepPayload.selectedEntrypoints.find(entrypoint => entrypoint.supportedListenerType === 'HTTP') != null;
     if (this.hasHttpListeners) {
       this.formGroup.addControl('paths', this.formBuilder.control(paths, Validators.required));
     }
-    this.hasTcpListeners = currentStepPayload.selectedEntrypoints.find((entrypoint) => entrypoint.supportedListenerType === 'TCP') != null;
+    this.hasTcpListeners = currentStepPayload.selectedEntrypoints.find(entrypoint => entrypoint.supportedListenerType === 'TCP') != null;
     if (this.hasTcpListeners) {
       this.formGroup.addControl('hosts', this.formBuilder.control(tcpHosts, Validators.required));
     }
-    this.hasKafkaListeners = currentStepPayload.selectedEntrypoints.some((entrypoint) => entrypoint.supportedListenerType === 'KAFKA');
+    this.hasKafkaListeners = currentStepPayload.selectedEntrypoints.some(entrypoint => entrypoint.supportedListenerType === 'KAFKA');
     if (this.hasKafkaListeners) {
       const initialKafkaControlValue: KafkaHostData = kafkaHost;
 
@@ -164,13 +159,13 @@ export class Step2Entrypoints2ConfigComponent implements OnInit, OnDestroy {
     const hostsValues = this.formGroup.get('hosts')?.value ?? [];
     const hostValue = this.formGroup.get('kafka')?.value;
 
-    this.stepService.validStep((previousPayload) => {
+    this.stepService.validStep(previousPayload => {
       let paths: PathV4[];
       let hosts: TcpHost[];
       let host: KafkaHost;
-      if (this.selectedEntrypoints.some((entrypoint) => entrypoint.supportedListenerType === 'TCP')) {
+      if (this.selectedEntrypoints.some(entrypoint => entrypoint.supportedListenerType === 'TCP')) {
         hosts = hostsValues;
-      } else if (this.selectedEntrypoints.some((entrypoint) => entrypoint.supportedListenerType === 'KAFKA')) {
+      } else if (this.selectedEntrypoints.some(entrypoint => entrypoint.supportedListenerType === 'KAFKA')) {
         host = hostValue;
       } else {
         paths = this.enableVirtualHost
@@ -180,7 +175,7 @@ export class Step2Entrypoints2ConfigComponent implements OnInit, OnDestroy {
             pathsValue.map(({ path }) => ({ path }));
       }
 
-      const selectedEntrypoints: ApiCreationPayload['selectedEntrypoints'] = previousPayload.selectedEntrypoints.map((entrypoint) => ({
+      const selectedEntrypoints: ApiCreationPayload['selectedEntrypoints'] = previousPayload.selectedEntrypoints.map(entrypoint => ({
         ...entrypoint,
         configuration: this.formGroup.get(`${entrypoint.id}-config`)?.value,
         selectedQos: this.formGroup.get(`${entrypoint.id}-qos`)?.value,
@@ -199,10 +194,13 @@ export class Step2Entrypoints2ConfigComponent implements OnInit, OnDestroy {
       case 'MESSAGE':
         this.stepService.goToNextStep({
           groupNumber: 3,
-          component: this.isA2ASelected ? Step3Endpoints2ConfigComponent : Step3Endpoints1ListComponent,
+          component: Step3Endpoints1ListComponent,
         });
         break;
       case 'PROXY':
+      case 'MCP_PROXY':
+      case 'LLM_PROXY':
+      case 'A2A_PROXY':
       case 'NATIVE':
         this.stepService.goToNextStep({
           groupNumber: 3,
@@ -221,6 +219,16 @@ export class Step2Entrypoints2ConfigComponent implements OnInit, OnDestroy {
       this.licenseService.openDialog({
         feature: ApimFeature.APIM_NATIVE_KAFKA_REACTOR,
         context: UTMTags.API_CREATION_NATIVE_KAFKA_ENTRYPOINT_CONFIG,
+      });
+    } else if (this.apiType === 'LLM_PROXY') {
+      this.licenseService.openDialog({
+        feature: ApimFeature.APIM_LLM_PROXY_REACTOR,
+        context: UTMTags.API_CREATION_LLM_ENTRYPOINT_CONFIG,
+      });
+    } else if (this.apiType === 'A2A_PROXY') {
+      this.licenseService.openDialog({
+        feature: ApimFeature.APIM_A2A_PROXY_REACTOR,
+        context: UTMTags.API_CREATION_A2A_ENTRYPOINT_CONFIG,
       });
     } else {
       this.licenseService.openDialog({

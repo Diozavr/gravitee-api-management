@@ -16,6 +16,9 @@
 package io.gravitee.rest.api.service.impl.configuration.identity;
 
 import static io.gravitee.repository.management.model.Audit.AuditProperties.IDENTITY_PROVIDER;
+import static io.gravitee.repository.management.model.IdentityProvider.AuditEvent.IDENTITY_PROVIDER_CREATED;
+import static io.gravitee.repository.management.model.IdentityProvider.AuditEvent.IDENTITY_PROVIDER_DELETED;
+import static io.gravitee.repository.management.model.IdentityProvider.AuditEvent.IDENTITY_PROVIDER_UPDATED;
 import static java.util.Collections.singletonMap;
 
 import io.gravitee.common.utils.IdGenerator;
@@ -23,7 +26,12 @@ import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.IdentityProviderRepository;
 import io.gravitee.repository.management.model.IdentityProvider;
 import io.gravitee.repository.management.model.IdentityProviderType;
-import io.gravitee.rest.api.model.configuration.identity.*;
+import io.gravitee.rest.api.model.configuration.identity.GroupMappingEntity;
+import io.gravitee.rest.api.model.configuration.identity.IdentityProviderActivationReferenceType;
+import io.gravitee.rest.api.model.configuration.identity.IdentityProviderEntity;
+import io.gravitee.rest.api.model.configuration.identity.NewIdentityProviderEntity;
+import io.gravitee.rest.api.model.configuration.identity.RoleMappingEntity;
+import io.gravitee.rest.api.model.configuration.identity.UpdateIdentityProviderEntity;
 import io.gravitee.rest.api.model.permissions.RoleScope;
 import io.gravitee.rest.api.service.AuditService;
 import io.gravitee.rest.api.service.RoleService;
@@ -33,10 +41,17 @@ import io.gravitee.rest.api.service.configuration.identity.IdentityProviderActiv
 import io.gravitee.rest.api.service.configuration.identity.IdentityProviderService;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import io.gravitee.rest.api.service.impl.AbstractService;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -45,12 +60,12 @@ import org.springframework.stereotype.Component;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class IdentityProviderServiceImpl extends AbstractService implements IdentityProviderService {
 
     private static final String CLIENT_ID = "clientId";
     private static final String CLIENT_SECRET = "clientSecret";
-    private final Logger LOGGER = LoggerFactory.getLogger(IdentityProviderServiceImpl.class);
 
     @Lazy
     @Autowired
@@ -68,7 +83,7 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
     @Override
     public IdentityProviderEntity create(ExecutionContext executionContext, NewIdentityProviderEntity newIdentityProviderEntity) {
         try {
-            LOGGER.debug("Create identity provider {}", newIdentityProviderEntity);
+            log.debug("Create identity provider {}", newIdentityProviderEntity);
 
             Optional<IdentityProvider> optIdentityProvider = identityProviderRepository.findById(
                 IdGenerator.generate(newIdentityProviderEntity.getName())
@@ -102,17 +117,18 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
 
             auditService.createOrganizationAuditLog(
                 executionContext,
-                executionContext.getOrganizationId(),
-                singletonMap(IDENTITY_PROVIDER, createdIdentityProvider.getId()),
-                IdentityProvider.AuditEvent.IDENTITY_PROVIDER_CREATED,
-                createdIdentityProvider.getUpdatedAt(),
-                null,
-                createdIdentityProvider
+                AuditService.AuditLogData.builder()
+                    .properties(singletonMap(IDENTITY_PROVIDER, createdIdentityProvider.getId()))
+                    .event(IDENTITY_PROVIDER_CREATED)
+                    .createdAt(createdIdentityProvider.getUpdatedAt())
+                    .oldValue(null)
+                    .newValue(createdIdentityProvider)
+                    .build()
             );
 
             return convert(createdIdentityProvider);
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to create identity provider {}", newIdentityProviderEntity, ex);
+            log.error("An error occurs while trying to create identity provider {}", newIdentityProviderEntity, ex);
             throw new TechnicalManagementException("An error occurs while trying to create " + newIdentityProviderEntity, ex);
         }
     }
@@ -124,7 +140,7 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
         UpdateIdentityProviderEntity updateIdentityProvider
     ) {
         try {
-            LOGGER.debug("Update identity provider {}", updateIdentityProvider);
+            log.debug("Update identity provider {}", updateIdentityProvider);
 
             IdentityProvider identityProviderToUpdate = identityProviderRepository
                 .findById(id)
@@ -144,17 +160,18 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
             // Audit
             auditService.createOrganizationAuditLog(
                 executionContext,
-                executionContext.getOrganizationId(),
-                singletonMap(IDENTITY_PROVIDER, id),
-                IdentityProvider.AuditEvent.IDENTITY_PROVIDER_UPDATED,
-                identityProvider.getUpdatedAt(),
-                identityProviderToUpdate,
-                updatedIdentityProvider
+                AuditService.AuditLogData.builder()
+                    .properties(singletonMap(IDENTITY_PROVIDER, id))
+                    .event(IDENTITY_PROVIDER_UPDATED)
+                    .createdAt(identityProvider.getUpdatedAt())
+                    .oldValue(identityProviderToUpdate)
+                    .newValue(updatedIdentityProvider)
+                    .build()
             );
 
             return convert(updatedIdentityProvider);
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to update identity provider {}", updateIdentityProvider, ex);
+            log.error("An error occurs while trying to update identity provider {}", updateIdentityProvider, ex);
             throw new TechnicalManagementException("An error occurs while trying to update " + updateIdentityProvider, ex);
         }
     }
@@ -162,7 +179,7 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
     @Override
     public IdentityProviderEntity findById(String id) {
         try {
-            LOGGER.debug("Find identity provider by ID: {}", id);
+            log.debug("Find identity provider by ID: {}", id);
 
             Optional<IdentityProvider> identityProvider = identityProviderRepository.findById(id);
 
@@ -172,7 +189,7 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
 
             throw new IdentityProviderNotFoundException(id);
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to find an identity provider using its ID {}", id, ex);
+            log.error("An error occurs while trying to find an identity provider using its ID {}", id, ex);
             throw new TechnicalManagementException("An error occurs while trying to delete an identity provider using its ID " + id, ex);
         }
     }
@@ -180,7 +197,7 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
     @Override
     public void delete(ExecutionContext executionContext, String id) {
         try {
-            LOGGER.debug("Delete identity provider: {}", id);
+            log.debug("Delete identity provider: {}", id);
 
             IdentityProvider identityProvider = identityProviderRepository
                 .findById(id)
@@ -191,17 +208,18 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
 
             auditService.createOrganizationAuditLog(
                 executionContext,
-                executionContext.getOrganizationId(),
-                Collections.singletonMap(IDENTITY_PROVIDER, id),
-                IdentityProvider.AuditEvent.IDENTITY_PROVIDER_DELETED,
-                new Date(),
-                identityProvider,
-                null
+                AuditService.AuditLogData.builder()
+                    .properties(singletonMap(IDENTITY_PROVIDER, id))
+                    .event(IDENTITY_PROVIDER_DELETED)
+                    .createdAt(new Date())
+                    .oldValue(identityProvider)
+                    .newValue(null)
+                    .build()
             );
 
             identityProviderActivationService.deactivateIdpOnAllTargets(executionContext, id);
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to delete an identity provider using its ID {}", id, ex);
+            log.error("An error occurs while trying to delete an identity provider using its ID {}", id, ex);
             throw new TechnicalManagementException("An error occurs while trying to delete an identity provider using its ID " + id, ex);
         }
     }
@@ -230,7 +248,7 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
                 .map(this::convert)
                 .collect(Collectors.toSet());
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to retrieve identity providers", ex);
+            log.error("An error occurs while trying to retrieve identity providers", ex);
             throw new TechnicalManagementException("An error occurs while trying to retrieve identity providers", ex);
         }
     }
@@ -361,13 +379,10 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
                     .getGroupMappings()
                     .stream()
                     .collect(
-                        Collectors.toMap(
-                            GroupMappingEntity::getCondition,
-                            groupMappingEntity -> {
-                                String[] groups = new String[groupMappingEntity.getGroups().size()];
-                                return groupMappingEntity.getGroups().toArray(groups);
-                            }
-                        )
+                        Collectors.toMap(GroupMappingEntity::getCondition, groupMappingEntity -> {
+                            String[] groups = new String[groupMappingEntity.getGroups().size()];
+                            return groupMappingEntity.getGroups().toArray(groups);
+                        })
                     )
             );
         }
@@ -378,53 +393,50 @@ public class IdentityProviderServiceImpl extends AbstractService implements Iden
                     .getRoleMappings()
                     .stream()
                     .collect(
-                        Collectors.toMap(
-                            RoleMappingEntity::getCondition,
-                            roleMapping -> {
-                                List<String> lstRoles = new ArrayList<>();
-                                if (roleMapping.getOrganizations() != null && !roleMapping.getOrganizations().isEmpty()) {
-                                    roleMapping
-                                        .getOrganizations()
-                                        .forEach(organizationRoleName -> {
-                                            // Ensure that the role is existing
+                        Collectors.toMap(RoleMappingEntity::getCondition, roleMapping -> {
+                            List<String> lstRoles = new ArrayList<>();
+                            if (roleMapping.getOrganizations() != null && !roleMapping.getOrganizations().isEmpty()) {
+                                roleMapping
+                                    .getOrganizations()
+                                    .forEach(organizationRoleName -> {
+                                        // Ensure that the role is existing
+                                        roleService.findByScopeAndName(
+                                            RoleScope.ORGANIZATION,
+                                            organizationRoleName,
+                                            executionContext.getOrganizationId()
+                                        );
+                                        lstRoles.add(
+                                            io.gravitee.repository.management.model.RoleScope.ORGANIZATION.name() +
+                                                ":" +
+                                                organizationRoleName
+                                        );
+                                    });
+                            }
+                            if (roleMapping.getEnvironments() != null && !roleMapping.getEnvironments().isEmpty()) {
+                                roleMapping
+                                    .getEnvironments()
+                                    .forEach((environmentId, environmentRoles) -> {
+                                        // Ensure that the role is existing
+                                        environmentRoles.forEach(environmentRoleName -> {
                                             roleService.findByScopeAndName(
-                                                RoleScope.ORGANIZATION,
-                                                organizationRoleName,
+                                                RoleScope.ENVIRONMENT,
+                                                environmentRoleName,
                                                 executionContext.getOrganizationId()
                                             );
                                             lstRoles.add(
-                                                io.gravitee.repository.management.model.RoleScope.ORGANIZATION.name() +
-                                                ":" +
-                                                organizationRoleName
-                                            );
-                                        });
-                                }
-                                if (roleMapping.getEnvironments() != null && !roleMapping.getEnvironments().isEmpty()) {
-                                    roleMapping
-                                        .getEnvironments()
-                                        .forEach((environmentId, environmentRoles) -> {
-                                            // Ensure that the role is existing
-                                            environmentRoles.forEach(environmentRoleName -> {
-                                                roleService.findByScopeAndName(
-                                                    RoleScope.ENVIRONMENT,
-                                                    environmentRoleName,
-                                                    executionContext.getOrganizationId()
-                                                );
-                                                lstRoles.add(
-                                                    io.gravitee.repository.management.model.RoleScope.ENVIRONMENT.name() +
+                                                io.gravitee.repository.management.model.RoleScope.ENVIRONMENT.name() +
                                                     ":" +
                                                     environmentId +
                                                     ":" +
                                                     environmentRoleName
-                                                );
-                                            });
+                                            );
                                         });
-                                }
-
-                                String[] roles = new String[lstRoles.size()];
-                                return lstRoles.toArray(roles);
+                                    });
                             }
-                        )
+
+                            String[] roles = new String[lstRoles.size()];
+                            return lstRoles.toArray(roles);
+                        })
                     )
             );
         }

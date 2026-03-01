@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 The Gravitee team (http://gravitee.io)
+ * Copyright (C) 2024 The Gravitee team (http://gravitee.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,6 +152,32 @@ describe('PaginationComponent', () => {
       await previousPageButton.click();
 
       expect(selectPageSpy).toHaveBeenCalledWith(2);
+    });
+  });
+
+  describe('Previous and Next button labels', () => {
+    beforeEach(async () => {
+      await init(2, 30);
+    });
+
+    it('should show "Previous" text on previous button', async () => {
+      const previousPageButton = await componentHarness.getPreviousPageButton();
+      expect(await previousPageButton.getText()).toContain('Previous');
+    });
+
+    it('should show "Next" text on next button', async () => {
+      const nextPageButton = await componentHarness.getNextPageButton();
+      expect(await nextPageButton.getText()).toContain('Next');
+    });
+
+    it('should enable Previous button when not on first page', async () => {
+      const previousPageButton = await componentHarness.getPreviousPageButton();
+      expect(await previousPageButton.isDisabled()).toEqual(false);
+    });
+
+    it('should enable Next button when not on last page', async () => {
+      const nextPageButton = await componentHarness.getNextPageButton();
+      expect(await nextPageButton.isDisabled()).toEqual(false);
     });
   });
 });

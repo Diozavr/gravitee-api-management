@@ -62,8 +62,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.util.Optional;
 import java.util.Set;
 import javax.inject.Singleton;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.http.server.ServerHttpRequest;
@@ -74,6 +73,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@CustomLog
 @Singleton
 @Path("/auth/cockpit")
 public class CockpitAuthenticationResource extends AbstractAuthenticationResource {
@@ -84,7 +84,6 @@ public class CockpitAuthenticationResource extends AbstractAuthenticationResourc
     protected static final String ENVIRONMENT_CLAIM = "env";
     protected static final String API_CLAIM = "api";
     protected static final String APPLICATION_CLAIM = "app";
-    private static final Logger LOGGER = LoggerFactory.getLogger(CockpitAuthenticationResource.class);
     private static final String COCKPIT_SOURCE = "cockpit";
 
     @Autowired
@@ -172,23 +171,19 @@ public class CockpitAuthenticationResource extends AbstractAuthenticationResourc
                 String url = installationAccessQueryService.getPortalAPIUrl(environmentId);
                 if (url == null) {
                     ServerHttpRequest request = new ServletServerHttpRequest(httpServletRequest);
-                    UriComponents uriComponents = UriComponentsBuilder
-                        .fromHttpRequest(request)
+                    UriComponents uriComponents = UriComponentsBuilder.fromHttpRequest(request)
                         .replacePath(getProperty(PROPERTY_HTTP_API_PORTAL_ENTRYPOINT, PROPERTY_HTTP_API_PORTAL_PROXY_PATH, "/portal"))
                         .replaceQuery(null)
                         .build();
                     url = uriComponents.toUriString();
                 }
 
-                return Response
-                    .temporaryRedirect(
-                        new URI("%s/environments/%s/auth/console?token=%s".formatted(url, environmentId, tokenEntity.getToken()))
-                    )
-                    .build();
+                return Response.temporaryRedirect(
+                    new URI("%s/environments/%s/auth/console?token=%s".formatted(url, environmentId, tokenEntity.getToken()))
+                ).build();
             } else {
                 final String apiCrossId = jwtClaimsSet.getStringClaim(API_CLAIM);
-                final String apiId = Optional
-                    .ofNullable(apiCrossId)
+                final String apiId = Optional.ofNullable(apiCrossId)
                     .flatMap(crossId -> this.apiSearchService.findIdByEnvironmentIdAndCrossId(environmentId, crossId))
                     .orElse(null);
 
@@ -203,10 +198,10 @@ public class CockpitAuthenticationResource extends AbstractAuthenticationResourc
                 return Response.temporaryRedirect(new URI(url)).build();
             }
         } catch (UserNotFoundException e) {
-            LOGGER.error("Authentication failed", e);
+            log.error("Authentication failed", e);
             return Response.status(Response.Status.FORBIDDEN).build();
         } catch (Exception e) {
-            LOGGER.error("Error occurred when trying to log user using cockpit.", e);
+            log.error("Error occurred when trying to log user using cockpit.", e);
             return Response.serverError().build();
         } finally {
             GraviteeContext.cleanContext();

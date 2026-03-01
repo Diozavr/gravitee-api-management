@@ -51,6 +51,8 @@ public class Membership {
         ORGANIZATION,
         PLATFORM,
         INTEGRATION,
+        CLUSTER,
+        API_PRODUCT,
     }
 
     public boolean isGroupUser() {

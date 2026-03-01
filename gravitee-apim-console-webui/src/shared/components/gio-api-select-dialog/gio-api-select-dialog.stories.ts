@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { applicationConfig, Meta, moduleMetadata, StoryObj } from '@storybook/angular';
-import { action } from '@storybook/addon-actions';
+import { action } from 'storybook/actions';
 import { of } from 'rxjs';
 import { Component } from '@angular/core';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -58,7 +58,7 @@ class OpenDialogStoryComponent {
       })
       .afterClosed()
       .pipe(
-        tap((selected) => {
+        tap(selected => {
           action('selected')(selected);
         }),
       )
@@ -85,7 +85,7 @@ export default {
 } as Meta;
 
 export const Default: StoryObj = {
-  play: (context) => {
+  play: context => {
     const button = context.canvasElement.querySelector('#open-dialog-story') as HTMLButtonElement;
     button.click();
   },

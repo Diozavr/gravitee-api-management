@@ -75,14 +75,18 @@ public class ApiTemplateServiceImplTest {
 
     @Before
     public void before() {
-        apiTemplateService =
-            new ApiTemplateServiceImpl(apiSearchService, apiMetadataService, primaryOwnerService, notificationTemplateService);
+        apiTemplateService = new ApiTemplateServiceImpl(
+            apiSearchService,
+            apiMetadataService,
+            primaryOwnerService,
+            notificationTemplateService
+        );
     }
 
     @Test
     public void shouldReturnApiModelV2WithNoDefinitionVersion() {
         ApiEntity apiEntity = new ApiEntity();
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api")).thenReturn(apiEntity);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api", false, false, false)).thenReturn(apiEntity);
 
         GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(GraviteeContext.getExecutionContext(), "api");
         assertTrue(genericApiModel instanceof ApiModel);
@@ -92,7 +96,7 @@ public class ApiTemplateServiceImplTest {
     public void shouldReturnApiModelV2WithV2DefinitionVersion() {
         ApiEntity apiEntity = new ApiEntity();
         apiEntity.setGraviteeDefinitionVersion("2.0.0");
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api")).thenReturn(apiEntity);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api", false, false, false)).thenReturn(apiEntity);
 
         GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(GraviteeContext.getExecutionContext(), "api");
         assertTrue(genericApiModel instanceof ApiModel);
@@ -102,7 +106,7 @@ public class ApiTemplateServiceImplTest {
     public void shouldReturnApiModelV4WithV4DefinitionVersion() {
         io.gravitee.rest.api.model.v4.api.ApiEntity apiEntity = new io.gravitee.rest.api.model.v4.api.ApiEntity();
         apiEntity.setDefinitionVersion(DefinitionVersion.V4);
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api")).thenReturn(apiEntity);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api", false, false, false)).thenReturn(apiEntity);
 
         GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(GraviteeContext.getExecutionContext(), "api");
         assertTrue(genericApiModel instanceof io.gravitee.rest.api.model.v4.api.ApiModel);
@@ -112,7 +116,7 @@ public class ApiTemplateServiceImplTest {
     public void shouldReturnDecodedMetadata() {
         io.gravitee.rest.api.model.v4.api.ApiEntity apiEntity = new io.gravitee.rest.api.model.v4.api.ApiEntity();
         apiEntity.setDefinitionVersion(DefinitionVersion.V4);
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api")).thenReturn(apiEntity);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api", false, false, false)).thenReturn(apiEntity);
 
         ApiMetadataEntity apiMetadataEntity = new ApiMetadataEntity();
         apiMetadataEntity.setApiId("api");
@@ -120,8 +124,9 @@ public class ApiTemplateServiceImplTest {
         apiMetadataEntity.setValue("value");
         when(apiMetadataService.findAllByApi(GraviteeContext.getExecutionContext(), "api")).thenReturn(List.of(apiMetadataEntity));
 
-        when(notificationTemplateService.resolveInlineTemplateWithParam(any(), any(), any(Reader.class), any()))
-            .thenReturn("{key=value resolved}");
+        when(notificationTemplateService.resolveInlineTemplateWithParam(any(), any(), any(Reader.class), any())).thenReturn(
+            "{key=value resolved}"
+        );
 
         when(primaryOwnerService.getPrimaryOwnerEmail(any(), any())).thenReturn("support@gravitee.test");
 
@@ -156,7 +161,7 @@ public class ApiTemplateServiceImplTest {
         apiEntity.setListeners(List.of());
         apiEntity.setEndpointGroups(List.of());
 
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api-id")).thenReturn(apiEntity);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api-id", false, false, false)).thenReturn(apiEntity);
 
         GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(GraviteeContext.getExecutionContext(), "api-id");
 
@@ -189,7 +194,7 @@ public class ApiTemplateServiceImplTest {
         NativeApiEntity apiEntity = new NativeApiEntity();
         apiEntity.setDefinitionVersion(DefinitionVersion.V4);
         apiEntity.setId("api-id");
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api-id")).thenReturn(apiEntity);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "api-id", false, false, false)).thenReturn(apiEntity);
 
         ApiMetadataEntity apiMetadataEntity = new ApiMetadataEntity();
         apiMetadataEntity.setApiId("api-id");
@@ -197,8 +202,9 @@ public class ApiTemplateServiceImplTest {
         apiMetadataEntity.setValue("value");
         when(apiMetadataService.findAllByApi(GraviteeContext.getExecutionContext(), "api-id")).thenReturn(List.of(apiMetadataEntity));
 
-        when(notificationTemplateService.resolveInlineTemplateWithParam(any(), any(), any(Reader.class), any()))
-            .thenReturn("{key=value resolved}");
+        when(notificationTemplateService.resolveInlineTemplateWithParam(any(), any(), any(Reader.class), any())).thenReturn(
+            "{key=value resolved}"
+        );
 
         when(primaryOwnerService.getPrimaryOwnerEmail(any(), any())).thenReturn("support@gravitee.test");
 

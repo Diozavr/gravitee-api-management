@@ -18,51 +18,24 @@
 @use '../scss/theme';
 @use './m3-adapter';
 
-.secondary-button {
-  @include mat.button-color(theme.$light-theme, $color-variant: secondary);
-}
-
 mat-chip {
-  --mdc-chip-elevated-container-color: #{theme.$chip-background};
-}
-
-mat-card {
-  --mdc-elevated-card-container-elevation: 0;
-  --mdc-outlined-card-container-color: #{theme.$card-background-color};
-  --mdc-outlined-card-container-shape: #{theme.$card-container-shape};
-  --mdc-elevated-card-container-shape: #{theme.$card-container-shape};
+  --mat-chip-elevated-container-color: #{theme.$chip-background};
 }
 
 mat-dialog-container {
-  --mdc-dialog-container-color: #{theme.$card-background-color};
+  --mat-dialog-container-color: #{theme.$card-background-color};
+  --mat-dialog-container-shape: #{theme.$container-shape};
 }
 
 mat-form-field {
-  --mdc-filled-text-field-container-color: #{m3-adapter.$surface-variant};
-  --mdc-filled-text-field-disabled-container-color: #{m3-adapter.$surface-variant};
-  --mdc-filled-text-field-disabled-input-text-color: var(--mdc-filled-text-field-input-text-color);
-  --mdc-outlined-text-field-container-color: #{theme.$card-background-color};
+  --mat-form-field-filled-container-color: #{m3-adapter.$surface-variant};
+  --mat-form-field-filled-disabled-container-color: #{m3-adapter.$surface-variant};
+  --mat-form-field-filled-disabled-input-text-color: var(--mat-form-field-filled-input-text-color);
+  --mat-form-field-outlined-container-color: #{theme.$card-background-color};
 }
 
 mat-expansion-panel {
   --mat-expansion-container-background-color: #{theme.$card-background-color};
-}
-
-table.mat-mdc-table {
-  --mat-table-row-item-outline-color: #{theme.$table-border-color};
-  --mat-table-background-color: #{theme.$table-header-background-color};
-
-  overflow: hidden;
-  border: 1px solid theme.$table-border-color;
-  border-radius: #{theme.$card-container-shape};
-
-  th {
-    color: theme.$default-text-contrast-color;
-  }
-
-  tbody {
-    background: theme.$card-background-color;
-  }
 }
 
 .mat-mdc-select-panel {
@@ -73,8 +46,107 @@ mat-datepicker-content.mat-datepicker-content.mat-primary {
   --mat-datepicker-calendar-container-background-color: #{theme.$calendar-background-color};
 }
 
-button,
-a {
-  --mdc-outlined-button-container-shape: #{theme.$button-container-shape};
-  --mdc-filled-button-container-shape: #{theme.$button-container-shape};
+:root {
+  @include mat.button-overrides(
+    (
+      outlined-container-shape: #{theme.$button-outlined-container-shape},
+      outlined-label-text-transform: #{theme.$button-outlined-text-transform},
+      outlined-label-text-color: #{theme.$button-outlined-text-color},
+      outlined-outline-color: #{theme.$button-outlined-border-color},
+      outlined-outline-width: #{theme.$button-outlined-border-width},
+      filled-container-shape: #{theme.$button-filled-container-shape},
+      filled-container-color: #{theme.$button-filled-container-color},
+      filled-label-text-transform: #{theme.$button-filled-text-transform},
+      filled-label-text-color: #{theme.$button-filled-text-color},
+      text-container-shape: #{theme.$button-text-container-shape},
+      text-label-text-transform: #{theme.$button-text-text-transform},
+      text-label-text-color: #{theme.$button-text-text-color},
+    )
+  );
+}
+
+.mat-warn.mat-mdc-button-base.mat-mdc-outlined-button {
+  --mat-button-outlined-label-text-color: #{theme.$error-main-color};
+  --mat-button-outlined-outline-color: #{theme.$error-main-color};
+}
+
+table.mat-mdc-table {
+  overflow: hidden;
+  border: 1px solid #{theme.$table-border-color};
+  border-radius: #{theme.$table-border-radius};
+
+  @include mat.table-overrides(
+    (
+      header-headline-color: #{theme.$table-header-headline-color},
+      background-color: #{theme.$table-header-background-color},
+      row-item-outline-color: #{theme.$table-border-color},
+    )
+  );
+
+  tbody {
+    background: #{theme.$table-body-background-color};
+  }
+}
+
+mat-card {
+  color: #{theme.$card-text-color};
+
+  @include mat.card-overrides(
+    (
+      elevated-container-shape: #{theme.$card-container-shape},
+      elevated-container-color: #{theme.$card-background-color},
+      elevated-container-elevation: #{theme.$card-elevation},
+      outlined-container-shape: #{theme.$card-container-shape},
+      outlined-container-color: #{theme.$card-background-color},
+      outlined-outline-width: #{theme.$card-border-width},
+      outlined-outline-color: #{theme.$card-border-color},
+      outlined-container-elevation: #{theme.$card-elevation},
+    )
+  );
+}
+
+.secondary-button {
+  @include mat.button-color(theme.$light-theme, $color-variant: secondary);
+}
+
+.nav-button {
+  @include mat.button-overrides(
+    (
+      outlined-outline-color: transparent,
+      outlined-label-text-color: #{theme.$nav-bar-link-color},
+      filled-label-text-color: #{theme.$nav-bar-link-active-color},
+      filled-container-color: #{theme.$nav-bar-link-active-background-color},
+      outlined-hover-state-layer-opacity: 7%,
+      filled-horizontal-padding: #{theme.$nav-bar-link-padding},
+      outlined-horizontal-padding: #{theme.$nav-bar-link-padding},
+      outlined-outline-width: 0,
+    )
+  );
+}
+
+mat-icon,
+.material-icons {
+  display: inline-block;
+  direction: ltr;
+  font-family: 'Material Icons', serif;
+
+  /* Support for IE. */
+  font-feature-settings: 'liga';
+  font-size: 24px; /* Preferred icon size */
+
+  /* Support for all WebKit browsers. */
+  -webkit-font-smoothing: antialiased;
+
+  /* Support for Firefox. */
+  -moz-osx-font-smoothing: grayscale;
+  font-style: normal;
+  font-weight: normal;
+  letter-spacing: normal;
+  line-height: 1;
+
+  /* Support for Safari and Chrome. */
+  text-rendering: optimizelegibility;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
 }

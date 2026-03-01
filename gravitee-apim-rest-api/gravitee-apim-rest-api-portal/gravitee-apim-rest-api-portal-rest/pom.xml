@@ -96,6 +96,7 @@
                             </supportingFilesToGenerate>
                             <configOptions>
                                 <dateLibrary>java8</dateLibrary>
+                                <enumPropertyNaming>legacy</enumPropertyNaming>
                                 <useBeanValidation>true</useBeanValidation>
                             </configOptions>
                             <typeMappings>
@@ -184,10 +185,6 @@
 			<artifactId>jakarta.annotation-api</artifactId>
 		</dependency>
 
-		<dependency>
-			<groupId>commons-lang</groupId>
-			<artifactId>commons-lang</artifactId>
-		</dependency>
 
 		<!-- Jackson dependencies -->
 		<dependency>

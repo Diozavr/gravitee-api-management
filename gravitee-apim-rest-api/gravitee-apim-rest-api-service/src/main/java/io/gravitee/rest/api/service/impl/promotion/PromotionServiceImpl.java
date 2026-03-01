@@ -70,8 +70,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -81,10 +80,9 @@ import org.springframework.util.StringUtils;
  * @author Florent CHAMFROY (florent.chamfroy at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class PromotionServiceImpl extends AbstractService implements PromotionService {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(PromotionServiceImpl.class);
 
     private final ApiSearchService apiSearchService;
     private final ApiDuplicatorService apiDuplicatorService;
@@ -126,8 +124,10 @@ public class PromotionServiceImpl extends AbstractService implements PromotionSe
     public List<PromotionTargetEntity> listPromotionTargets(String organizationId, String environmentId) {
         EnvironmentEntity environmentEntity = environmentService.findById(environmentId);
 
-        final CockpitReply<List<PromotionTargetEntity>> listCockpitReply =
-            this.cockpitPromotionService.listPromotionTargets(organizationId, environmentId);
+        final CockpitReply<List<PromotionTargetEntity>> listCockpitReply = this.cockpitPromotionService.listPromotionTargets(
+            organizationId,
+            environmentId
+        );
         if (listCockpitReply.getStatus() == CockpitReplyStatus.SUCCEEDED) {
             return listCockpitReply
                 .getReply()
@@ -179,12 +179,14 @@ public class PromotionServiceImpl extends AbstractService implements PromotionSe
 
             auditService.createApiAuditLog(
                 executionContext,
-                createdPromotion.getApiId(),
-                emptyMap(),
-                PROMOTION_CREATED,
-                createdPromotion.getCreatedAt(),
-                null,
-                createdPromotion
+                AuditService.AuditLogData.builder()
+                    .properties(emptyMap())
+                    .event(PROMOTION_CREATED)
+                    .createdAt(createdPromotion.getCreatedAt())
+                    .oldValue(null)
+                    .newValue(createdPromotion)
+                    .build(),
+                createdPromotion.getApiId()
             );
         } catch (TechnicalException exception) {
             throw new TechnicalManagementException(
@@ -231,16 +233,16 @@ public class PromotionServiceImpl extends AbstractService implements PromotionSe
             Promotion createdOrUpdatedPromotion;
 
             if (existingPromotion.isPresent()) {
-                LOGGER.debug("Updating existing promotion: {}", promotion.getId());
+                log.debug("Updating existing promotion: {}", promotion.getId());
                 createdOrUpdatedPromotion = promotionRepository.update(promotion);
             } else {
-                LOGGER.debug("Creating promotion: {}", promotion.getId());
+                log.debug("Creating promotion: {}", promotion.getId());
                 createdOrUpdatedPromotion = promotionRepository.create(promotion);
             }
 
             return convert(createdOrUpdatedPromotion);
         } catch (TechnicalException e) {
-            LOGGER.error("An error occurs while trying to create or update a promotion using its id {}", promotionEntity.getId(), e);
+            log.error("An error occurs while trying to create or update a promotion using its id {}", promotionEntity.getId(), e);
             throw new TechnicalManagementException(
                 "An error occurs while trying to create or update a promotion using its id {}" + promotionEntity.getId(),
                 e
@@ -251,7 +253,7 @@ public class PromotionServiceImpl extends AbstractService implements PromotionSe
     @Override
     public Page<PromotionEntity> search(PromotionQuery query, Sortable sortable, Pageable pageable) {
         try {
-            LOGGER.debug("Searching promotions");
+            log.debug("Searching promotions");
 
             PromotionCriteria criteria = queryToCriteriaBuilder(query).build();
 
@@ -259,11 +261,11 @@ public class PromotionServiceImpl extends AbstractService implements PromotionSe
                 .search(criteria, convert(sortable), convert(pageable))
                 .map(this::convert);
 
-            LOGGER.debug("Searching promotions - Done with {} elements", promotions.getPageElements());
+            log.debug("Searching promotions - Done with {} elements", promotions.getPageElements());
 
             return promotions;
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to search promotions", ex);
+            log.error("An error occurs while trying to search promotions", ex);
             throw new TechnicalManagementException("An error occurs while trying to search promotions", ex);
         }
     }
@@ -297,8 +299,11 @@ public class PromotionServiceImpl extends AbstractService implements PromotionSe
                         throw new ForbiddenAccessException();
                     }
 
-                    promoted =
-                        apiDuplicatorService.updateWithImportedDefinition(targetExecutionContext, apiIdToUpdate, apiDefinition.toString());
+                    promoted = apiDuplicatorService.updateWithImportedDefinition(
+                        targetExecutionContext,
+                        apiIdToUpdate,
+                        apiDefinition.toString()
+                    );
                 }
                 promotion.setTargetApiId(promoted.getId());
             }
@@ -318,7 +323,7 @@ public class PromotionServiceImpl extends AbstractService implements PromotionSe
 
             return convert(updated);
         } catch (TechnicalException | IOException ex) {
-            LOGGER.error("An error occurs while trying to process promotion", ex);
+            log.error("An error occurs while trying to process promotion", ex);
             throw new TechnicalManagementException("An error occurs while trying to process promotion", ex);
         }
     }
@@ -443,8 +448,9 @@ public class PromotionServiceImpl extends AbstractService implements PromotionSe
         JsonNode apiDefinition
     ) {
         // find target API by crossId first, then fallback on last promotion target ID
-        return findAlreadyPromotedApiByCrossId(environment, apiDefinition)
-            .orElseGet(() -> findAlreadyPromotedApiFromLastPromotion(executionContext, promotion));
+        return findAlreadyPromotedApiByCrossId(environment, apiDefinition).orElseGet(() ->
+            findAlreadyPromotedApiFromLastPromotion(executionContext, promotion)
+        );
     }
 
     private Optional<String> findAlreadyPromotedApiByCrossId(EnvironmentEntity environment, JsonNode apiDefinition) {
@@ -463,7 +469,7 @@ public class PromotionServiceImpl extends AbstractService implements PromotionSe
         if (!CollectionUtils.isEmpty(previousPromotions)) {
             PromotionEntity lastAcceptedPromotion = previousPromotions.get(0);
             return apiSearchService.exists(lastAcceptedPromotion.getTargetApiId())
-                ? apiSearchService.findGenericById(executionContext, lastAcceptedPromotion.getTargetApiId()).getId()
+                ? apiSearchService.findGenericById(executionContext, lastAcceptedPromotion.getTargetApiId(), false, false, false).getId()
                 : null;
         }
         return null;

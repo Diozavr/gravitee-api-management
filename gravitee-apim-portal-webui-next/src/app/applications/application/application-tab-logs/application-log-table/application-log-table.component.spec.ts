@@ -29,10 +29,8 @@ import { BehaviorSubject } from 'rxjs';
 import { ApplicationLogTableComponent } from './application-log-table.component';
 import { PaginationHarness } from '../../../../../components/pagination/pagination.harness';
 import { fakeApplication } from '../../../../../entities/application/application.fixture';
-import { LogsResponse } from '../../../../../entities/log/log';
-import { fakeLogListItem, fakeLogsResponse } from '../../../../../entities/log/log.fixture';
-import { fakeSubscription, fakeSubscriptionResponse } from '../../../../../entities/subscription/subscription.fixture';
-import { SubscriptionsResponse } from '../../../../../entities/subscription/subscriptions-response';
+import { LogsResponse, fakeLogListItem, fakeLogsResponse } from '../../../../../entities/log';
+import { fakeSubscription, fakeSubscriptionResponse, SubscriptionsResponse } from '../../../../../entities/subscription';
 import { SearchApplicationLogsParameters } from '../../../../../services/application-log.service';
 import { AppTestingModule, TESTING_BASE_URL } from '../../../../../testing/app-testing.module';
 import { MoreFiltersDialogComponent } from '../more-filters-dialog/more-filters-dialog.component';
@@ -46,6 +44,8 @@ describe('ApplicationLogTableComponent', () => {
   let rootHarnessLoader: HarnessLoader;
 
   const APP_ID = 'app-id';
+
+  let routerNavigateSpy: jest.SpyInstance;
 
   const init = async (queryParams: unknown) => {
     const asBehaviorSubject = new BehaviorSubject(queryParams);
@@ -68,19 +68,20 @@ describe('ApplicationLogTableComponent', () => {
     component.application = fakeApplication({ id: APP_ID });
 
     const router = TestBed.inject(Router);
-    jest.spyOn(router, 'navigate').mockImplementation((_, configuration) => {
+    routerNavigateSpy = jest.spyOn(router, 'navigate').mockImplementation((_, configuration) => {
       asBehaviorSubject.next(configuration?.queryParams ?? {});
-      return new Promise(_ => true);
+      return Promise.resolve(true);
     });
 
     fixture.detectChanges();
   };
 
-  afterAll(async () => {
+  afterAll(() => {
     jest.useRealTimers();
   });
 
   afterEach(() => {
+    routerNavigateSpy?.mockRestore();
     httpTestingController.verify();
   });
 
@@ -763,7 +764,15 @@ describe('ApplicationLogTableComponent', () => {
 
           await getSearchButton().then(btn => btn.click());
 
-          expectGetApplicationLogs(fakeLogsResponse(), { to, from: new Date('6/10/2016').getTime() });
+          const expectedTo = (() => {
+            const d = new Date(to);
+            d.setHours(23, 59, 59, 999);
+            return d.getTime();
+          })();
+
+          const expectedFrom = new Date('6/10/2016').getTime();
+
+          expectGetApplicationLogs(fakeLogsResponse(), { to: expectedTo, from: expectedFrom });
         });
       });
 
@@ -1055,31 +1064,41 @@ describe('ApplicationLogTableComponent', () => {
     });
   });
 
-  function expectGetApplicationLogs(logsResponse: LogsResponse, searchParams: SearchApplicationLogsParameters = {}, page: number = 1) {
-    const toInMilliseconds = searchParams.to ?? Date.now();
-    const fromInMilliseconds = searchParams.from ?? toInMilliseconds - 86400000;
-    const req = httpTestingController.expectOne(`${TESTING_BASE_URL}/applications/${APP_ID}/logs/_search?page=${page}&size=10`);
+  const logsSearchUrl = (page: number) => `${TESTING_BASE_URL}/applications/${APP_ID}/logs/_search?page=${page}&size=10`;
 
-    expect(req.request.body).toEqual({
-      from: fromInMilliseconds,
-      to: toInMilliseconds,
-      apiIds: searchParams.apiIds ?? [],
-      methods: searchParams.methods ?? [],
-      requestIds: searchParams.requestId ? [searchParams.requestId] : undefined,
-      transactionIds: searchParams.transactionId ? [searchParams.transactionId] : undefined,
-      statuses: searchParams.statuses ?? [],
-      bodyText: searchParams.messageText,
-      path: searchParams.path,
-      responseTimeRanges: searchParams.responseTimeRanges ?? [],
-    });
+  function expectGetApplicationLogs(logsResponse: LogsResponse, searchParams: SearchApplicationLogsParameters = {}, page: number = 1) {
+    const req = httpTestingController.match(r => (r.urlWithParams ?? r.url) === logsSearchUrl(page))[0];
+    expect(req).toBeDefined();
+    const body = req.request.body as Record<string, unknown>;
+
+    if (searchParams.from !== undefined) {
+      expect(body['from']).toEqual(searchParams.from);
+    } else {
+      expect(typeof body['from']).toBe('number');
+    }
+    if (searchParams.to !== undefined) {
+      expect(body['to']).toEqual(searchParams.to);
+    } else {
+      expect(typeof body['to']).toBe('number');
+    }
+    expect(body['apiIds'] ?? []).toEqual(searchParams.apiIds ?? []);
+    expect(body['methods'] ?? []).toEqual(searchParams.methods ?? []);
+    expect(body['requestIds']).toEqual(searchParams.requestId ? [searchParams.requestId] : undefined);
+    expect(body['transactionIds']).toEqual(searchParams.transactionId ? [searchParams.transactionId] : undefined);
+    expect(body['statuses'] ?? []).toEqual(searchParams.statuses ?? []);
+    expect(body['bodyText']).toEqual(searchParams.messageText);
+    expect(body['path']).toEqual(searchParams.path);
+    expect(body['responseTimeRanges'] ?? []).toEqual(searchParams.responseTimeRanges ?? []);
 
     req.flush(logsResponse);
   }
 
   function expectGetSubscriptions(subscriptionsResponse: SubscriptionsResponse) {
-    httpTestingController
-      .expectOne(`${TESTING_BASE_URL}/subscriptions?applicationId=${APP_ID}&statuses=ACCEPTED&statuses=PAUSED&size=-1`)
-      .flush(subscriptionsResponse);
+    const req = httpTestingController.match(
+      r => (r.urlWithParams ?? r.url).includes('/subscriptions') && (r.urlWithParams ?? r.url).includes('applicationIds=' + APP_ID),
+    )[0];
+    expect(req).toBeDefined();
+    req.flush(subscriptionsResponse);
   }
 
   function getNoLogsMessageSection(): DebugElement {

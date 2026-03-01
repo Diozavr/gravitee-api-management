@@ -49,7 +49,7 @@ import io.gravitee.apim.core.user.model.BaseUserEntity;
 import io.gravitee.apim.infra.json.jackson.JacksonJsonDiffProcessor;
 import io.gravitee.apim.infra.template.FreemarkerTemplateProcessor;
 import io.gravitee.common.utils.TimeProvider;
-import io.gravitee.rest.api.model.CategoryEntity;
+import io.gravitee.definition.model.federation.FederatedApi;
 import io.gravitee.rest.api.service.common.UuidString;
 import io.gravitee.rest.api.service.exceptions.InvalidDataException;
 import io.gravitee.rest.api.service.exceptions.LifecycleStateChangeNotAllowedException;
@@ -94,8 +94,7 @@ class UpdateFederatedApiDomainServiceTest {
         roleQueryService.resetSystemRoles(ORGANIZATION_ID);
         membershipQueryService.initWith(
             List.of(
-                Membership
-                    .builder()
+                Membership.builder()
                     .id("member-id")
                     .memberId("my-member-id")
                     .memberType(Membership.Type.USER)
@@ -107,8 +106,7 @@ class UpdateFederatedApiDomainServiceTest {
         );
         groupQueryService.initWith(
             List.of(
-                Group
-                    .builder()
+                Group.builder()
                     .id("group-1")
                     .environmentId("environment-id")
                     .eventRules(List.of(new Group.GroupEventRule(Group.GroupEvent.API_CREATE)))
@@ -127,22 +125,21 @@ class UpdateFederatedApiDomainServiceTest {
             userCrudService
         );
 
-        usecase =
-            new UpdateFederatedApiDomainService(
-                apiCrudService,
-                auditDomainService,
-                new ValidateFederatedApiDomainService(new GroupValidationService(groupQueryService), categoryDomainService),
-                categoryDomainService,
-                new ApiIndexerDomainService(
-                    new ApiMetadataDecoderDomainService(
-                        new ApiMetadataQueryServiceInMemory(metadataCrudService),
-                        new FreemarkerTemplateProcessor()
-                    ),
-                    apiPrimaryOwnerService,
-                    new ApiCategoryQueryServiceInMemory(),
-                    indexer
-                )
-            );
+        usecase = new UpdateFederatedApiDomainService(
+            apiCrudService,
+            auditDomainService,
+            new ValidateFederatedApiDomainService(new GroupValidationService(groupQueryService), categoryDomainService),
+            categoryDomainService,
+            new ApiIndexerDomainService(
+                new ApiMetadataDecoderDomainService(
+                    new ApiMetadataQueryServiceInMemory(metadataCrudService),
+                    new FreemarkerTemplateProcessor()
+                ),
+                apiPrimaryOwnerService,
+                new ApiCategoryQueryServiceInMemory(),
+                indexer
+            )
+        );
     }
 
     @BeforeAll
@@ -163,8 +160,7 @@ class UpdateFederatedApiDomainServiceTest {
         apiCrudService.initWith(List.of(ApiFixtures.aFederatedApi()));
         var auditInfo = AuditInfoFixtures.anAuditInfo(ORGANIZATION_ID, ENVIRONMENT_ID, USER_ID);
         String categoryKey = "categoryKey-1";
-        var apiToUpdate = ApiFixtures
-            .aFederatedApi()
+        var apiToUpdate = ApiFixtures.aFederatedApi()
             .toBuilder()
             .name("updated-name")
             .description("updated-description")
@@ -174,9 +170,7 @@ class UpdateFederatedApiDomainServiceTest {
             .apiLifecycleState(Api.ApiLifecycleState.PUBLISHED)
             .build();
 
-        CategoryEntity categoryEntity = new CategoryEntity();
         String categoryId = "categoryId-1";
-        categoryEntity.setId(categoryId);
         when(categoryDomainService.toCategoryId(any(), any())).thenReturn(Set.of(categoryId));
         when(categoryDomainService.toCategoryKey(any(), any())).thenReturn(Set.of(categoryKey));
         var ownerEntity = buildPrimaryOwnerEntity();
@@ -184,11 +178,11 @@ class UpdateFederatedApiDomainServiceTest {
         //when
         var updatedApi = usecase.update(apiToUpdate.getId(), old -> apiToUpdate, auditInfo, ownerEntity, oneShotIndexation(auditInfo));
         //then
-        assertThat(apiCrudService.storage()).extracting("federatedApiDefinition").doesNotContainNull();
+        assertThat(apiCrudService.storage()).map(Api::getApiDefinitionValue).doesNotContainNull();
         SoftAssertions.assertSoftly(soft -> {
             assertThat(updatedApi.getName()).isEqualTo("updated-name");
             assertThat(updatedApi.getDescription()).isEqualTo("updated-description");
-            assertThat(updatedApi.getFederatedApiDefinition()).isNotNull();
+            assertThat(updatedApi.getApiDefinitionValue()).isInstanceOf(FederatedApi.class);
             assertThat(updatedApi.getVersion()).isEqualTo("2.0.0");
             assertThat(updatedApi.getLabels()).containsExactly("label-1");
             assertThat(updatedApi.getCategories()).containsExactly(categoryKey);
@@ -201,8 +195,7 @@ class UpdateFederatedApiDomainServiceTest {
         //given
         apiCrudService.initWith(List.of(ApiFixtures.aFederatedApi()));
         var auditInfo = AuditInfoFixtures.anAuditInfo(ORGANIZATION_ID, ENVIRONMENT_ID, USER_ID);
-        var apiToUpdate = ApiFixtures
-            .aFederatedApi()
+        var apiToUpdate = ApiFixtures.aFederatedApi()
             .toBuilder()
             .name("updated-name")
             .description("updated-description")
@@ -211,9 +204,6 @@ class UpdateFederatedApiDomainServiceTest {
             .apiLifecycleState(Api.ApiLifecycleState.PUBLISHED)
             .build();
 
-        CategoryEntity categoryEntity = new CategoryEntity();
-        String categoryId = "categoryId-1";
-        categoryEntity.setId(categoryId);
         var ownerEntity = buildPrimaryOwnerEntity();
 
         //when
@@ -255,8 +245,7 @@ class UpdateFederatedApiDomainServiceTest {
     public void update_throws_an_exception_when_group_not_exist() {
         apiCrudService.initWith(List.of(ApiFixtures.aFederatedApi().toBuilder().build()));
         var auditInfo = AuditInfoFixtures.anAuditInfo(ORGANIZATION_ID, ENVIRONMENT_ID, USER_ID);
-        var apiToUpdate = ApiFixtures
-            .aFederatedApi()
+        var apiToUpdate = ApiFixtures.aFederatedApi()
             .toBuilder()
             .groups(Set.of("not-existing-group"))
             .apiLifecycleState(Api.ApiLifecycleState.PUBLISHED)
@@ -281,8 +270,7 @@ class UpdateFederatedApiDomainServiceTest {
             .usingRecursiveFieldByFieldElementComparatorIgnoringFields("patch")
             .contains(
                 // API Audit
-                AuditEntity
-                    .builder()
+                AuditEntity.builder()
                     .id("generated-id")
                     .organizationId(ORGANIZATION_ID)
                     .environmentId(ENVIRONMENT_ID)

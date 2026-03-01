@@ -41,8 +41,11 @@ export type SharedPolicyGroupAddEditDialogResult =
 
 const PHASE_BY_API_TYPE: Record<ApiV4['type'], FlowPhase[]> = {
   PROXY: ['REQUEST', 'RESPONSE'],
+  A2A_PROXY: ['REQUEST', 'RESPONSE'],
+  LLM_PROXY: ['REQUEST', 'RESPONSE'],
+  MCP_PROXY: ['REQUEST', 'RESPONSE'],
   MESSAGE: ['REQUEST', 'RESPONSE', 'PUBLISH', 'SUBSCRIBE'],
-  NATIVE: ['PUBLISH', 'SUBSCRIBE', 'CONNECT', 'INTERACT'],
+  NATIVE: ['PUBLISH', 'SUBSCRIBE', 'ENTRYPOINT_CONNECT', 'INTERACT'],
 };
 
 @Component({
@@ -83,7 +86,7 @@ export class SharedPolicyGroupsAddEditDialogComponent {
     const apiType = isEdit(data) ? data.sharedPolicyGroup.apiType : data.apiType;
 
     this.apiTypeLabel = apiType === 'MESSAGE' ? 'Message' : 'Proxy';
-    this.phases = PHASE_BY_API_TYPE[apiType].map((phase) => ({ name: toReadableFlowPhase(phase), value: phase }));
+    this.phases = PHASE_BY_API_TYPE[apiType].map(phase => ({ name: toReadableFlowPhase(phase), value: phase }));
 
     this.formGroup = new FormGroup({
       name: new FormControl(isEdit(data) ? data.sharedPolicyGroup.name : '', Validators.required),
@@ -97,7 +100,7 @@ export class SharedPolicyGroupsAddEditDialogComponent {
 
     this.isValid$ = this.formGroup.statusChanges.pipe(
       startWith(this.formGroup.status),
-      map((status) => status === 'VALID'),
+      map(status => status === 'VALID'),
     );
   }
 

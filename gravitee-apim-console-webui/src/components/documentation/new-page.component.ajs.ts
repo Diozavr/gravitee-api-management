@@ -15,7 +15,6 @@
  */
 
 import { IController, IPromise, IScope } from 'angular';
-
 import { ActivatedRoute, Router } from '@angular/router';
 import { Dictionary, keyBy } from 'lodash';
 
@@ -78,7 +77,7 @@ class NewPageComponentController implements IController {
     q.type = PageType.MARKDOWN_TEMPLATE;
     q.published = true;
     q.translated = true;
-    this.DocumentationService.search(q, null).then((response) => {
+    this.DocumentationService.search(q, null).then(response => {
       this.templates = response.data;
     });
 
@@ -149,7 +148,7 @@ class NewPageComponentController implements IController {
           this.gotoEdit(page);
         }
       })
-      .catch((err) => {
+      .catch(err => {
         this.error = { ...err.data, title: 'Sorry, unable to create page' };
       });
   }

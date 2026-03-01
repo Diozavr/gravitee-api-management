@@ -15,9 +15,11 @@
  */
 package inmemory;
 
+import io.gravitee.apim.core.gateway.model.BaseInstance;
 import io.gravitee.apim.core.gateway.model.Instance;
 import io.gravitee.apim.core.gateway.query_service.InstanceQueryService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
+import io.gravitee.rest.api.service.exceptions.InstanceNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,7 +29,22 @@ public class InstanceQueryServiceInMemory implements InstanceQueryService, InMem
 
     @Override
     public List<Instance> findAllStarted(String organizationId, String environmentId) {
-        return storage.stream().filter(instance -> instance.getStartedAt() != null).toList();
+        return storage
+            .stream()
+            .filter(instance -> instance.getStartedAt() != null)
+            .toList();
+    }
+
+    @Override
+    public BaseInstance findById(ExecutionContext executionContext, String instanceId) {
+        return storage
+            .stream()
+            .filter(
+                instance -> instanceId.equals(instance.getId()) && instance.getEnvironments().contains(executionContext.getEnvironmentId())
+            )
+            .findFirst()
+            .map(instance -> BaseInstance.builder().ip(instance.getIp()).id(instance.getId()).hostname(instance.getHostname()).build())
+            .orElseThrow(() -> new InstanceNotFoundException(instanceId));
     }
 
     @Override

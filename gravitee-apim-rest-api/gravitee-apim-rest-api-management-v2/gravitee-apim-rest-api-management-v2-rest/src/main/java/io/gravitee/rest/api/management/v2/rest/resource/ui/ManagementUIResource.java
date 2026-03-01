@@ -34,7 +34,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.http.server.ServerHttpRequest;
@@ -48,7 +48,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  */
 @Tag(name = "Management UI Resource")
 @Path("/ui")
-@Slf4j
+@CustomLog
 public class ManagementUIResource {
 
     private static final String PROPERTY_HTTP_API_MANAGEMENT_PROXY_PATH = "installation.api.proxyPath.management";
@@ -81,10 +81,9 @@ public class ManagementUIResource {
         if (enforceOrganizationId != null) {
             organizationId = enforceOrganizationId;
         } else {
-            organizationId =
-                GraviteeContext.getCurrentOrganization() != null
-                    ? GraviteeContext.getCurrentOrganization()
-                    : GraviteeContext.getDefaultOrganization();
+            organizationId = GraviteeContext.getCurrentOrganization() != null
+                ? GraviteeContext.getCurrentOrganization()
+                : GraviteeContext.getDefaultOrganization();
         }
 
         String consoleApiUrl = installationAccessQueryService.getConsoleAPIUrl(organizationId);
@@ -93,15 +92,14 @@ public class ManagementUIResource {
         }
 
         ServerHttpRequest request = new ServletServerHttpRequest(httpServletRequest);
-        UriComponents uriComponents = UriComponentsBuilder
-            .fromHttpRequest(request)
+        UriComponents uriComponents = UriComponentsBuilder.fromHttpRequest(request)
             .replacePath(installationAccessQueryService.getConsoleApiPath())
             .replaceQuery(null)
             .build();
 
-        return Response
-            .ok(ManagementUIBootstrapEntity.builder().organizationId(organizationId).baseURL(uriComponents.toUriString()).build())
-            .build();
+        return Response.ok(
+            ManagementUIBootstrapEntity.builder().organizationId(organizationId).baseURL(uriComponents.toUriString()).build()
+        ).build();
     }
 
     @Path("/customization")

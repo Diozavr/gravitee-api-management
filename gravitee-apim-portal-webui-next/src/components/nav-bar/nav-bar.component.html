@@ -16,32 +16,12 @@
 
 -->
 <div class="nav-bar__container">
-  <app-company-title [title]="siteTitle" [logo]="logo()" />
-  <div class="menu-items">
-    <app-nav-bar-button i18n="@@catalog" [path]="['catalog']">Catalog</app-nav-bar-button>
-    <app-nav-bar-button i18n="@@guides" [path]="['guides']">Guides</app-nav-bar-button>
-    @if (!isEmpty(currentUser())) {
-      <app-nav-bar-button i18n="@@applications" [path]="['applications']">Applications</app-nav-bar-button>
+  <app-company-title [logo]="logo()" />
+  @if (!forceLogin() || isLoggedIn()) {
+    @if (isMobile()) {
+      <app-mobile-nav-bar [currentUser]="currentUser()" [topBarNavigationItems]="topBarNavigationItems()" />
+    } @else {
+      <app-desktop-nav-bar [currentUser]="currentUser()" [topBarNavigationItems]="topBarNavigationItems()" />
     }
-    @for (link of customLinks(); track link.id) {
-      <a
-        [href]="link.target"
-        mat-stroked-button
-        color="primary"
-        class="menu-items__custom_link"
-        [target]="link.type === 'external' ? '_blank' : ''">
-        {{ link.name }}
-      </a>
-    }
-  </div>
-
-  @if (!isEmpty(currentUser())) {
-    <div class="authenticated-actions">
-      <app-user-avatar [user]="currentUser()" />
-    </div>
-  } @else {
-    <div class="unauthenticated-actions">
-      <app-nav-bar-button i18n="@@logIn" [path]="['log-in']">Log in</app-nav-bar-button>
-    </div>
   }
 </div>

@@ -16,6 +16,7 @@
 package io.gravitee.rest.api.portal.rest.resource;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.gravitee.node.logging.NodeLoggerFactory;
 import io.gravitee.rest.api.idp.api.authentication.UserDetails;
 import io.gravitee.rest.api.model.InlinePictureEntity;
 import io.gravitee.rest.api.model.MediaEntity;
@@ -25,26 +26,43 @@ import io.gravitee.rest.api.model.permissions.RoleScope;
 import io.gravitee.rest.api.model.permissions.SystemRole;
 import io.gravitee.rest.api.portal.rest.model.Links;
 import io.gravitee.rest.api.portal.rest.resource.param.PaginationParam;
-import io.gravitee.rest.api.service.*;
+import io.gravitee.rest.api.service.AccessControlService;
+import io.gravitee.rest.api.service.ApiService;
+import io.gravitee.rest.api.service.MembershipService;
+import io.gravitee.rest.api.service.PermissionService;
+import io.gravitee.rest.api.service.RoleService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.exceptions.PaginationInvalidException;
 import io.gravitee.rest.api.service.exceptions.UploadUnauthorized;
 import io.gravitee.rest.api.service.v4.ApiSearchService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.core.*;
+import jakarta.ws.rs.core.CacheControl;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.EntityTag;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Request;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
+import jakarta.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.UriInfo;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
@@ -68,7 +86,7 @@ public abstract class AbstractResource<T, K> {
     protected static final String METADATA_PAGINATION_FIRST_ITEM_INDEX_KEY = "first";
     protected static final String METADATA_PAGINATION_LAST_ITEM_INDEX_KEY = "last";
 
-    protected static final Logger LOGGER = LoggerFactory.getLogger(AbstractResource.class);
+    protected final Logger log = NodeLoggerFactory.getLogger(this.getClass());
 
     @Context
     protected SecurityContext securityContext;
@@ -164,7 +182,7 @@ public abstract class AbstractResource<T, K> {
                     return pictureType + "," + Base64.getEncoder().encodeToString(bos.toByteArray());
                 }
             } catch (IOException e) {
-                LOGGER.error(e.getMessage(), e);
+                log.error(e.getMessage(), e);
                 return null;
             }
         }
@@ -181,6 +199,10 @@ public abstract class AbstractResource<T, K> {
             String mediaType = encodedPicture.substring("data:".length(), encodedPicture.indexOf(';'));
             if (!mediaType.startsWith("image/")) {
                 throw new UploadUnauthorized("Image file format unauthorized " + mediaType);
+            }
+
+            if (mediaType.startsWith("image/svg")) {
+                throw new UploadUnauthorized("SVG files are not supported");
             }
         }
     }
@@ -210,20 +232,18 @@ public abstract class AbstractResource<T, K> {
                     final String querySize = queryParameters.getFirst(PaginationParam.SIZE_QUERY_PARAM_NAME);
 
                     if (queryPage != null) {
-                        linkTemplate =
-                            linkTemplate.replaceFirst(
-                                PaginationParam.PAGE_QUERY_PARAM_NAME + "=(\\w*)",
-                                PaginationParam.PAGE_QUERY_PARAM_NAME + "=" + pageToken
-                            );
+                        linkTemplate = linkTemplate.replaceFirst(
+                            PaginationParam.PAGE_QUERY_PARAM_NAME + "=(\\w*)",
+                            PaginationParam.PAGE_QUERY_PARAM_NAME + "=" + pageToken
+                        );
                     } else {
                         linkTemplate += "&" + PaginationParam.PAGE_QUERY_PARAM_NAME + "=" + pageToken;
                     }
                     if (querySize != null) {
-                        linkTemplate =
-                            linkTemplate.replaceFirst(
-                                PaginationParam.SIZE_QUERY_PARAM_NAME + "=(\\w*)",
-                                PaginationParam.SIZE_QUERY_PARAM_NAME + "=" + sizeToken
-                            );
+                        linkTemplate = linkTemplate.replaceFirst(
+                            PaginationParam.SIZE_QUERY_PARAM_NAME + "=(\\w*)",
+                            PaginationParam.SIZE_QUERY_PARAM_NAME + "=" + sizeToken
+                        );
                     }
                 }
 
@@ -232,13 +252,12 @@ public abstract class AbstractResource<T, K> {
                 Integer nextPage = Math.min(page + 1, lastPage);
                 Integer prevPage = Math.max(firstPage, page - 1);
 
-                paginatedLinks =
-                    new Links()
-                        .first(linkTemplate.replace(pageToken, String.valueOf(firstPage)).replace(sizeToken, String.valueOf(size)))
-                        .last(linkTemplate.replace(pageToken, String.valueOf(lastPage)).replace(sizeToken, String.valueOf(size)))
-                        .next(linkTemplate.replace(pageToken, String.valueOf(nextPage)).replace(sizeToken, String.valueOf(size)))
-                        .prev(linkTemplate.replace(pageToken, String.valueOf(prevPage)).replace(sizeToken, String.valueOf(size)))
-                        .self(uriInfo.getRequestUri().toString());
+                paginatedLinks = new Links()
+                    .first(linkTemplate.replace(pageToken, String.valueOf(firstPage)).replace(sizeToken, String.valueOf(size)))
+                    .last(linkTemplate.replace(pageToken, String.valueOf(lastPage)).replace(sizeToken, String.valueOf(size)))
+                    .next(linkTemplate.replace(pageToken, String.valueOf(nextPage)).replace(sizeToken, String.valueOf(size)))
+                    .prev(linkTemplate.replace(pageToken, String.valueOf(prevPage)).replace(sizeToken, String.valueOf(size)))
+                    .self(uriInfo.getRequestUri().toString());
 
                 if (page == 1) {
                     paginatedLinks.setPrev(null);
@@ -273,7 +292,7 @@ public abstract class AbstractResource<T, K> {
             paginationMetadata.put(METADATA_PAGINATION_TOTAL_KEY, totalItems);
             paginationMetadata.put(METADATA_PAGINATION_TOTAL_PAGE_KEY, totalPages);
 
-            return new ArrayList(list).subList(startIndex, lastIndex);
+            return startIndex >= list.size() ? new ArrayList(list) : new ArrayList(list).subList(startIndex, lastIndex);
         }
     }
 
@@ -287,12 +306,22 @@ public abstract class AbstractResource<T, K> {
         Map<String, Object> dataMetadata = new HashMap<>();
         Map<String, Object> paginationMetadata = new HashMap<>();
 
-        int totalItems = dataList.size();
+        Object totalObj = null;
+        if (metadata != null && metadata.containsKey("paginateMetaData")) {
+            totalObj = metadata.get("paginateMetaData").get("totalElements");
+        }
+
+        int totalItems = totalObj != null ? Integer.parseInt(totalObj.toString()) : dataList.size();
 
         List pageContent;
         if (withPagination && totalItems > 0 && paginationParam.getSize() > 0) {
-            pageContent =
-                this.paginateResultList(dataList, totalItems, paginationParam.getPage(), paginationParam.getSize(), paginationMetadata);
+            pageContent = this.paginateResultList(
+                dataList,
+                totalItems,
+                paginationParam.getPage(),
+                paginationParam.getSize(),
+                paginationMetadata
+            );
         } else {
             if (paginationParam.getSize() < -1) {
                 throw new BadRequestException("Pagination size is not valid");
@@ -415,8 +444,7 @@ public abstract class AbstractResource<T, K> {
             return builder.cacheControl(cc).build();
         }
 
-        return Response
-            .ok(media.getData())
+        return Response.ok(media.getData())
             // Add header to force download, so avoid browser to display the media and maybe render malicious attachments
             .header("Content-Disposition", "attachment; filename=\"" + media.getFileName() + "\"")
             .cacheControl(cc)

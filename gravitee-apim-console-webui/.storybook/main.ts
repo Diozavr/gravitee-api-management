@@ -12,16 +12,16 @@ const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|mdx)'],
   addons: ['@storybook/addon-essentials'],
   features: {},
-  webpackFinal: async (config) => {
+  webpackFinal: async config => {
     config.optimization.minimize = false;
     return config;
   },
   staticDirs: [
     {
-      from: '../node_modules/@gravitee/ui-particles-angular/assets',
+      from: '../../node_modules/@gravitee/ui-particles-angular/assets',
       to: '/assets',
     },
-    { from: '../node_modules/monaco-editor', to: '/assets/monaco-editor' },
+    { from: '../../node_modules/monaco-editor', to: '/assets/monaco-editor' },
   ],
 };
 

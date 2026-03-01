@@ -23,11 +23,11 @@ import io.gravitee.integration.api.command.IntegrationCommandType;
 import io.gravitee.integration.api.command.hello.HelloCommand;
 import io.gravitee.integration.controller.command.IntegrationCommandContext;
 import io.reactivex.rxjava3.core.Single;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class HelloCommandHandler implements CommandHandler<HelloCommand, HelloReply> {
 
     private final CheckIntegrationUseCase checkIntegrationUseCase;
@@ -40,25 +40,24 @@ public class HelloCommandHandler implements CommandHandler<HelloCommand, HelloRe
 
     @Override
     public Single<HelloReply> handle(HelloCommand command) {
-        return Single
-            .fromCallable(() -> {
-                var payload = command.getPayload();
-                var result = checkIntegrationUseCase.execute(
-                    new CheckIntegrationUseCase.Input(
-                        integrationCommandContext.getOrganizationId(),
-                        integrationCommandContext.getUserId(),
-                        payload.getTargetId(),
-                        payload.getProvider()
-                    )
-                );
+        return Single.fromCallable(() -> {
+            var payload = command.getPayload();
+            var result = checkIntegrationUseCase.execute(
+                new CheckIntegrationUseCase.Input(
+                    integrationCommandContext.getOrganizationId(),
+                    integrationCommandContext.getUserId(),
+                    payload.getTargetId(),
+                    payload.getProvider()
+                )
+            );
 
-                if (result.success()) {
-                    integrationCommandContext.setIntegrationId(payload.getTargetId());
-                    return new HelloReply(command.getId(), HelloReplyPayload.builder().targetId(payload.getTargetId()).build());
-                }
+            if (result.success()) {
+                integrationCommandContext.setIntegrationId(payload.getTargetId());
+                return new HelloReply(command.getId(), HelloReplyPayload.builder().targetId(payload.getTargetId()).build());
+            }
 
-                return new HelloReply(command.getId(), result.message());
-            })
+            return new HelloReply(command.getId(), result.message());
+        })
             .doOnError(throwable ->
                 log.error("Unable to process hello command payload for target [{}]", command.getPayload().getTargetId(), throwable)
             )

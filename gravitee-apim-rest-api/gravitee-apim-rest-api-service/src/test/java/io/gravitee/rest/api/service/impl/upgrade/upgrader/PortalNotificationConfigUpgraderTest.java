@@ -18,6 +18,7 @@ package io.gravitee.rest.api.service.impl.upgrade.upgrader;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
+import io.gravitee.definition.model.Origin;
 import io.gravitee.node.api.upgrader.UpgraderException;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.EnvironmentRepository;
@@ -63,8 +64,9 @@ public class PortalNotificationConfigUpgraderTest {
 
     @Test
     public void should_upgrade_only_portal_default_notification() throws TechnicalException, UpgraderException {
-        when(environmentRepository.findAll())
-            .thenReturn(Set.of(Environment.builder().id("env#1").build(), Environment.builder().id("env#2").build()));
+        when(environmentRepository.findAll()).thenReturn(
+            Set.of(Environment.builder().id("env#1").build(), Environment.builder().id("env#2").build())
+        );
 
         Set<PortalNotificationConfig> portalNotificationConfigs = Set.of(
             aPortalNotificationConfig("DEFAULT", NotificationReferenceType.PORTAL, "user#1"),
@@ -77,30 +79,26 @@ public class PortalNotificationConfigUpgraderTest {
         assertTrue(upgrader.upgrade());
 
         verify(portalNotificationConfigRepository, times(4)).create(any());
-        verify(portalNotificationConfigRepository)
-            .create(
-                argThat(portalNotificationConfig ->
-                    portalNotificationConfig.equals(aPortalNotificationConfig("env#1", NotificationReferenceType.ENVIRONMENT, "user#1"))
-                )
-            );
-        verify(portalNotificationConfigRepository)
-            .create(
-                argThat(portalNotificationConfig ->
-                    portalNotificationConfig.equals(aPortalNotificationConfig("env#2", NotificationReferenceType.ENVIRONMENT, "user#1"))
-                )
-            );
-        verify(portalNotificationConfigRepository)
-            .create(
-                argThat(portalNotificationConfig ->
-                    portalNotificationConfig.equals(aPortalNotificationConfig("env#1", NotificationReferenceType.ENVIRONMENT, "user#2"))
-                )
-            );
-        verify(portalNotificationConfigRepository)
-            .create(
-                argThat(portalNotificationConfig ->
-                    portalNotificationConfig.equals(aPortalNotificationConfig("env#2", NotificationReferenceType.ENVIRONMENT, "user#2"))
-                )
-            );
+        verify(portalNotificationConfigRepository).create(
+            argThat(portalNotificationConfig ->
+                portalNotificationConfig.equals(aPortalNotificationConfig("env#1", NotificationReferenceType.ENVIRONMENT, "user#1"))
+            )
+        );
+        verify(portalNotificationConfigRepository).create(
+            argThat(portalNotificationConfig ->
+                portalNotificationConfig.equals(aPortalNotificationConfig("env#2", NotificationReferenceType.ENVIRONMENT, "user#1"))
+            )
+        );
+        verify(portalNotificationConfigRepository).create(
+            argThat(portalNotificationConfig ->
+                portalNotificationConfig.equals(aPortalNotificationConfig("env#1", NotificationReferenceType.ENVIRONMENT, "user#2"))
+            )
+        );
+        verify(portalNotificationConfigRepository).create(
+            argThat(portalNotificationConfig ->
+                portalNotificationConfig.equals(aPortalNotificationConfig("env#2", NotificationReferenceType.ENVIRONMENT, "user#2"))
+            )
+        );
 
         verify(portalNotificationConfigRepository, times(2)).delete(any());
         verify(portalNotificationConfigRepository).delete(aPortalNotificationConfig("DEFAULT", NotificationReferenceType.PORTAL, "user#1"));
@@ -109,8 +107,9 @@ public class PortalNotificationConfigUpgraderTest {
 
     @Test
     public void should_not_create_if_not_find_default_notification() throws TechnicalException, UpgraderException {
-        when(environmentRepository.findAll())
-            .thenReturn(Set.of(Environment.builder().id("DEFAULT").build(), Environment.builder().id("env#1").build()));
+        when(environmentRepository.findAll()).thenReturn(
+            Set.of(Environment.builder().id("DEFAULT").build(), Environment.builder().id("env#1").build())
+        );
 
         when(portalNotificationConfigRepository.findAll()).thenReturn(Collections.emptySet());
 
@@ -130,8 +129,7 @@ public class PortalNotificationConfigUpgraderTest {
         String user,
         List<String> hooks
     ) {
-        return PortalNotificationConfig
-            .builder()
+        return PortalNotificationConfig.builder()
             .referenceId(referenceId)
             .referenceType(referenceType)
             .user(user)
@@ -144,5 +142,36 @@ public class PortalNotificationConfigUpgraderTest {
     @Test
     public void test_order() {
         Assert.assertEquals(UpgraderOrder.PORTAL_NOTIFICATION_CONFIG_UPGRADER, upgrader.getOrder());
+    }
+
+    @Test
+    public void should_set_origin_to_management_when_missing() throws TechnicalException, UpgraderException {
+        when(environmentRepository.findAll()).thenReturn(Set.of(Environment.builder().id("env#1").build()));
+        PortalNotificationConfig source = aPortalNotificationConfig("DEFAULT", NotificationReferenceType.PORTAL, "user#1");
+        source.setOrigin(null);
+        when(portalNotificationConfigRepository.findAll()).thenReturn(Set.of(source));
+        assertTrue(upgrader.upgrade());
+
+        verify(portalNotificationConfigRepository).create(
+            argThat(
+                cfg ->
+                    cfg.getReferenceType() == NotificationReferenceType.ENVIRONMENT &&
+                    "env#1".equals(cfg.getReferenceId()) &&
+                    "user#1".equals(cfg.getUser()) &&
+                    cfg.getOrigin() == Origin.MANAGEMENT
+            )
+        );
+    }
+
+    @Test
+    public void should_preserve_origin_when_present() throws TechnicalException, UpgraderException {
+        when(environmentRepository.findAll()).thenReturn(Set.of(Environment.builder().id("env#1").build()));
+        PortalNotificationConfig source = aPortalNotificationConfig("DEFAULT", NotificationReferenceType.PORTAL, "user#2");
+        source.setOrigin(Origin.KUBERNETES);
+        when(portalNotificationConfigRepository.findAll()).thenReturn(Set.of(source));
+        assertTrue(upgrader.upgrade());
+        verify(portalNotificationConfigRepository).create(
+            argThat(cfg -> "env#1".equals(cfg.getReferenceId()) && cfg.getOrigin() == Origin.KUBERNETES)
+        );
     }
 }

@@ -61,7 +61,10 @@ public class ApiMetadataServiceImpl extends AbstractReferenceMetadataService imp
     @Override
     public List<ApiMetadataEntity> findAllByApi(final ExecutionContext executionContext, final String apiId) {
         final List<ReferenceMetadataEntity> allMetadata = findAllByReference(API, apiId, Optional.of(executionContext.getEnvironmentId()));
-        return allMetadata.stream().map(m -> convert(m, apiId)).collect(toList());
+        return allMetadata
+            .stream()
+            .map(m -> convert(m, apiId))
+            .collect(toList());
     }
 
     @Override
@@ -111,7 +114,7 @@ public class ApiMetadataServiceImpl extends AbstractReferenceMetadataService imp
             update(executionContext, metadataEntity, API, metadataEntity.getApiId(), true),
             metadataEntity.getApiId()
         );
-        GenericApiEntity genericApi = apiSearchService.findGenericById(executionContext, apiMetadataEntity.getApiId());
+        GenericApiEntity genericApi = apiSearchService.findGenericById(executionContext, apiMetadataEntity.getApiId(), false, false, true);
         GenericApiEntity genericApiWithMetadata = fetchMetadataForApi(executionContext, genericApi);
         searchEngineService.index(executionContext, genericApiWithMetadata, false);
         return apiMetadataEntity;
@@ -125,7 +128,7 @@ public class ApiMetadataServiceImpl extends AbstractReferenceMetadataService imp
         MetadataReferenceType referenceType,
         String referenceId
     ) {
-        final GenericApiEntity genericApi = apiSearchService.findGenericById(executionContext, referenceId);
+        final GenericApiEntity genericApi = apiSearchService.findGenericById(executionContext, referenceId, false, false, false);
         metadataService.checkMetadataFormat(executionContext, format, value, referenceType, genericApi);
     }
 
@@ -138,20 +141,17 @@ public class ApiMetadataServiceImpl extends AbstractReferenceMetadataService imp
             mapMetadata.put(metadata.getKey(), metadata.getValue() == null ? metadata.getDefaultValue() : metadata.getValue())
         );
 
-        String decodedValue =
-            this.notificationTemplateService.resolveInlineTemplateWithParam(
-                    executionContext.getOrganizationId(),
-                    genericApiEntity.getId(),
-                    new StringReader(mapMetadata.toString()),
-                    Collections.singletonMap("api", genericApiEntity)
-                );
+        String decodedValue = this.notificationTemplateService.resolveInlineTemplateWithParam(
+            executionContext.getOrganizationId(),
+            genericApiEntity.getId(),
+            new StringReader(mapMetadata.toString()),
+            Collections.singletonMap("api", genericApiEntity)
+        );
         Map<String, Object> metadataDecoded = null;
         if (decodedValue != null) {
-            metadataDecoded =
-                Arrays
-                    .stream(decodedValue.substring(1, decodedValue.length() - 1).split(", "))
-                    .map(entry -> entry.split("="))
-                    .collect(Collectors.toMap(entry -> entry[0], entry -> entry.length > 1 ? entry[1] : ""));
+            metadataDecoded = Arrays.stream(decodedValue.substring(1, decodedValue.length() - 1).split(", "))
+                .map(entry -> entry.split("="))
+                .collect(Collectors.toMap(entry -> entry[0], entry -> entry.length > 1 ? entry[1] : ""));
         }
         genericApiEntity.setMetadata(metadataDecoded);
 

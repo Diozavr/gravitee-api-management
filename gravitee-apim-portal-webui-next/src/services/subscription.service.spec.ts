@@ -17,7 +17,7 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
 import { SubscriptionService } from './subscription.service';
-import { SubscriptionStatusEnum, fakeSubscriptionResponse, SubscriptionsResponse } from '../entities/subscription';
+import { fakeSubscriptionResponse, SubscriptionsResponse, SubscriptionStatusEnum } from '../entities/subscription';
 import { AppTestingModule, TESTING_BASE_URL } from '../testing/app-testing.module';
 
 describe('SubscriptionService', () => {
@@ -40,14 +40,25 @@ describe('SubscriptionService', () => {
 
   it('should return subscription list', done => {
     const subscriptionResponse: SubscriptionsResponse = fakeSubscriptionResponse();
-    service.list({ apiId, statuses: status }).subscribe(response => {
+    service.list({ apiIds: [apiId], statuses: status }).subscribe(response => {
       expect(response).toMatchObject(subscriptionResponse);
       done();
     });
 
-    const req = httpTestingController.expectOne(`${TESTING_BASE_URL}/subscriptions?apiId=testId&statuses=PENDING`);
+    const req = httpTestingController.expectOne(`${TESTING_BASE_URL}/subscriptions?apiIds=testId&statuses=PENDING`);
     expect(req.request.method).toEqual('GET');
 
     req.flush(subscriptionResponse);
+  });
+
+  it('should close subscription', done => {
+    service.close('subscriptionId').subscribe(() => {
+      done();
+    });
+
+    const req = httpTestingController.expectOne(`${TESTING_BASE_URL}/subscriptions/subscriptionId/_close`);
+    expect(req.request.method).toEqual('POST');
+
+    req.flush(null);
   });
 });

@@ -37,6 +37,7 @@ import io.gravitee.gateway.reactive.core.context.MutableRequest;
 import io.gravitee.gateway.reactive.core.context.MutableResponse;
 import io.gravitee.gateway.reactive.debug.policy.steps.PolicyRequestStep;
 import io.gravitee.gateway.reactive.debug.reactor.context.DebugExecutionContext;
+import io.gravitee.node.api.Node;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.EventRepository;
 import io.gravitee.repository.management.model.ApiDebugStatus;
@@ -71,6 +72,9 @@ class DebugCompletionProcessorTest {
     @Mock
     private MutableResponse mockResponse;
 
+    @Mock
+    private Node node;
+
     private HttpHeaders spyResponseHeaders;
     private DebugApiV2 debugApi;
     private CustomComponentProvider componentProvider;
@@ -94,6 +98,7 @@ class DebugCompletionProcessorTest {
         this.debugApi = new DebugApiV2("event-id", debugApi);
         componentProvider = new CustomComponentProvider();
         componentProvider.add(Api.class, this.debugApi);
+        componentProvider.add(Node.class, this.node);
         debugCtx = new DebugExecutionContext(mockRequest, mockResponse);
         debugCtx.componentProvider(componentProvider);
 
@@ -150,7 +155,9 @@ class DebugCompletionProcessorTest {
         event.setType(EventType.DEBUG_API);
 
         when(eventRepository.findById("event-id")).thenReturn(Optional.of(event));
-        when(eventRepository.update(any())).thenThrow(new TechnicalException("error")).thenAnswer(invocation -> invocation.getArgument(0));
+        when(eventRepository.update(any()))
+            .thenThrow(new TechnicalException("error"))
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         TestObserver<Void> obs = debugCompletionProcessor.execute(debugCtx).test();
         obs.awaitDone(10, TimeUnit.SECONDS).assertComplete();
@@ -158,8 +165,9 @@ class DebugCompletionProcessorTest {
         ArgumentCaptor<Event> captor = ArgumentCaptor.forClass(Event.class);
         verify(eventRepository, times(2)).update(captor.capture());
         assertThat(captor.getAllValues().get(1).getId()).isEqualTo("event-id");
-        assertThat(captor.getAllValues().get(1).getProperties())
-            .isEqualTo(Map.of(API_DEBUG_STATUS.getValue(), ApiDebugStatus.ERROR.name()));
+        assertThat(captor.getAllValues().get(1).getProperties()).isEqualTo(
+            Map.of(API_DEBUG_STATUS.getValue(), ApiDebugStatus.ERROR.name())
+        );
     }
 
     @Test

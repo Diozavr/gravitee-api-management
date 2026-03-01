@@ -33,6 +33,8 @@ public class PlanCRD {
     @NotEmpty
     private String id;
 
+    private String hrid;
+
     private String crossId;
 
     private String name;
@@ -46,6 +48,8 @@ public class PlanCRD {
     private List<String> excludedGroups;
 
     private String generalConditions;
+
+    private String generalConditionsHrid;
 
     private int order;
 

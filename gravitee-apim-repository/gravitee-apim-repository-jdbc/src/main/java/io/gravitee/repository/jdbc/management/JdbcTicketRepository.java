@@ -29,17 +29,13 @@ import java.sql.Types;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
-/**
- */
+@CustomLog
 @Repository
 public class JdbcTicketRepository extends JdbcAbstractCrudRepository<Ticket, String> implements TicketRepository {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcTicketRepository.class);
 
     JdbcTicketRepository(@Value("${management.jdbc.prefix:}") String tablePrefix) {
         super(tablePrefix, "tickets");
@@ -47,8 +43,7 @@ public class JdbcTicketRepository extends JdbcAbstractCrudRepository<Ticket, Str
 
     @Override
     protected JdbcObjectMapper<Ticket> buildOrm() {
-        return JdbcObjectMapper
-            .builder(Ticket.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(Ticket.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("from_user", Types.NVARCHAR, String.class)
             .addColumn("created_at", Types.TIMESTAMP, Date.class)
@@ -66,7 +61,7 @@ public class JdbcTicketRepository extends JdbcAbstractCrudRepository<Ticket, Str
 
     @Override
     public Page<Ticket> search(TicketCriteria criteria, Sortable sortable, Pageable pageable) throws TechnicalException {
-        LOGGER.debug("JdbcTicketRepository.search() - {}", getOrm().getTableName());
+        log.debug("JdbcTicketRepository.search() - {}", getOrm().getTableName());
 
         try {
             List result;
@@ -88,25 +83,24 @@ public class JdbcTicketRepository extends JdbcAbstractCrudRepository<Ticket, Str
 
                 applySortable(sortable, query);
 
-                result =
-                    jdbcTemplate.query(
-                        query.toString(),
-                        (PreparedStatement ps) -> {
-                            int idx = 1;
-                            if (criteria.getFromUser() != null && criteria.getFromUser().length() > 0) {
-                                idx = getOrm().setArguments(ps, Arrays.asList(criteria.getFromUser()), idx);
-                            }
+                result = jdbcTemplate.query(
+                    query.toString(),
+                    (PreparedStatement ps) -> {
+                        int idx = 1;
+                        if (criteria.getFromUser() != null && criteria.getFromUser().length() > 0) {
+                            idx = getOrm().setArguments(ps, Arrays.asList(criteria.getFromUser()), idx);
+                        }
 
-                            if (criteria.getApi() != null && criteria.getApi().length() > 0) {
-                                idx = getOrm().setArguments(ps, Arrays.asList(criteria.getApi()), idx);
-                            }
-                        },
-                        getOrm().getRowMapper()
-                    );
+                        if (criteria.getApi() != null && criteria.getApi().length() > 0) {
+                            idx = getOrm().setArguments(ps, Arrays.asList(criteria.getApi()), idx);
+                        }
+                    },
+                    getOrm().getRowMapper()
+                );
             }
             return getResultAsPage(pageable, result);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find all {} items:", getOrm().getTableName(), ex);
+            log.error("Failed to find all {} items:", getOrm().getTableName(), ex);
             throw new TechnicalException("Failed to find all " + getOrm().getTableName() + " items", ex);
         }
     }
@@ -130,7 +124,7 @@ public class JdbcTicketRepository extends JdbcAbstractCrudRepository<Ticket, Str
 
     @Override
     public List<String> deleteByApiId(String apiId) throws TechnicalException {
-        LOGGER.debug("JdbcTicketRepository.deleteByApiId({})", apiId);
+        log.debug("JdbcTicketRepository.deleteByApiId({})", apiId);
         try {
             final var rows = jdbcTemplate.queryForList("select id from " + this.tableName + " where api = ?", String.class, apiId);
 
@@ -138,17 +132,17 @@ public class JdbcTicketRepository extends JdbcAbstractCrudRepository<Ticket, Str
                 jdbcTemplate.update("delete from " + tableName + " where api = ?", apiId);
             }
 
-            LOGGER.debug("JdbcTicketRepository.deleteByApiId({}) - Done", apiId);
+            log.debug("JdbcTicketRepository.deleteByApiId({}) - Done", apiId);
             return rows;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to delete tickets by apiId: {}", apiId, ex);
+            log.error("Failed to delete tickets by apiId: {}", apiId, ex);
             throw new TechnicalException("Failed to delete tickets by api", ex);
         }
     }
 
     @Override
     public List<String> deleteByApplicationId(String applicationId) throws TechnicalException {
-        LOGGER.debug("JdbcTicketRepository.deleteByApplicationId({})", applicationId);
+        log.debug("JdbcTicketRepository.deleteByApplicationId({})", applicationId);
         try {
             final var rows = jdbcTemplate.queryForList(
                 "select id from " + this.tableName + " where application = ?",
@@ -160,10 +154,10 @@ public class JdbcTicketRepository extends JdbcAbstractCrudRepository<Ticket, Str
                 jdbcTemplate.update("delete from " + tableName + " where application = ?", applicationId);
             }
 
-            LOGGER.debug("JdbcTicketRepository.deleteByApplicationId({}) - Done", applicationId);
+            log.debug("JdbcTicketRepository.deleteByApplicationId({}) - Done", applicationId);
             return rows;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to delete tickets by applicationId: {}", applicationId, ex);
+            log.error("Failed to delete tickets by applicationId: {}", applicationId, ex);
             throw new TechnicalException("Failed to delete tickets by application", ex);
         }
     }

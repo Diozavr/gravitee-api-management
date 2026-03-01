@@ -122,10 +122,10 @@ describe('ApiPlanFormComponent', () => {
     httpTestingController = TestBed.inject(HttpTestingController);
     testComponent = fixture.componentInstance;
     testComponent.mode = mode;
-    testComponent.planMenuItem = AVAILABLE_PLANS_FOR_MENU.find((vm) => vm.planFormType === planFormType);
+    testComponent.planMenuItem = AVAILABLE_PLANS_FOR_MENU.find(vm => vm.planFormType === planFormType);
     testComponent.api = api;
     testComponent.apiType = apiType;
-    testComponent.isTcpApi = isApiV4(api) && api.listeners.find((listener) => listener.type === 'TCP') != null;
+    testComponent.isTcpApi = isApiV4(api) && api.listeners.find(listener => listener.type === 'TCP') != null;
   };
 
   afterEach(() => {
@@ -267,7 +267,7 @@ describe('ApiPlanFormComponent', () => {
 
         const shardingTagsInput = await planForm.getShardingTagsInput();
         await shardingTagsInput.clickOptions({ text: /Tag 1/ });
-        await shardingTagsInput.getOptions({ text: /Tag 2/ }).then((options) => options[0].isDisabled());
+        await shardingTagsInput.getOptions({ text: /Tag 2/ }).then(options => options[0].isDisabled());
 
         const excludedGroupsInput = await planForm.getExcludedGroupsInput();
         await excludedGroupsInput.clickOptions({ text: 'Group A' });
@@ -416,7 +416,7 @@ describe('ApiPlanFormComponent', () => {
 
         const shardingTagsInput = await planForm.getShardingTagsInput();
         await shardingTagsInput.clickOptions({ text: /Tag 1/ });
-        await shardingTagsInput.getOptions({ text: /Tag 2/ }).then((options) => options[0].isDisabled());
+        await shardingTagsInput.getOptions({ text: /Tag 2/ }).then(options => options[0].isDisabled());
 
         const excludedGroupsInput = await planForm.getExcludedGroupsInput();
         await excludedGroupsInput.clickOptions({ text: 'Group A' });
@@ -563,7 +563,7 @@ describe('ApiPlanFormComponent', () => {
 
         const shardingTagsInput = await planForm.getShardingTagsInput();
         await shardingTagsInput.clickOptions({ text: /Tag 1/ });
-        await shardingTagsInput.getOptions({ text: /Tag 2/ }).then((options) => options[0].isDisabled());
+        await shardingTagsInput.getOptions({ text: /Tag 2/ }).then(options => options[0].isDisabled());
 
         const excludedGroupsInput = await planForm.getExcludedGroupsInput();
         await excludedGroupsInput.clickOptions({ text: 'Group A' });
@@ -880,6 +880,219 @@ describe('ApiPlanFormComponent', () => {
         ],
       } as CreatePlanV4);
     });
+
+    it('should add new plan with MCP_PROXY API', async () => {
+      const API = fakeApiV4({ type: 'MCP_PROXY' });
+      configureTestingModule('create', 'API_KEY', API);
+      fixture.detectChanges();
+
+      const planForm = await loader.getHarness(ApiPlanFormHarness);
+
+      planForm.httpRequest(httpTestingController).expectGroupListRequest([fakeGroup({ id: 'group-a', name: 'Group A' })]);
+      planForm.httpRequest(httpTestingController).expectDocumentationSearchRequest(API.id, []);
+      planForm.httpRequest(httpTestingController).expectCurrentUserTagsRequest([]);
+      planForm.httpRequest(httpTestingController).expectTagsListRequest([]);
+
+      fixture.detectChanges();
+
+      expect(testComponent.planControl.touched).toEqual(false);
+      expect(testComponent.planControl.dirty).toEqual(false);
+      expect(testComponent.planControl.valid).toEqual(false);
+
+      // 1- General Step
+      const nameInput = await planForm.getNameInput();
+      await nameInput.setValue('🗺');
+
+      const descriptionInput = await planForm.getDescriptionInput();
+      await descriptionInput.setValue('Description');
+
+      const characteristicsInput = await planForm.getCharacteristicsInput();
+      await characteristicsInput.addTag('C1');
+
+      const generalConditionsInput = await planForm.getGeneralConditionsInput();
+      expect(await generalConditionsInput.getValueText()).toEqual('');
+
+      const validationToggle = await planForm.getValidationToggle();
+      await validationToggle.toggle();
+
+      const commentRequired = await planForm.getCommentRequiredToggle();
+      await commentRequired.toggle();
+
+      const commentMessageInput = await planForm.getCommentMessageInput();
+      await commentMessageInput.setValue('Comment message');
+
+      const shardingTagsInput = await planForm.getShardingTagsInput();
+      expect(await shardingTagsInput.getValueText()).toEqual('');
+
+      const excludedGroupsInput = await planForm.getExcludedGroupsInput();
+      await excludedGroupsInput.clickOptions({ text: 'Group A' });
+
+      // 2- Secure Step
+      planForm.httpRequest(httpTestingController).expectPolicySchemaV2GetRequest('api-key', fakeApiKeySchema);
+
+      // 3- Restriction Step
+
+      const rateLimitEnabledInput = await planForm.getRateLimitEnabledInput();
+      await rateLimitEnabledInput.toggle();
+      planForm.httpRequest(httpTestingController).expectPolicySchemaGetRequest('rate-limit', {});
+
+      const quotaEnabledInput = await planForm.getQuotaEnabledInput();
+      await quotaEnabledInput.toggle();
+      planForm.httpRequest(httpTestingController).expectPolicySchemaGetRequest('quota', {});
+
+      expect(testComponent.planControl.touched).toEqual(true);
+      expect(testComponent.planControl.dirty).toEqual(true);
+      expect(testComponent.planControl.valid).toEqual(true);
+      expect(testComponent.planControl.value).toEqual({
+        name: '🗺',
+        description: 'Description',
+        characteristics: ['C1'],
+        commentMessage: 'Comment message',
+        commentRequired: true,
+        excludedGroups: ['group-a'],
+        generalConditions: '',
+        tags: [],
+        mode: 'STANDARD',
+        security: {
+          configuration: {},
+          type: 'API_KEY',
+        },
+        selectionRule: null,
+        validation: 'AUTO',
+        flows: [
+          {
+            selectors: [
+              {
+                type: 'MCP',
+                methods: [],
+              },
+            ],
+            enabled: true,
+            request: [
+              {
+                configuration: {},
+                enabled: true,
+                name: 'Rate Limiting',
+                policy: 'rate-limit',
+              },
+              {
+                configuration: {},
+                enabled: true,
+                name: 'Quota',
+                policy: 'quota',
+              },
+            ],
+          },
+        ],
+      } as CreatePlanV4);
+    });
+
+    it('should add new plan with LLM_PROXY API', async () => {
+      const API = fakeApiV4({ type: 'LLM_PROXY' });
+      configureTestingModule('create', 'API_KEY', API);
+      fixture.detectChanges();
+
+      const planForm = await loader.getHarness(ApiPlanFormHarness);
+
+      planForm.httpRequest(httpTestingController).expectGroupListRequest([fakeGroup({ id: 'group-a', name: 'Group A' })]);
+      planForm.httpRequest(httpTestingController).expectDocumentationSearchRequest(API.id, []);
+      planForm.httpRequest(httpTestingController).expectCurrentUserTagsRequest([]);
+      planForm.httpRequest(httpTestingController).expectTagsListRequest([]);
+
+      fixture.detectChanges();
+
+      expect(testComponent.planControl.touched).toEqual(false);
+      expect(testComponent.planControl.dirty).toEqual(false);
+      expect(testComponent.planControl.valid).toEqual(false);
+
+      // 1- General Step
+      const nameInput = await planForm.getNameInput();
+      await nameInput.setValue('🗺');
+
+      const descriptionInput = await planForm.getDescriptionInput();
+      await descriptionInput.setValue('Description');
+
+      const characteristicsInput = await planForm.getCharacteristicsInput();
+      await characteristicsInput.addTag('C1');
+
+      const generalConditionsInput = await planForm.getGeneralConditionsInput();
+      expect(await generalConditionsInput.getValueText()).toEqual('');
+
+      const validationToggle = await planForm.getValidationToggle();
+      await validationToggle.toggle();
+
+      const commentRequired = await planForm.getCommentRequiredToggle();
+      await commentRequired.toggle();
+
+      const commentMessageInput = await planForm.getCommentMessageInput();
+      await commentMessageInput.setValue('Comment message');
+
+      const shardingTagsInput = await planForm.getShardingTagsInput();
+      expect(await shardingTagsInput.getValueText()).toEqual('');
+
+      const excludedGroupsInput = await planForm.getExcludedGroupsInput();
+      await excludedGroupsInput.clickOptions({ text: 'Group A' });
+
+      // 2- Secure Step
+      planForm.httpRequest(httpTestingController).expectPolicySchemaV2GetRequest('api-key', fakeApiKeySchema);
+
+      // 3- Restriction Step
+
+      const rateLimitEnabledInput = await planForm.getRateLimitEnabledInput();
+      await rateLimitEnabledInput.toggle();
+      planForm.httpRequest(httpTestingController).expectPolicySchemaGetRequest('rate-limit', {});
+
+      const quotaEnabledInput = await planForm.getQuotaEnabledInput();
+      await quotaEnabledInput.toggle();
+      planForm.httpRequest(httpTestingController).expectPolicySchemaGetRequest('quota', {});
+
+      expect(testComponent.planControl.touched).toEqual(true);
+      expect(testComponent.planControl.dirty).toEqual(true);
+      expect(testComponent.planControl.valid).toEqual(true);
+      expect(testComponent.planControl.value).toEqual({
+        name: '🗺',
+        description: 'Description',
+        characteristics: ['C1'],
+        commentMessage: 'Comment message',
+        commentRequired: true,
+        excludedGroups: ['group-a'],
+        generalConditions: '',
+        tags: [],
+        mode: 'STANDARD',
+        security: {
+          configuration: {},
+          type: 'API_KEY',
+        },
+        selectionRule: null,
+        validation: 'AUTO',
+        flows: [
+          {
+            selectors: [
+              {
+                type: 'HTTP',
+                path: '/',
+                pathOperator: 'STARTS_WITH',
+              },
+            ],
+            enabled: true,
+            request: [
+              {
+                configuration: {},
+                enabled: true,
+                name: 'Rate Limiting',
+                policy: 'rate-limit',
+              },
+              {
+                configuration: {},
+                enabled: true,
+                name: 'Quota',
+                policy: 'quota',
+              },
+            ],
+          },
+        ],
+      } as CreatePlanV4);
+    });
   });
   it('should not display secure step with push plans', async () => {
     configureTestingModule('create', 'PUSH', undefined, 'MESSAGE');
@@ -895,7 +1108,7 @@ describe('ApiPlanFormComponent', () => {
     expect(testComponent.planControl.valid).toEqual(false);
 
     const stepsHarness = await loader.getAllHarnesses(MatStepHarness);
-    const steps = await Promise.all(stepsHarness.map((step) => step.getLabel()));
+    const steps = await Promise.all(stepsHarness.map(step => step.getLabel()));
     expect(steps).toEqual(['General', 'Restriction']);
   });
 
@@ -949,7 +1162,7 @@ describe('ApiPlanFormComponent', () => {
       const shardingTagsInput = await planForm.getShardingTagsInput();
       expect(await shardingTagsInput.getValueText()).toContain('Tag 1');
       await shardingTagsInput.clickOptions({ text: /Tag 1/ }); // Unselect Tag 1
-      await shardingTagsInput.getOptions({ text: /Tag 2/ }).then((options) => options[0].isDisabled());
+      await shardingTagsInput.getOptions({ text: /Tag 2/ }).then(options => options[0].isDisabled());
 
       const excludedGroupsInput = await planForm.getExcludedGroupsInput();
       await excludedGroupsInput.clickOptions({ text: 'Group A' });
@@ -1093,7 +1306,7 @@ describe('ApiPlanFormComponent', () => {
         const shardingTagsInput = await planForm.getShardingTagsInput();
         expect(await shardingTagsInput.getValueText()).toContain('Tag 1');
         await shardingTagsInput.clickOptions({ text: /Tag 1/ }); // Unselect Tag 1
-        await shardingTagsInput.getOptions({ text: /Tag 2/ }).then((options) => options[0].isDisabled());
+        await shardingTagsInput.getOptions({ text: /Tag 2/ }).then(options => options[0].isDisabled());
 
         const excludedGroupsInput = await planForm.getExcludedGroupsInput();
         await excludedGroupsInput.clickOptions({ text: 'Group A' });
@@ -1165,7 +1378,7 @@ describe('ApiPlanFormComponent', () => {
         expect(testComponent.planControl.valid).toEqual(false);
 
         const stepsHarness = await loader.getAllHarnesses(MatStepHarness);
-        const steps = await Promise.all(stepsHarness.map((step) => step.getLabel()));
+        const steps = await Promise.all(stepsHarness.map(step => step.getLabel()));
         expect(steps).toEqual(['General']);
       });
     });
@@ -1240,7 +1453,7 @@ describe('ApiPlanFormComponent', () => {
       expect(testComponent.planControl.valid).toEqual(false);
 
       const stepsHarness = await loader.getAllHarnesses(MatStepHarness);
-      const steps = await Promise.all(stepsHarness.map((step) => step.getLabel()));
+      const steps = await Promise.all(stepsHarness.map(step => step.getLabel()));
       expect(steps).toEqual(['General', 'mTLS authentication configuration', 'Restriction']);
     });
 
@@ -1262,7 +1475,7 @@ describe('ApiPlanFormComponent', () => {
       expect(testComponent.planControl.valid).toEqual(false);
 
       const stepsHarness = await loader.getAllHarnesses(MatStepHarness);
-      const steps = await Promise.all(stepsHarness.map((step) => step.getLabel()));
+      const steps = await Promise.all(stepsHarness.map(step => step.getLabel()));
       expect(steps).toEqual(['General']);
     });
   });

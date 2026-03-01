@@ -45,12 +45,12 @@ import java.util.Set;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class LocalApiSynchronizer implements LocalSynchronizer {
 
     private final Map<Path, ReactableApi> definitions = new HashMap<>();
@@ -88,8 +88,7 @@ public class LocalApiSynchronizer implements LocalSynchronizer {
     }
 
     public Completable synchronize(final File localRegistryDir) {
-        return Flowable
-            .fromArray(localRegistryDir.listFiles((dir, name) -> name.endsWith(".json")))
+        return Flowable.fromArray(localRegistryDir.listFiles((dir, name) -> name.endsWith(".json")))
             .map(this::deployApi)
             .doOnError(throwable -> log.error("Error synchronizing API", throwable))
             .doOnNext(api -> log.debug("api {} synchronized from local registry", api.getId()))
@@ -109,7 +108,7 @@ public class LocalApiSynchronizer implements LocalSynchronizer {
                     Set<Subscription> subscriptionsToDeploy = fileDefinition
                         .getRepositorySubscriptionList()
                         .stream()
-                        .map(subscriptionMapper::to)
+                        .flatMap(sub -> subscriptionMapper.to(sub).stream())
                         .collect(Collectors.toSet());
                     subscriptionsToDeploy.forEach(subscriptionService::register);
 
@@ -130,8 +129,7 @@ public class LocalApiSynchronizer implements LocalSynchronizer {
 
     @Override
     public Completable watch(final Path localRegistryPath, final WatchService watchService) {
-        return Flowable
-            .interval(5, TimeUnit.SECONDS)
+        return Flowable.interval(5, TimeUnit.SECONDS)
             .subscribeOn(Schedulers.from(this.syncLocalExecutor))
             .map(t -> {
                 WatchKey key = watchService.poll();

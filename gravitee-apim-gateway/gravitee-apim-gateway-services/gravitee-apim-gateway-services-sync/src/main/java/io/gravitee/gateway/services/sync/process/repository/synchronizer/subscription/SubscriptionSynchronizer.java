@@ -23,7 +23,9 @@ import io.gravitee.gateway.services.sync.process.common.synchronizer.Order;
 import io.gravitee.gateway.services.sync.process.repository.RepositorySynchronizer;
 import io.gravitee.gateway.services.sync.process.repository.fetcher.SubscriptionFetcher;
 import io.gravitee.gateway.services.sync.process.repository.service.PlanService;
+import io.gravitee.repository.management.model.Plan;
 import io.gravitee.repository.management.model.Subscription;
+import io.gravitee.repository.management.model.SubscriptionReferenceType;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
@@ -32,14 +34,14 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class SubscriptionSynchronizer implements RepositorySynchronizer {
 
@@ -61,14 +63,12 @@ public class SubscriptionSynchronizer implements RepositorySynchronizer {
                 .subscribeOn(Schedulers.from(syncFetcherExecutor))
                 // append per page
                 .flatMap(subscriptions ->
-                    Flowable
-                        .just(subscriptions)
+                    Flowable.just(subscriptions)
                         .flatMapIterable(s -> s)
-                        .filter(subscription -> planCache.isDeployed(subscription.getApi(), subscription.getPlan()))
-                        .flatMapMaybe(subscription -> Maybe.fromCallable(() -> subscriptionMapper.to(subscription)))
+                        .filter(this::isPlanDeployed)
+                        .flatMapIterable(subscription -> subscriptionMapper.to(subscription))
                         .map(subscription ->
-                            SingleSubscriptionDeployable
-                                .builder()
+                            SingleSubscriptionDeployable.builder()
                                 .subscription(subscription)
                                 .syncAction(
                                     subscription.getStatus().equals(Subscription.Status.ACCEPTED.name())
@@ -130,6 +130,20 @@ public class SubscriptionSynchronizer implements RepositorySynchronizer {
                 log.error(throwable.getMessage(), throwable);
                 return Flowable.empty();
             });
+    }
+
+    private boolean isPlanDeployed(Subscription subscription) {
+        Plan.PlanReferenceType referenceType = subscription.getReferenceType() != null
+            ? toPlanReferenceType(subscription.getReferenceType())
+            : Plan.PlanReferenceType.API;
+        String identifier = subscription.getReferenceId() != null ? subscription.getReferenceId() : subscription.getApi();
+        return planCache.isDeployed(identifier, subscription.getPlan(), referenceType);
+    }
+
+    private static Plan.PlanReferenceType toPlanReferenceType(SubscriptionReferenceType subscriptionReferenceType) {
+        return subscriptionReferenceType == SubscriptionReferenceType.API_PRODUCT
+            ? Plan.PlanReferenceType.API_PRODUCT
+            : Plan.PlanReferenceType.API;
     }
 
     @Override

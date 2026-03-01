@@ -39,6 +39,7 @@ public class CoreRulesTest extends AbstractApimArchitectureTest {
                 resideInAnyPackage(
                     anyPackageThatContains(GRAVITEE_APIM_PACKAGE + "." + CORE_PACKAGE),
                     "java..",
+                    "javax.annotation..",
                     "org.slf4j..",
                     "lombok..",
                     "com.fasterxml..",
@@ -46,8 +47,10 @@ public class CoreRulesTest extends AbstractApimArchitectureTest {
                     "io.reactivex.rxjava3..",
                     // Api Definition can't be in core because it is required for the Gateway
                     "io.gravitee.definition..",
+                    "io.gravitee.plugin.configurations..",
                     // Allow Gravitee node API to be used in core
                     "io.gravitee.node.api..",
+                    "io.gravitee.node.logging..",
                     // TODO: ideally, core should be independent from model.
                     "io.gravitee.rest.api.model..",
                     // Common and Exceptions are an accepted case of reusability

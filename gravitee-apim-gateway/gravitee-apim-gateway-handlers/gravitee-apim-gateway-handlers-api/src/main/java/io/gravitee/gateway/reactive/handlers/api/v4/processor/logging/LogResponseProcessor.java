@@ -17,7 +17,6 @@ package io.gravitee.gateway.reactive.handlers.api.v4.processor.logging;
 
 import io.gravitee.gateway.reactive.api.context.InternalContextAttributes;
 import io.gravitee.gateway.reactive.core.context.HttpExecutionContextInternal;
-import io.gravitee.gateway.reactive.core.context.MutableExecutionContext;
 import io.gravitee.gateway.reactive.core.processor.Processor;
 import io.gravitee.gateway.reactive.core.v4.analytics.AnalyticsContext;
 import io.gravitee.gateway.reactive.core.v4.analytics.LoggingContext;
@@ -52,7 +51,8 @@ public class LogResponseProcessor implements Processor {
             LoggingContext loggingContext = analyticsContext.getLoggingContext();
 
             if (log != null && loggingContext.entrypointResponse()) {
-                ((LogEntrypointResponse) log.getEntrypointResponse()).capture();
+                LogEntrypointResponse entrypointResponse = (LogEntrypointResponse) log.getEntrypointResponse();
+                entrypointResponse.capture(ctx);
             }
         });
     }

@@ -52,7 +52,7 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
         assertEquals("GCU-my-plan", plan.get().getGeneralConditions());
         assertEquals("Free plan", plan.get().getName());
         assertEquals("Description of the free plan", plan.get().getDescription());
-        assertEquals("api1", plan.get().getApi());
+        assertEquals("api1", plan.get().getReferenceId());
         assertEquals(Plan.PlanSecurityType.API_KEY, plan.get().getSecurity());
         assertEquals(Plan.PlanValidationType.AUTO, plan.get().getValidation());
         assertEquals(Plan.PlanType.API, plan.get().getType());
@@ -82,8 +82,7 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
             .get()
             .usingRecursiveComparison()
             .isEqualTo(
-                Plan
-                    .builder()
+                Plan.builder()
                     .id("plan-v4")
                     .definitionVersion(DefinitionVersion.V4)
                     .name("Free plan")
@@ -95,6 +94,8 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
                     .type(Plan.PlanType.API)
                     .mode(Plan.PlanMode.STANDARD)
                     .apiType(ApiType.PROXY)
+                    .referenceId("api2")
+                    .referenceType(Plan.PlanReferenceType.API)
                     .status(Plan.Status.PUBLISHED)
                     .order(0)
                     .createdAt(new Date(1506964899000L))
@@ -117,7 +118,7 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
         assertEquals("GCU-my-plan", plan.getGeneralConditions());
         assertEquals("Free plan", plan.getName());
         assertEquals("Description of the free plan", plan.getDescription());
-        assertEquals("api1", plan.getApi());
+        assertEquals("api1", plan.getReferenceId());
         assertEquals(Plan.PlanSecurityType.API_KEY, plan.getSecurity());
         assertEquals(Plan.PlanValidationType.AUTO, plan.getValidation());
         assertEquals(Plan.PlanType.API, plan.getType());
@@ -183,7 +184,7 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
         assertEquals("plan-oauth2", planOAuth2.get().getId());
         assertEquals("oauth2", planOAuth2.get().getName());
         assertEquals("Description of oauth2", planOAuth2.get().getDescription());
-        assertEquals("4e0db366-f772-4489-8db3-66f772b48989", planOAuth2.get().getApi());
+        assertEquals("4e0db366-f772-4489-8db3-66f772b48989", planOAuth2.get().getReferenceId());
         assertEquals(Plan.PlanSecurityType.OAUTH2, planOAuth2.get().getSecurity());
         assertEquals(Plan.PlanValidationType.MANUAL, planOAuth2.get().getValidation());
         assertEquals(Plan.PlanType.API, planOAuth2.get().getType());
@@ -308,7 +309,7 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
         plan.setValidation(Plan.PlanValidationType.AUTO);
         plan.setType(Plan.PlanType.API);
         plan.setStatus(Plan.Status.STAGING);
-        plan.setApi("api1");
+        plan.setReferenceId("api1");
         plan.setEnvironmentId("DEFAULT");
         plan.setGeneralConditions("general_conditions");
         plan.setCreatedAt(parse("11/02/2016"));
@@ -329,7 +330,7 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
         Assert.assertEquals("Invalid plan description.", plan.getDescription(), createdPlan.getDescription());
         Assert.assertEquals("Invalid plan validation.", plan.getValidation(), createdPlan.getValidation());
         Assert.assertEquals("Invalid plan type.", plan.getType(), createdPlan.getType());
-        Assert.assertEquals("Invalid plan API.", plan.getApi(), createdPlan.getApi());
+        Assert.assertEquals("Invalid plan API.", plan.getReferenceId(), createdPlan.getReferenceId());
         Assert.assertTrue("Invalid plan created date.", compareDate(plan.getCreatedAt(), createdPlan.getCreatedAt()));
         Assert.assertTrue("Invalid plan updated date.", compareDate(plan.getUpdatedAt(), createdPlan.getUpdatedAt()));
         Assert.assertEquals("Invalid plan status.", plan.getStatus(), createdPlan.getStatus());
@@ -341,13 +342,12 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
 
     @Test
     public void should_create_v4() throws Exception {
-        var toCreate = Plan
-            .builder()
+        var toCreate = Plan.builder()
             .id("a-plan-v4")
             .definitionVersion(DefinitionVersion.V4)
             .name("Plan V4")
             .description("Description of the V4 plan")
-            .api("api2")
+            .referenceId("api2")
             .environmentId("DEFAULT")
             .security(Plan.PlanSecurityType.API_KEY)
             .validation(Plan.PlanValidationType.AUTO)
@@ -377,7 +377,7 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
         plan.setValidation(Plan.PlanValidationType.AUTO);
         plan.setType(Plan.PlanType.API);
         plan.setStatus(Plan.Status.STAGING);
-        plan.setApi("my-api");
+        plan.setReferenceId("my-api");
         plan.setEnvironmentId("DEFAULT");
         plan.setCreatedAt(parse("11/02/2016"));
         plan.setUpdatedAt(parse("12/02/2016"));
@@ -400,7 +400,7 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
         Assert.assertEquals("Invalid oauth2 plan description.", plan.getDescription(), createdPlan.getDescription());
         Assert.assertEquals("Invalid oauth2 plan validation.", plan.getValidation(), createdPlan.getValidation());
         Assert.assertEquals("Invalid oauth2 plan type.", plan.getType(), createdPlan.getType());
-        Assert.assertEquals("Invalid oauth2 plan API.", plan.getApi(), createdPlan.getApi());
+        Assert.assertEquals("Invalid oauth2 plan API.", plan.getReferenceId(), createdPlan.getReferenceId());
         Assert.assertTrue("Invalid oauth2 plan created date.", compareDate(plan.getCreatedAt(), createdPlan.getCreatedAt()));
         Assert.assertTrue("Invalid oauth2 plan updated date.", compareDate(plan.getUpdatedAt(), createdPlan.getUpdatedAt()));
         Assert.assertEquals("Invalid oauth2 plan status.", plan.getStatus(), createdPlan.getStatus());
@@ -492,7 +492,14 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
         List<String> deleted = planRepository.deleteByEnvironmentId("ToBeDeleted");
 
         assertThat(deleted).containsOnly("plan-deleted-1", "plan-deleted-2");
-        assertEquals(0, planRepository.findAll().stream().filter(plan -> "ToBeDeleted".equals(plan.getEnvironmentId())).count());
+        assertEquals(
+            0,
+            planRepository
+                .findAll()
+                .stream()
+                .filter(plan -> "ToBeDeleted".equals(plan.getEnvironmentId()))
+                .count()
+        );
     }
 
     @Test
@@ -503,5 +510,89 @@ public class PlanRepositoryTest extends AbstractManagementRepositoryTest {
     @Test
     public void plan_should_not_exist() throws Exception {
         assertFalse(planRepository.exists("unknown"));
+    }
+
+    @Test
+    public void should_update_order() throws Exception {
+        // Given an existing plan with a known order
+        Optional<Plan> optional = planRepository.findById("my-plan");
+        assertNotNull(optional);
+        assertTrue(optional.isPresent());
+        int initialOrder = optional.get().getOrder();
+
+        // When updating the order
+        int newOrder = initialOrder + 3;
+        planRepository.updateOrder("my-plan", newOrder);
+
+        // Then the plan order is updated
+        Optional<Plan> updated = planRepository.findById("my-plan");
+        assertTrue(updated.isPresent());
+        assertEquals(newOrder, updated.get().getOrder());
+    }
+
+    @Test
+    public void should_update_plans_cross_ids() throws Exception {
+        // Given existing plan with cross ids updated
+        Optional<Plan> planOptional = planRepository.findById("my-plan");
+        assertTrue(planOptional.isPresent());
+        assertNull(planOptional.get().getCrossId());
+        var plan = planOptional.get();
+        plan.setCrossId("my-plan-cross-id-updated");
+
+        Optional<Plan> planV4Optional = planRepository.findById("plan-v4");
+        assertTrue(planV4Optional.isPresent());
+        assertNull(planV4Optional.get().getCrossId());
+        var planV4 = planV4Optional.get();
+        planV4.setCrossId("plan-v4-cross-id-updated");
+
+        // When updating in the database the cross ids of the plans
+        planRepository.updateCrossIds(List.of(planV4, plan));
+
+        // Then the plans cross IDs are updated
+        Optional<Plan> updatedPlan = planRepository.findById("my-plan");
+        assertTrue(updatedPlan.isPresent());
+        assertEquals("my-plan-cross-id-updated", updatedPlan.get().getCrossId());
+
+        Optional<Plan> updatedPlanV4 = planRepository.findById("plan-v4");
+        assertTrue(updatedPlanV4.isPresent());
+        assertEquals("plan-v4-cross-id-updated", updatedPlanV4.get().getCrossId());
+    }
+
+    @Test
+    public void shouldFindByReferenceIdAndReferenceType_forApiProduct() throws Exception {
+        Set<Plan> plans = planRepository.findByReferenceIdAndReferenceType(
+            "c45b8e66-4d2a-47ad-9b8e-664d2a97ad88",
+            Plan.PlanReferenceType.API_PRODUCT
+        );
+
+        assertThat(plans)
+            .extracting(Plan::getId, Plan::getReferenceId, Plan::getReferenceType)
+            .containsExactly(tuple("api-product-plan-1", "c45b8e66-4d2a-47ad-9b8e-664d2a97ad88", Plan.PlanReferenceType.API_PRODUCT));
+    }
+
+    @Test
+    public void shouldFindByIdAndReferenceIdAndReferenceType() throws Exception {
+        Optional<Plan> plan = planRepository.findByIdAndReferenceIdAndReferenceType(
+            "api-product-plan-1",
+            "c45b8e66-4d2a-47ad-9b8e-664d2a97ad88",
+            Plan.PlanReferenceType.API_PRODUCT
+        );
+
+        assertThat(plan)
+            .isPresent()
+            .get()
+            .extracting(Plan::getId, Plan::getReferenceId, Plan::getReferenceType)
+            .containsExactly("api-product-plan-1", "c45b8e66-4d2a-47ad-9b8e-664d2a97ad88", Plan.PlanReferenceType.API_PRODUCT);
+    }
+
+    @Test
+    public void shouldNotFindByIdAndReferenceIdAndReferenceTypeDoesNotMatch() throws Exception {
+        Optional<Plan> plan = planRepository.findByIdAndReferenceIdAndReferenceType(
+            "api-product-plan-1",
+            "another-api-product",
+            Plan.PlanReferenceType.API_PRODUCT
+        );
+
+        assertThat(plan).isEmpty();
     }
 }

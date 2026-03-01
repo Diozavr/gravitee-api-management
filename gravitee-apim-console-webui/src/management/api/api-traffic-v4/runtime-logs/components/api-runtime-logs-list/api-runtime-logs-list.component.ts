@@ -14,46 +14,137 @@
  * limitations under the License.
  */
 
-import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { PageEvent } from '@angular/material/paginator';
+import { Component, computed, inject, input, output, signal, effect } from '@angular/core';
+import { GioAvatarModule } from '@gravitee/ui-particles-angular';
+import { MatIcon } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
+import { MatTableModule } from '@angular/material/table';
+import { MatSort } from '@angular/material/sort';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { RouterLink } from '@angular/router';
+import { DatePipe } from '@angular/common';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatMenuModule } from '@angular/material/menu';
+import { FormsModule } from '@angular/forms';
 
-import { ConnectionLog, Pagination } from '../../../../../../entities/management-api-v2';
+import { GioTableWrapperModule } from '../../../../../../shared/components/gio-table-wrapper/gio-table-wrapper.module';
+import { ApiType, ConnectionLog, Pagination } from '../../../../../../entities/management-api-v2';
+import {
+  GioTableWrapperFilters,
+  GioTableWrapperPagination,
+} from '../../../../../../shared/components/gio-table-wrapper/gio-table-wrapper.component';
+import { GioTooltipOnEllipsisModule } from '../../../../../../shared/components/gio-tooltip-on-ellipsis/gio-tooltip-on-ellipsis.module';
+import { ApiUtils } from '../../../../../../util/api.util';
+import { Constants } from '../../../../../../entities/Constants';
 
 @Component({
   selector: 'api-runtime-logs-list',
   templateUrl: './api-runtime-logs-list.component.html',
   styleUrls: ['./api-runtime-logs-list.component.scss'],
-  standalone: false,
+  standalone: true,
+  imports: [
+    GioAvatarModule,
+    GioTableWrapperModule,
+    MatIcon,
+    MatTableModule,
+    MatSort,
+    MatTooltipModule,
+    RouterLink,
+    MatButtonModule,
+    DatePipe,
+    GioTooltipOnEllipsisModule,
+    MatCheckboxModule,
+    MatMenuModule,
+    FormsModule,
+  ],
 })
 export class ApiRuntimeLogsListComponent {
-  @Input()
-  logEnabled: boolean;
+  constants = inject(Constants);
+  logs = input.required<ConnectionLog[]>();
+  pagination = input.required<Pagination>();
+  apiType = input.required<ApiType>();
+  readonly gioTableWrapperFilters = computed(() => {
+    const pagination = this.pagination();
+    return {
+      searchTerm: '',
+      pagination: {
+        index: pagination.page ?? 1,
+        size: pagination.perPage ?? 10,
+      },
+    };
+  });
+  columnsAvailable = computed(() => {
+    const type = this.apiType();
+    return [
+      { name: 'timestamp', label: 'Timestamp' },
+      { name: 'method', label: 'Method' },
+      { name: 'status', label: 'Status' },
+      ...(type === 'MCP_PROXY'
+        ? [
+            { name: 'mcpMethod', label: 'MCP Method' },
+            { name: 'mcpError', label: 'MCP Error' },
+          ]
+        : []),
+      { name: 'URI', label: 'URI' },
+      { name: 'application', label: 'Application' },
+      { name: 'plan', label: 'Plan' },
+      { name: 'responseTime', label: 'Response time' },
+      ...(type === 'MESSAGE' ? [] : [{ name: 'endpoint', label: 'Endpoint reached' }]),
+      { name: 'issues', label: 'Issues' },
+      { name: 'actions', label: 'Actions' },
+    ];
+  });
+  displayedColumns = signal<string[]>([]);
+  displayedColumnsOption: Record<string, boolean> = {};
 
-  @Input()
-  isMessageApi: boolean;
-
-  @Input()
-  logs: ConnectionLog[];
-
-  @Output()
-  paginationUpdated: EventEmitter<PageEvent> = new EventEmitter<PageEvent>();
-  @Output()
-  navigateToSettings = new EventEmitter<void>();
-
-  private _pagination?: Pagination;
-
+  paginationUpdated = output<GioTableWrapperPagination>();
   pageSizeOptions: number[] = [10, 25, 50, 100];
 
-  @Input()
-  get pagination(): Pagination {
-    return this._pagination;
+  constructor() {
+    effect(() => {
+      if (localStorage.getItem(`${this.constants.org.currentEnv.id}-${this.apiType}-logs-list-visible-columns`)) {
+        const storedColumns: Record<string, boolean> = JSON.parse(
+          localStorage.getItem(`${this.constants.org.currentEnv.id}-${this.apiType}-logs-list-visible-columns`),
+        );
+        this.displayedColumnsOption = storedColumns;
+        const displayedColumns = Object.keys(storedColumns).filter(key => storedColumns[key]);
+        this.displayedColumns.set(displayedColumns);
+      } else {
+        this.displayedColumns.set(this.columnsAvailable().map(c => c.name));
+        this.displayedColumnsOption = this.displayedColumns().reduce(
+          (acc, curr) => {
+            acc[curr] = true;
+            return acc;
+          },
+          {} as Record<string, boolean>,
+        );
+      }
+    });
   }
 
-  set pagination(value: Pagination) {
-    this._pagination = value;
-
-    if (this._pagination.totalCount == null) {
-      this._pagination = { ...this._pagination, totalCount: 0 };
+  onFiltersChanged(event: GioTableWrapperFilters) {
+    const eventPagination = event.pagination;
+    const currentPagination = this.pagination();
+    if (
+      (currentPagination.perPage >= 0 && currentPagination.perPage !== eventPagination.size) ||
+      (currentPagination.page >= 0 && currentPagination.page !== eventPagination.index)
+    ) {
+      this.paginationUpdated.emit({ index: eventPagination.index, size: eventPagination.size });
     }
+  }
+
+  getMcpErrorLabel(error?: string): string {
+    return ApiUtils.getMcpErrorLabel(error);
+  }
+
+  protected updateVisibleColumns() {
+    const checkedColumns = Object.entries(this.displayedColumnsOption)
+      .filter(([_k, v]) => v)
+      .map(([k]) => k);
+    this.displayedColumns.set(checkedColumns);
+    localStorage.setItem(
+      `${this.constants.org.currentEnv.id}-${this.apiType}-logs-list-visible-columns`,
+      JSON.stringify(this.displayedColumnsOption),
+    );
   }
 }

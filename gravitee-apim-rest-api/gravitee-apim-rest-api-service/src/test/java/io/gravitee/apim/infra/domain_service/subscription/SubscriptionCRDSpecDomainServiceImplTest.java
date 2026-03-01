@@ -15,7 +15,6 @@
  */
 package io.gravitee.apim.infra.domain_service.subscription;
 
-import static fixtures.core.model.MembershipFixtures.anApiPrimaryOwnerUserMembership;
 import static fixtures.core.model.MembershipFixtures.anApplicationPrimaryOwnerUserMembership;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -25,19 +24,7 @@ import static org.mockito.Mockito.when;
 
 import fixtures.ApplicationModelFixtures;
 import fixtures.core.model.AuditInfoFixtures;
-import inmemory.ApiCrudServiceInMemory;
-import inmemory.ApiKeyCrudServiceInMemory;
-import inmemory.ApiKeyQueryServiceInMemory;
-import inmemory.ApplicationCrudServiceInMemory;
-import inmemory.AuditCrudServiceInMemory;
-import inmemory.GroupQueryServiceInMemory;
-import inmemory.IntegrationAgentInMemory;
-import inmemory.MembershipQueryServiceInMemory;
-import inmemory.PlanCrudServiceInMemory;
-import inmemory.RoleQueryServiceInMemory;
-import inmemory.SubscriptionCrudServiceInMemory;
-import inmemory.TriggerNotificationDomainServiceInMemory;
-import inmemory.UserCrudServiceInMemory;
+import inmemory.*;
 import io.gravitee.apim.core.api.model.Api;
 import io.gravitee.apim.core.api_key.domain_service.GenerateApiKeyDomainService;
 import io.gravitee.apim.core.api_key.domain_service.RevokeApiKeyDomainService;
@@ -50,6 +37,7 @@ import io.gravitee.apim.core.subscription.domain_service.CloseSubscriptionDomain
 import io.gravitee.apim.core.subscription.domain_service.RejectSubscriptionDomainService;
 import io.gravitee.apim.core.subscription.domain_service.SubscriptionCRDSpecDomainService;
 import io.gravitee.apim.core.subscription.model.SubscriptionEntity;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.apim.core.subscription.model.crd.SubscriptionCRDSpec;
 import io.gravitee.apim.core.user.model.BaseUserEntity;
 import io.gravitee.apim.infra.adapter.SubscriptionAdapterImpl;
@@ -94,10 +82,10 @@ class SubscriptionCRDSpecDomainServiceImplTest {
     private static final String PLAN_ID = "plan-id";
     private static final String SUBSCRIPTION_ID = "subscription-id";
 
-    private static final SubscriptionCRDSpec SPEC = SubscriptionCRDSpec
-        .builder()
+    private static final SubscriptionCRDSpec SPEC = SubscriptionCRDSpec.builder()
         .id(SUBSCRIPTION_ID)
-        .apiId(API_ID)
+        .referenceId(API_ID)
+        .referenceType(SubscriptionReferenceType.API)
         .applicationId(APPLICATION_ID)
         .planId(PLAN_ID)
         .build();
@@ -122,6 +110,8 @@ class SubscriptionCRDSpecDomainServiceImplTest {
         roleQueryService,
         userCrudService
     );
+    private final MetadataCrudServiceInMemory metadataCrudService = new MetadataCrudServiceInMemory();
+    private final IntegrationCrudServiceInMemory integrationCrudService = new IntegrationCrudServiceInMemory();
 
     private final SubscriptionService subscriptionService = Mockito.mock(SubscriptionService.class);
 
@@ -135,27 +125,26 @@ class SubscriptionCRDSpecDomainServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        when(subscriptionService.create(eq(EXECUTION_CONTEXT), any(), isNull(), eq(SUBSCRIPTION_ID)))
-            .thenReturn(subscriptionAdapter.map(subscriptionAdapter.fromSpec(SPEC)));
+        when(subscriptionService.create(eq(EXECUTION_CONTEXT), any(), isNull(), eq(SUBSCRIPTION_ID))).thenReturn(
+            subscriptionAdapter.map(subscriptionAdapter.fromSpec(SPEC))
+        );
 
         subscriptionCrudService.initWith(
             List.of(subscriptionAdapter.fromSpec(SPEC).toBuilder().status(SubscriptionEntity.Status.PENDING).subscribedBy(USER_ID).build())
         );
 
         apiCrudService.initWith(List.of(Api.builder().id(API_ID).build()));
-        cut =
-            new SubscriptionCRDSpecDomainServiceImpl(
-                subscriptionService,
-                subscriptionAdapter,
-                acceptSubscriptionDomainService(),
-                closeSubscriptionDomainService()
-            );
+        cut = new SubscriptionCRDSpecDomainServiceImpl(
+            subscriptionService,
+            subscriptionAdapter,
+            acceptSubscriptionDomainService(),
+            closeSubscriptionDomainService()
+        );
 
         membershipQueryService.initWith(List.of(anApplicationPrimaryOwnerUserMembership(APPLICATION_ID, USER_ID, ORGANIZATION_ID)));
         applicationCrudService.initWith(
             List.of(
-                ApplicationModelFixtures
-                    .anApplicationEntity()
+                ApplicationModelFixtures.anApplicationEntity()
                     .toBuilder()
                     .id(APPLICATION_ID)
                     .primaryOwner(PrimaryOwnerEntity.builder().id(USER_ID).displayName("Jane").build())
@@ -226,8 +215,7 @@ class SubscriptionCRDSpecDomainServiceImplTest {
 
     private void givenExistingJWTPlan() {
         givenExistingPlan(
-            Plan
-                .builder()
+            Plan.builder()
                 .id(PLAN_ID)
                 .apiId(API_ID)
                 .definitionVersion(DefinitionVersion.V2)
@@ -288,7 +276,9 @@ class SubscriptionCRDSpecDomainServiceImplTest {
             integrationAgent,
             notificationService,
             userCrudService,
-            applicationPrimaryOwnerDomainService
+            applicationPrimaryOwnerDomainService,
+            metadataCrudService,
+            integrationCrudService
         );
     }
 

@@ -230,7 +230,11 @@ describe('ApiSubscriptionListComponent', () => {
           actions: '',
         },
       ]);
-      expect(rowCells).toEqual([['There is no subscription (yet).']]);
+      expect(rowCells).toHaveLength(0);
+
+      const table = await loader.getHarness(MatTableHarness.with({ selector: '#subscriptionsTable' }));
+      const tableElement = await table.host();
+      expect(await tableElement.text()).toContain('There is no subscription (yet).');
     }));
 
     it('should display a table with one row and show view details button when user can create', fakeAsync(async () => {
@@ -267,7 +271,7 @@ describe('ApiSubscriptionListComponent', () => {
       expect(
         await loader
           .getHarness(MatButtonHarness.with({ selector: '[aria-label="View the subscription details"]' }))
-          .then((btn) => btn.isDisabled()),
+          .then(btn => btn.isDisabled()),
       ).toEqual(false);
     }));
 
@@ -307,9 +311,7 @@ describe('ApiSubscriptionListComponent', () => {
         ],
       ]);
       expect(
-        await loader
-          .getHarness(MatButtonHarness.with({ selector: '[aria-label="Edit the subscription"]' }))
-          .then((btn) => btn.isDisabled()),
+        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Edit the subscription"]' })).then(btn => btn.isDisabled()),
       ).toEqual(false);
     }));
 
@@ -347,7 +349,7 @@ describe('ApiSubscriptionListComponent', () => {
       expect(
         await loader
           .getHarness(MatButtonHarness.with({ selector: '[aria-label="View the subscription details"]' }))
-          .then((btn) => btn.isDisabled()),
+          .then(btn => btn.isDisabled()),
       ).toEqual(false);
     }));
 
@@ -388,7 +390,11 @@ describe('ApiSubscriptionListComponent', () => {
       expectApiSubscriptionsGetRequest([], ['REJECTED']);
 
       const { rowCells } = await computeSubscriptionsTableCells();
-      expect(rowCells).toEqual([['There is no subscription (yet).']]);
+      expect(rowCells).toHaveLength(0);
+
+      const table = await loader.getHarness(MatTableHarness.with({ selector: '#subscriptionsTable' }));
+      const tableElement = await table.host();
+      expect(await tableElement.text()).toContain('There is no subscription (yet).');
     }));
   });
 
@@ -786,10 +792,10 @@ describe('ApiSubscriptionListComponent', () => {
     expectApiPlansGetRequest(plans);
 
     if (params?.application) {
-      params?.application.split(',').forEach((appId) =>
+      params?.application.split(',').forEach(appId =>
         expectGetApplication(
           appId,
-          applications.find((app) => app.id === appId),
+          applications.find(app => app.id === appId),
         ),
       );
     }
@@ -815,10 +821,10 @@ describe('ApiSubscriptionListComponent', () => {
     const table = await loader.getHarness(MatTableHarness.with({ selector: '#subscriptionsTable' }));
 
     const headerRows = await table.getHeaderRows();
-    const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+    const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
     const rows = await table.getRows();
-    const rowCells = await parallel(() => rows.map((row) => row.getCellTextByIndex()));
+    const rowCells = await parallel(() => rows.map(row => row.getCellTextByIndex()));
     return { headerCells, rowCells };
   }
 
@@ -933,7 +939,7 @@ describe('ApiSubscriptionListComponent', () => {
   function expectGetApplication(applicationId: string, application: Application) {
     const testRequest = httpTestingController
       .match(`${CONSTANTS_TESTING.env.baseURL}/applications/${applicationId}`)
-      .find((request) => !request.cancelled);
+      .find(request => !request.cancelled);
     if (testRequest) {
       testRequest.flush(application);
       fixture.detectChanges();

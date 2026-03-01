@@ -66,8 +66,6 @@ class ApiResource_RollbackTest extends ApiResourceTest {
 
     @Test
     void should_return_400_if_not_eventId() {
-        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API)).thenThrow(new ApiNotFoundException(API));
-
         final Response response = rootTarget().request().post(Entity.json(aRollbackPayload(null)));
         assertThat(response.getStatus()).isEqualTo(BAD_REQUEST_400);
 
@@ -85,8 +83,7 @@ class ApiResource_RollbackTest extends ApiResourceTest {
                 eq(API),
                 eq(RolePermissionAction.UPDATE)
             )
-        )
-            .thenReturn(false);
+        ).thenReturn(false);
 
         final Response response = rootTarget().request().post(Entity.json(aRollbackPayload(EVENT_ID)));
         assertThat(response.getStatus()).isEqualTo(FORBIDDEN_403);

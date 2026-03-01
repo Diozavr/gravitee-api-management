@@ -38,7 +38,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Getter
 @EqualsAndHashCode(of = { "id" }, callSuper = false)
 @Document(collection = "#{@environment.getProperty('management.mongodb.prefix')}flows")
-public class FlowMongo extends Auditable {
+public class FlowMongo extends DeprecatedAuditable {
 
     /**
      * Flow technical id
@@ -92,9 +92,9 @@ public class FlowMongo extends Auditable {
      */
     private List<FlowStep> interact = new ArrayList<>();
     /**
-     * Flow connect steps
+     * Flow entrypoint connect steps (Native APIs)
      */
-    private List<FlowStep> connect = new ArrayList<>();
+    private List<FlowStep> entrypointConnect = new ArrayList<>();
     /**
      * Flow state
      */
@@ -164,8 +164,8 @@ public class FlowMongo extends Auditable {
         return this;
     }
 
-    public FlowMongo setConnect(final List<FlowStep> connect) {
-        this.connect = connect;
+    public FlowMongo setEntrypointConnect(final List<FlowStep> entrypointConnect) {
+        this.entrypointConnect = entrypointConnect;
         return this;
     }
 

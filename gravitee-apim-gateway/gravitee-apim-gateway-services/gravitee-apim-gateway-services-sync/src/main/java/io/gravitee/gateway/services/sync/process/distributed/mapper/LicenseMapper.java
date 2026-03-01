@@ -20,19 +20,18 @@ import io.gravitee.repository.distributedsync.model.DistributedEvent;
 import io.gravitee.repository.distributedsync.model.DistributedEventType;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Date;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class LicenseMapper {
 
     public Maybe<LicenseDeployable> to(final DistributedEvent event) {
         return Maybe.just(
-            LicenseDeployable
-                .builder()
+            LicenseDeployable.builder()
                 .id(event.getId())
                 .license(event.getPayload())
                 .syncAction(SyncActionMapper.to(event.getSyncAction()))
@@ -42,8 +41,7 @@ public class LicenseMapper {
 
     public Maybe<DistributedEvent> to(final LicenseDeployable deployable) {
         return Maybe.just(
-            DistributedEvent
-                .builder()
+            DistributedEvent.builder()
                 .payload(deployable.license())
                 .id(deployable.id())
                 .type(DistributedEventType.LICENSE)

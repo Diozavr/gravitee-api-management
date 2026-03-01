@@ -1,10 +1,16 @@
 {
+  "extends": "../tsconfig.base.json",
   "compileOnSave": false,
   "compilerOptions": {
+    "baseUrl": "./",
     "outDir": "./dist/out-tsc",
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "noImplicitOverride": true,
+    "paths": {
+      "@gravitee/gravitee-markdown": ["../gravitee-apim-webui-libs/gravitee-markdown/src/public-api.ts"],
+      "@gravitee/gravitee-dashboard": ["../gravitee-apim-webui-libs/gravitee-dashboard/src/public-api.ts"]
+    },
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
@@ -13,12 +19,12 @@
     "sourceMap": true,
     "declaration": false,
     "experimentalDecorators": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "importHelpers": true,
-    "target": "ES2022",
+    "target": "ES2023",
     "module": "ES2022",
     "useDefineForClassFields": false,
-    "lib": ["ES2022", "dom"],
+    "lib": ["ES2023", "dom"],
     "types": ["@angular/localize", "jest"]
   },
   "angularCompilerOptions": {
@@ -27,5 +33,5 @@
     "strictInputAccessModifiers": true,
     "strictTemplates": true
   },
-  "exclude": ["src/**/*.spec.ts"]
+  "include": ["src/**/*"]
 }

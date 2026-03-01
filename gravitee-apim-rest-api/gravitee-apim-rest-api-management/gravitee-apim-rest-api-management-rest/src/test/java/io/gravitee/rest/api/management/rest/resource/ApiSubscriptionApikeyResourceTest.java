@@ -33,6 +33,7 @@ import inmemory.ApiKeyCrudServiceInMemory;
 import inmemory.ApplicationCrudServiceInMemory;
 import inmemory.InMemoryAlternative;
 import inmemory.SubscriptionCrudServiceInMemory;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.common.http.HttpStatusCode;
 import io.gravitee.rest.api.model.ApiKeyEntity;
 import io.gravitee.rest.api.model.ApiKeyMode;
@@ -85,9 +86,9 @@ public class ApiSubscriptionApikeyResourceTest extends AbstractResourceTest {
 
     @After
     public void tearDown() {
-        Stream
-            .of(apiKeyCrudServiceInMemory, applicationCrudServiceInMemory, subscriptionCrudServiceInMemory)
-            .forEach(InMemoryAlternative::reset);
+        Stream.of(apiKeyCrudServiceInMemory, applicationCrudServiceInMemory, subscriptionCrudServiceInMemory).forEach(
+            InMemoryAlternative::reset
+        );
 
         reset(apiKeyCrudServiceInMemory);
         GraviteeContext.cleanContext();
@@ -96,15 +97,22 @@ public class ApiSubscriptionApikeyResourceTest extends AbstractResourceTest {
     @Test
     public void delete_should_revoke_and_return_http_204() {
         subscriptionCrudServiceInMemory.initWith(
-            List.of(SubscriptionFixtures.aSubscription().toBuilder().id(SUBSCRIPTION_ID).apiId(API_ID).build())
+            List.of(
+                SubscriptionFixtures.aSubscription()
+                    .toBuilder()
+                    .id(SUBSCRIPTION_ID)
+                    .apiId(API_ID)
+                    .referenceId(API_ID)
+                    .referenceType(SubscriptionReferenceType.API)
+                    .build()
+            )
         );
         applicationCrudServiceInMemory.initWith(
             List.of(BaseApplicationEntity.builder().apiKeyMode(ApiKeyMode.EXCLUSIVE).id(APPLICATION_ID).build())
         );
         apiKeyCrudServiceInMemory.initWith(
             List.of(
-                ApiKeyFixtures
-                    .anApiKey()
+                ApiKeyFixtures.anApiKey()
                     .toBuilder()
                     .id(APIKEY_ID)
                     .applicationId(APPLICATION_ID)
@@ -115,8 +123,7 @@ public class ApiSubscriptionApikeyResourceTest extends AbstractResourceTest {
 
         Response response = envTarget().request().delete();
 
-        Assertions
-            .assertThat(apiKeyCrudServiceInMemory.storage())
+        Assertions.assertThat(apiKeyCrudServiceInMemory.storage())
             .extracting(
                 io.gravitee.apim.core.api_key.model.ApiKeyEntity::getId,
                 io.gravitee.apim.core.api_key.model.ApiKeyEntity::isRevoked
@@ -128,15 +135,22 @@ public class ApiSubscriptionApikeyResourceTest extends AbstractResourceTest {
     @Test
     public void delete_should_return_http_404_when_apikey_on_another_subscription() {
         subscriptionCrudServiceInMemory.initWith(
-            List.of(SubscriptionFixtures.aSubscription().toBuilder().id(SUBSCRIPTION_ID).apiId(API_ID).build())
+            List.of(
+                SubscriptionFixtures.aSubscription()
+                    .toBuilder()
+                    .id(SUBSCRIPTION_ID)
+                    .apiId(API_ID)
+                    .referenceId(API_ID)
+                    .referenceType(SubscriptionReferenceType.API)
+                    .build()
+            )
         );
         applicationCrudServiceInMemory.initWith(
             List.of(BaseApplicationEntity.builder().apiKeyMode(ApiKeyMode.EXCLUSIVE).id(APPLICATION_ID).build())
         );
         apiKeyCrudServiceInMemory.initWith(
             List.of(
-                ApiKeyFixtures
-                    .anApiKey()
+                ApiKeyFixtures.anApiKey()
                     .toBuilder()
                     .id(APIKEY_ID)
                     .applicationId(APPLICATION_ID)
@@ -147,8 +161,7 @@ public class ApiSubscriptionApikeyResourceTest extends AbstractResourceTest {
         Response response = envTarget().request().delete();
 
         assertThat(response.getStatus()).isEqualTo(HttpStatusCode.NOT_FOUND_404);
-        Assertions
-            .assertThat(apiKeyCrudServiceInMemory.storage())
+        Assertions.assertThat(apiKeyCrudServiceInMemory.storage())
             .extracting(
                 io.gravitee.apim.core.api_key.model.ApiKeyEntity::getId,
                 io.gravitee.apim.core.api_key.model.ApiKeyEntity::isRevoked
@@ -159,15 +172,22 @@ public class ApiSubscriptionApikeyResourceTest extends AbstractResourceTest {
     @Test
     public void delete_should_return_http_500_on_exception() {
         subscriptionCrudServiceInMemory.initWith(
-            List.of(SubscriptionFixtures.aSubscription().toBuilder().id(SUBSCRIPTION_ID).apiId(API_ID).build())
+            List.of(
+                SubscriptionFixtures.aSubscription()
+                    .toBuilder()
+                    .id(SUBSCRIPTION_ID)
+                    .apiId(API_ID)
+                    .referenceId(API_ID)
+                    .referenceType(SubscriptionReferenceType.API)
+                    .build()
+            )
         );
         applicationCrudServiceInMemory.initWith(
             List.of(BaseApplicationEntity.builder().apiKeyMode(ApiKeyMode.EXCLUSIVE).id(APPLICATION_ID).build())
         );
         apiKeyCrudServiceInMemory.initWith(
             List.of(
-                ApiKeyFixtures
-                    .anApiKey()
+                ApiKeyFixtures.anApiKey()
                     .toBuilder()
                     .id(APIKEY_ID)
                     .applicationId(APPLICATION_ID)

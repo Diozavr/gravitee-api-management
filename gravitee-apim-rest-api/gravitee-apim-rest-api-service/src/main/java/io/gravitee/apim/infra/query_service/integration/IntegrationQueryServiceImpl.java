@@ -30,11 +30,11 @@ import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import io.gravitee.rest.api.service.impl.AbstractService;
 import java.util.Collection;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
-@Slf4j
+@CustomLog
 @Service
 public class IntegrationQueryServiceImpl extends AbstractService implements IntegrationQueryService {
 
@@ -74,13 +74,12 @@ public class IntegrationQueryServiceImpl extends AbstractService implements Inte
                     .stream()
                     .map(MembershipEntity::getReferenceId)
                     .collect(Collectors.toSet());
-                integrations =
-                    integrationRepository.findAllByEnvironmentAndGroups(
-                        environmentId,
-                        integrationAccessibleDirectlyByUser,
-                        groups,
-                        convert(pageable)
-                    );
+                integrations = integrationRepository.findAllByEnvironmentAndGroups(
+                    environmentId,
+                    integrationAccessibleDirectlyByUser,
+                    groups,
+                    convert(pageable)
+                );
             }
             return integrations.map(IntegrationAdapter.INSTANCE::toEntity);
         } catch (TechnicalException e) {

@@ -121,8 +121,8 @@ describe('ApiPlanListComponent', () => {
       it('should display an empty table', fakeAsync(async () => {
         await initComponent([]);
 
-        const { headerCells, rowCells } = await computePlansTableCells();
-        expect(headerCells).toEqual([
+        const headerAndRowCells = await computePlansTableCells();
+        expect(headerAndRowCells.headerCells).toEqual([
           {
             'drag-icon': '',
             name: 'Name',
@@ -132,7 +132,10 @@ describe('ApiPlanListComponent', () => {
             actions: '',
           },
         ]);
-        expect(rowCells).toEqual([['There is no plan (yet).']]);
+
+        const table = await loader.getHarness(MatTableHarness);
+        const tableHost = await table.host();
+        expect(await tableHost.text()).toContain('There is no plan (yet).');
       }));
 
       it('should display a table with one row', fakeAsync(async () => {
@@ -150,49 +153,49 @@ describe('ApiPlanListComponent', () => {
             actions: '',
           },
         ]);
-        expect(rowCells).toEqual([['', 'Default plan', 'API_KEY', 'PUBLISHED', '🙅, 🔑', '']]);
+        expect(rowCells).toEqual([['', 'Default plan', 'API Key', 'PUBLISHED', '🙅, 🔑', '']]);
       }));
 
       it('should not display PUSH plan option for V2 APIs', fakeAsync(async () => {
         await initComponent([]);
-        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then((btn) => btn.click());
+        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then(btn => btn.click());
 
         const planSecurityDropdown = await loader.getHarness(MatMenuHarness);
         const items = await planSecurityDropdown.getItems();
-        const availablePlans = await Promise.all(items.map((item) => item.getText()));
+        const availablePlans = await Promise.all(items.map(item => item.getText()));
         expect(availablePlans).not.toContain('Push plan');
       }));
 
       it('should display all plan options for V4 APIs with only HTTP and SUBSCRIPTION listeners', fakeAsync(async () => {
         const v4Api = fakeApiV4({ id: API_ID, listeners: [{ type: 'HTTP' }, { type: 'SUBSCRIPTION' }] });
         await initComponent([], v4Api);
-        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then((btn) => btn.click());
+        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then(btn => btn.click());
 
         const planSecurityDropdown = await loader.getHarness(MatMenuHarness);
         const items = await planSecurityDropdown.getItems();
-        const availablePlans = await Promise.all(items.map((item) => item.getText()));
+        const availablePlans = await Promise.all(items.map(item => item.getText()));
         expect(availablePlans).toEqual(['OAuth2', 'JWT', 'API Key', 'Keyless (public)', 'Push plan']);
       }));
 
       it('should not display PUSH plan option for V4 APIs with only HTTP listeners', fakeAsync(async () => {
         const v4Api = fakeApiV4({ id: API_ID, listeners: [{ type: 'HTTP' }, { type: 'TCP' }] });
         await initComponent([], v4Api);
-        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then((btn) => btn.click());
+        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then(btn => btn.click());
 
         const planSecurityDropdown = await loader.getHarness(MatMenuHarness);
         const items = await planSecurityDropdown.getItems();
-        const availablePlans = await Promise.all(items.map((item) => item.getText()));
+        const availablePlans = await Promise.all(items.map(item => item.getText()));
         expect(availablePlans).toEqual(['OAuth2', 'JWT', 'API Key', 'Keyless (public)']);
       }));
 
       it('should display only PUSH plan option for V4 APIs with only SUBSCRIPTION listeners', fakeAsync(async () => {
         const v4Api = fakeApiV4({ id: API_ID, listeners: [{ type: 'SUBSCRIPTION' }] });
         await initComponent([], v4Api);
-        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then((btn) => btn.click());
+        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then(btn => btn.click());
 
         const planSecurityDropdown = await loader.getHarness(MatMenuHarness);
         const items = await planSecurityDropdown.getItems();
-        const availablePlans = await Promise.all(items.map((item) => item.getText()));
+        const availablePlans = await Promise.all(items.map(item => item.getText()));
         expect(availablePlans).toEqual(['Push plan']);
       }));
 
@@ -200,24 +203,25 @@ describe('ApiPlanListComponent', () => {
         const goldPlan = fakePlanV2({ name: 'gold plan ⭐️' });
         await initComponent([goldPlan]);
 
-        await loader.getHarness(MatButtonToggleHarness.with({ text: /CLOSED/ })).then((btn) => btn.toggle());
+        await loader.getHarness(MatButtonToggleHarness.with({ text: /CLOSED/ })).then(btn => btn.toggle());
 
         const closedPlan = fakePlanV2({ name: 'closed plan 🚪', status: 'CLOSED' });
         expectApiPlansListRequest([closedPlan], 'CLOSED');
 
         const { rowCells } = await computePlansTableCells();
-        expect(rowCells).toEqual([['', 'closed plan 🚪', 'API_KEY', 'CLOSED', 'tag1', '']]);
+        expect(rowCells).toEqual([['', 'closed plan 🚪', 'API Key', 'CLOSED', 'tag1', '']]);
       }));
 
       it('should search and not find any plan', fakeAsync(async () => {
         await initComponent([fakePlanV2()]);
 
-        await loader.getHarness(MatButtonToggleHarness.with({ text: /STAGING/ })).then((btn) => btn.toggle());
+        await loader.getHarness(MatButtonToggleHarness.with({ text: /STAGING/ })).then(btn => btn.toggle());
 
         expectApiPlansListRequest([], 'STAGING');
 
-        const { rowCells } = await computePlansTableCells();
-        expect(rowCells).toEqual([['There is no plan (yet).']]);
+        const table = await loader.getHarness(MatTableHarness);
+        const tableHost = await table.host();
+        expect(await tableHost.text()).toContain('There is no plan (yet).');
       }));
     });
 
@@ -268,7 +272,7 @@ describe('ApiPlanListComponent', () => {
           const plan = fakePlanV2();
           await initComponent([plan]);
 
-          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Edit the plan"]' })).then((btn) => btn.click());
+          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Edit the plan"]' })).then(btn => btn.click());
 
           expect(routerNavigateSpy).toBeCalledWith(['../plans'], expect.anything());
         });
@@ -278,7 +282,7 @@ describe('ApiPlanListComponent', () => {
         const plan = fakePlanV2();
         await initComponent([plan]);
 
-        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Design the plan"]' })).then((btn) => btn.click());
+        await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Design the plan"]' })).then(btn => btn.click());
 
         expect(routerNavigateSpy).toBeCalledWith(['../v2/policy-studio'], {
           queryParams: { flows: `${plan.id}_0` },
@@ -291,13 +295,13 @@ describe('ApiPlanListComponent', () => {
           const plan = fakePlanV2({ apiId: API_ID, name: 'publish me ☁️️', status: 'STAGING' });
           await initComponent([plan]);
 
-          await loader.getHarness(MatButtonToggleHarness.with({ text: /STAGING/ })).then((btn) => btn.toggle());
+          await loader.getHarness(MatButtonToggleHarness.with({ text: /STAGING/ })).then(btn => btn.toggle());
           expectApiPlansListRequest([plan], 'STAGING');
 
           const table = await computePlansTableCells();
-          expect(table.rowCells).toEqual([['', 'publish me ☁️️', 'API_KEY', 'STAGING', 'tag1', '']]);
+          expect(table.rowCells).toEqual([['', 'publish me ☁️️', 'API Key', 'STAGING', 'tag1', '']]);
 
-          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Publish the plan"]' })).then((btn) => btn.click());
+          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Publish the plan"]' })).then(btn => btn.click());
 
           const confirmDialog = await rootLoader.getHarness(MatDialogHarness.with({ selector: '#publishPlanDialog' }));
           const confirmDialogSwitchButton = await confirmDialog.getHarness(MatButtonHarness.with({ text: 'Publish' }));
@@ -313,13 +317,13 @@ describe('ApiPlanListComponent', () => {
           const plan = fakePlanV4({ apiId: API_ID, name: 'publish me ☁️️', status: 'STAGING' });
           await initComponent([plan]);
 
-          await loader.getHarness(MatButtonToggleHarness.with({ text: /STAGING/ })).then((btn) => btn.toggle());
+          await loader.getHarness(MatButtonToggleHarness.with({ text: /STAGING/ })).then(btn => btn.toggle());
           expectApiPlansListRequest([plan], 'STAGING');
 
           const table = await computePlansTableCells();
-          expect(table.rowCells).toEqual([['', 'publish me ☁️️', 'API_KEY', 'STAGING', 'tag1', '']]);
+          expect(table.rowCells).toEqual([['', 'publish me ☁️️', 'API Key', 'STAGING', 'tag1', '']]);
 
-          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Publish the plan"]' })).then((btn) => btn.click());
+          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Publish the plan"]' })).then(btn => btn.click());
 
           const confirmDialog = await rootLoader.getHarness(MatDialogHarness.with({ selector: '#publishPlanDialog' }));
           const confirmDialogSwitchButton = await confirmDialog.getHarness(MatButtonHarness.with({ text: 'Publish' }));
@@ -338,9 +342,9 @@ describe('ApiPlanListComponent', () => {
           await initComponent([plan]);
 
           const table = await computePlansTableCells();
-          expect(table.rowCells).toEqual([['', 'deprecate me 😥️', 'API_KEY', 'PUBLISHED', 'tag1', '']]);
+          expect(table.rowCells).toEqual([['', 'deprecate me 😥️', 'API Key', 'PUBLISHED', 'tag1', '']]);
 
-          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Deprecate the plan"]' })).then((btn) => btn.click());
+          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Deprecate the plan"]' })).then(btn => btn.click());
 
           const confirmDialog = await rootLoader.getHarness(MatDialogHarness.with({ selector: '#deprecatePlanDialog' }));
           const confirmDialogSwitchButton = await confirmDialog.getHarness(MatButtonHarness.with({ text: 'Deprecate' }));
@@ -357,9 +361,9 @@ describe('ApiPlanListComponent', () => {
           await initComponent([plan]);
 
           const table = await computePlansTableCells();
-          expect(table.rowCells).toEqual([['', 'deprecate me 😥️', 'API_KEY', 'PUBLISHED', 'tag1', '']]);
+          expect(table.rowCells).toEqual([['', 'deprecate me 😥️', 'API Key', 'PUBLISHED', 'tag1', '']]);
 
-          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Deprecate the plan"]' })).then((btn) => btn.click());
+          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Deprecate the plan"]' })).then(btn => btn.click());
 
           const confirmDialog = await rootLoader.getHarness(MatDialogHarness.with({ selector: '#deprecatePlanDialog' }));
           const confirmDialogSwitchButton = await confirmDialog.getHarness(MatButtonHarness.with({ text: 'Deprecate' }));
@@ -379,9 +383,9 @@ describe('ApiPlanListComponent', () => {
             await initComponent([plan]);
 
             const table = await computePlansTableCells();
-            expect(table.rowCells).toEqual([['', 'close me 🚪️', 'API_KEY', 'PUBLISHED', 'tag1', '']]);
+            expect(table.rowCells).toEqual([['', 'close me 🚪️', 'API Key', 'PUBLISHED', 'tag1', '']]);
 
-            await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Close the plan"]' })).then((btn) => btn.click());
+            await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Close the plan"]' })).then(btn => btn.click());
 
             expectGetApiPlanSubscriptionsRequest(plan.id);
 
@@ -400,9 +404,9 @@ describe('ApiPlanListComponent', () => {
             await initComponent([plan]);
 
             const table = await computePlansTableCells();
-            expect(table.rowCells).toEqual([['', 'close me 🚪️', 'API_KEY', 'PUBLISHED', 'tag1', '']]);
+            expect(table.rowCells).toEqual([['', 'close me 🚪️', 'API Key', 'PUBLISHED', 'tag1', '']]);
 
-            await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Close the plan"]' })).then((btn) => btn.click());
+            await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Close the plan"]' })).then(btn => btn.click());
 
             expectGetApiPlanSubscriptionsRequest(plan.id);
 
@@ -474,7 +478,7 @@ describe('ApiPlanListComponent', () => {
       it('should display an empty table', fakeAsync(async () => {
         await initComponent([], asyncApi);
 
-        const { headerCells, rowCells } = await computePlansTableCells();
+        const { headerCells } = await computePlansTableCells();
         expect(headerCells).toEqual([
           {
             'drag-icon': '',
@@ -485,7 +489,10 @@ describe('ApiPlanListComponent', () => {
             actions: '',
           },
         ]);
-        expect(rowCells).toEqual([['There is no plan (yet).']]);
+
+        const table = await loader.getHarness(MatTableHarness);
+        const tableHost = await table.host();
+        expect(await tableHost.text()).toContain('There is no plan (yet).');
       }));
 
       it('should display a table with one row', fakeAsync(async () => {
@@ -503,7 +510,7 @@ describe('ApiPlanListComponent', () => {
             actions: '',
           },
         ]);
-        expect(rowCells).toEqual([['', 'Default plan', 'API_KEY', 'PUBLISHED', '🙅, 🔑', '']]);
+        expect(rowCells).toEqual([['', 'Default plan', 'API Key', 'PUBLISHED', '🙅, 🔑', '']]);
       }));
 
       it.each`
@@ -517,11 +524,11 @@ describe('ApiPlanListComponent', () => {
         'should filter plans according to listener types',
         fakeAsync(async ({ api, expectedPlans }) => {
           await initComponent([], api);
-          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then((btn) => btn.click());
+          await loader.getHarness(MatButtonHarness.with({ selector: '[aria-label="Add new plan"]' })).then(btn => btn.click());
 
           const planSecurityDropdown = await loader.getHarness(MatMenuHarness);
           const items = await planSecurityDropdown.getItems();
-          const availablePlans = await Promise.all(items.map((item) => item.getText()));
+          const availablePlans = await Promise.all(items.map(item => item.getText()));
           expect(availablePlans).toStrictEqual(expectedPlans);
         }),
       );
@@ -547,7 +554,7 @@ describe('ApiPlanListComponent', () => {
           expectApiPlansListRequest([publishedApiKeyPlan, publishedOAuth2Plan], ['PUBLISHED']);
 
           const dialog = await rootLoader.getHarness(MatDialogHarness);
-          expect(await dialog.getText()).toContain('Your published plans with authentication will be closed automatically.');
+          expect(await dialog.getText()).toContain('Are you sure you want to publish the Keyless plan Default plan?');
 
           const confirmDialog = await rootLoader.getHarness(GioConfirmAndValidateDialogHarness);
           expect(await rootLoader.getHarness(MatButtonHarness.with({ text: 'Publish & Close' }))).toBeTruthy();
@@ -626,7 +633,7 @@ describe('ApiPlanListComponent', () => {
           expectApiPlansListRequest([publishedKeylessPlan], ['PUBLISHED']);
 
           const dialog = await rootLoader.getHarness(MatDialogHarness);
-          expect(await dialog.getText()).toContain('Your published Keyless plan will be closed automatically.');
+          expect(await dialog.getText()).toContain('Are you sure you want to publish the authentication plan Default plan?');
 
           const confirmDialog = await rootLoader.getHarness(GioConfirmAndValidateDialogHarness);
           expect(await rootLoader.getHarness(MatButtonHarness.with({ text: 'Publish & Close' }))).toBeTruthy();
@@ -699,7 +706,7 @@ describe('ApiPlanListComponent', () => {
       it('should display an empty table', fakeAsync(async () => {
         await initComponent([], federatedApi);
 
-        const { headerCells, rowCells } = await computePlansTableCells();
+        const { headerCells } = await computePlansTableCells();
         expect(headerCells).toEqual([
           {
             'drag-icon': '',
@@ -710,7 +717,10 @@ describe('ApiPlanListComponent', () => {
             actions: '',
           },
         ]);
-        expect(rowCells).toEqual([['There is no plan (yet).']]);
+
+        const table = await loader.getHarness(MatTableHarness);
+        const tableHost = await table.host();
+        expect(await tableHost.text()).toContain('There is no plan (yet).');
       }));
 
       it('should display a table with plans', fakeAsync(async () => {
@@ -728,7 +738,7 @@ describe('ApiPlanListComponent', () => {
             actions: '',
           },
         ]);
-        expect(rowCells).toEqual([['', 'Default plan', 'API_KEY', 'PUBLISHED', '', '']]);
+        expect(rowCells).toEqual([['', 'Default plan', 'API Key', 'PUBLISHED', '', '']]);
       }));
 
       it('should hide create plan button', fakeAsync(async () => {
@@ -764,10 +774,10 @@ describe('ApiPlanListComponent', () => {
     const table = await loader.getHarness(MatTableHarness.with({ selector: '#plansTable' }));
 
     const headerRows = await table.getHeaderRows();
-    const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+    const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
     const rows = await table.getRows();
-    const rowCells = await parallel(() => rows.map((row) => row.getCellTextByIndex()));
+    const rowCells = await parallel(() => rows.map(row => row.getCellTextByIndex()));
     return { headerCells, rowCells };
   }
 
@@ -777,7 +787,7 @@ describe('ApiPlanListComponent', () => {
       .expectOne(
         `${CONSTANTS_TESTING.env.v2BaseURL}/apis/${API_ID}/plans?page=1&perPage=9999&${
           statuses ? `statuses=${castArray(statuses).join(',')}` : 'statuses=PUBLISHED'
-        }${security ? `securities=${security}` : ''}`,
+        }${security ? `securities=${security}` : ''}&fields=-flow`,
         'GET',
       )
       .flush(response);

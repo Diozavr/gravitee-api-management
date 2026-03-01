@@ -26,6 +26,7 @@ import io.gravitee.common.http.HttpStatusCode;
 import io.gravitee.rest.api.model.*;
 import io.gravitee.rest.api.model.api.ApiEntity;
 import io.gravitee.rest.api.model.documentation.PageQuery;
+import io.gravitee.rest.api.model.v4.api.GenericApiEntity;
 import io.gravitee.rest.api.portal.rest.model.*;
 import io.gravitee.rest.api.portal.rest.model.Error;
 import io.gravitee.rest.api.portal.rest.model.Link.ResourceTypeEnum;
@@ -62,9 +63,11 @@ public class ApiResourceTest extends AbstractResourceTest {
 
         ApiEntity mockApi = new ApiEntity();
         mockApi.setId(API);
-        doReturn(mockApi).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API);
+        doReturn(mockApi).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API, false, false, true);
 
-        doReturn(true).when(accessControlService).canAccessApiFromPortal(GraviteeContext.getExecutionContext(), API);
+        doReturn(true)
+            .when(accessControlService)
+            .canAccessApiFromPortal(eq(GraviteeContext.getExecutionContext()), any(GenericApiEntity.class));
         doReturn(Set.of(API))
             .when(apiAuthorizationService)
             .findIdsByUser(eq(GraviteeContext.getExecutionContext()), any(), any(), eq(false));
@@ -125,7 +128,7 @@ public class ApiResourceTest extends AbstractResourceTest {
 
         doReturn(new HashSet<>(Arrays.asList(plan1, plan2, plan3)))
             .when(planSearchService)
-            .findByApi(GraviteeContext.getExecutionContext(), API);
+            .findByApi(eq(GraviteeContext.getExecutionContext()), any(GenericApiEntity.class), eq(true));
 
         // For pages
         doReturn(true).when(accessControlService).canAccessApiFromPortal(GraviteeContext.getExecutionContext(), API);
@@ -155,7 +158,9 @@ public class ApiResourceTest extends AbstractResourceTest {
         // init
         ApiEntity userApi = new ApiEntity();
         userApi.setId("1");
-        doReturn(false).when(accessControlService).canAccessApiFromPortal(GraviteeContext.getExecutionContext(), API);
+        doReturn(false)
+            .when(accessControlService)
+            .canAccessApiFromPortal(eq(GraviteeContext.getExecutionContext()), any(GenericApiEntity.class));
 
         // test
         final Response response = target(API).request().get();
@@ -190,8 +195,9 @@ public class ApiResourceTest extends AbstractResourceTest {
     @Test
     public void shouldHaveNotFoundWhileGettingApiPicture() {
         // init
-        when(apiAuthorizationService.findIdsByUser(eq(GraviteeContext.getExecutionContext()), any(), any(), eq(false)))
-            .thenReturn(Set.of("1"));
+        when(apiAuthorizationService.findIdsByUser(eq(GraviteeContext.getExecutionContext()), any(), any(), eq(false))).thenReturn(
+            Set.of("1")
+        );
 
         // test
         final Response response = target(API).path("picture").request().get();
@@ -258,20 +264,19 @@ public class ApiResourceTest extends AbstractResourceTest {
         markdownTemplate.setName("MARKDOWN_TEMPLATE");
         markdownTemplate.setPublished(true);
 
-        when(pageService.search(eq(GraviteeContext.getCurrentEnvironment()), any(PageQuery.class), isNull()))
-            .thenAnswer(
-                (Answer<List<PageEntity>>) invocation -> {
-                    PageQuery pq = invocation.getArgument(1);
-                    if (PageType.SYSTEM_FOLDER.equals(pq.getType()) && API.equals(pq.getApi())) {
-                        return Collections.singletonList(sysFolder);
-                    } else if ("SYS_FOLDER".equals(pq.getParent()) && API.equals(pq.getApi())) {
-                        return Arrays.asList(linkSysFolder, swaggerSysFolder, folderSysFolder, markdownTemplate);
-                    } else if ("FOLDER_SYS_FOLDER".equals(pq.getParent()) && API.equals(pq.getApi())) {
-                        return Collections.singletonList(markdownFolderSysFolder);
-                    }
-                    return null;
+        when(pageService.search(eq(GraviteeContext.getCurrentEnvironment()), any(PageQuery.class), isNull())).thenAnswer(
+            (Answer<List<PageEntity>>) invocation -> {
+                PageQuery pq = invocation.getArgument(1);
+                if (PageType.SYSTEM_FOLDER.equals(pq.getType()) && API.equals(pq.getApi())) {
+                    return Collections.singletonList(sysFolder);
+                } else if ("SYS_FOLDER".equals(pq.getParent()) && API.equals(pq.getApi())) {
+                    return Arrays.asList(linkSysFolder, swaggerSysFolder, folderSysFolder, markdownTemplate);
+                } else if ("FOLDER_SYS_FOLDER".equals(pq.getParent()) && API.equals(pq.getApi())) {
+                    return Collections.singletonList(markdownFolderSysFolder);
                 }
-            );
+                return null;
+            }
+        );
 
         when(accessControlService.canAccessPageFromPortal(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(true);
 

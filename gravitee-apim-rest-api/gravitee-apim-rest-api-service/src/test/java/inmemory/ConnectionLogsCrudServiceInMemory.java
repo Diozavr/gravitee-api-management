@@ -25,10 +25,17 @@ import io.gravitee.rest.api.model.v4.log.connection.BaseConnectionLog;
 import io.gravitee.rest.api.model.v4.log.connection.ConnectionLogDetail;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NonNull;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 public class ConnectionLogsCrudServiceInMemory implements ConnectionLogsCrudService, InMemoryAlternative<Object> {
 
@@ -38,12 +45,33 @@ public class ConnectionLogsCrudServiceInMemory implements ConnectionLogsCrudServ
     @Override
     public SearchLogsResponse<BaseConnectionLog> searchApiConnectionLogs(
         ExecutionContext executionContext,
+        SearchLogsFilters logsFilters,
+        Pageable pageable,
+        List<DefinitionVersion> definitionVersions
+    ) {
+        return searchApiConnectionLogs(executionContext, logsFilters.apiIds(), logsFilters, pageable, definitionVersions);
+    }
+
+    @Override
+    public SearchLogsResponse<BaseConnectionLog> searchApiConnectionLogs(
+        ExecutionContext executionContext,
         String apiId,
         SearchLogsFilters logsFilters,
         Pageable pageable,
         List<DefinitionVersion> definitionVersions
     ) {
-        var predicate = getBaseConnectionLogPredicate(logsFilters.toBuilder().apiIds(Set.of(apiId)).build());
+        return searchApiConnectionLogs(executionContext, Set.of(apiId), logsFilters, pageable, definitionVersions);
+    }
+
+    @Override
+    public SearchLogsResponse<BaseConnectionLog> searchApiConnectionLogs(
+        ExecutionContext executionContext,
+        Set<String> apiIds,
+        SearchLogsFilters logsFilters,
+        Pageable pageable,
+        List<DefinitionVersion> definitionVersions
+    ) {
+        var predicate = getBaseConnectionLogPredicate(logsFilters.toBuilder().apiIds(apiIds).build());
 
         var pageNumber = pageable.getPageNumber();
         var pageSize = pageable.getPageSize();
@@ -165,11 +193,11 @@ public class ConnectionLogsCrudServiceInMemory implements ConnectionLogsCrudServ
     private static Predicate<BaseConnectionLog> getBaseConnectionLogPredicate(SearchLogsFilters logsFilters) {
         Predicate<BaseConnectionLog> predicate = _ignored -> true;
 
-        if (logsFilters.apiIds() != null && !logsFilters.apiIds().isEmpty()) {
+        if (!CollectionUtils.isEmpty(logsFilters.apiIds())) {
             predicate = predicate.and(connectionLog -> logsFilters.apiIds().contains(connectionLog.getApiId()));
         }
 
-        if (logsFilters.requestIds() != null && !logsFilters.requestIds().isEmpty()) {
+        if (!CollectionUtils.isEmpty(logsFilters.requestIds())) {
             predicate = predicate.and(connectionLog -> logsFilters.requestIds().contains(connectionLog.getRequestId()));
         }
 
@@ -179,6 +207,10 @@ public class ConnectionLogsCrudServiceInMemory implements ConnectionLogsCrudServ
 
         if (null != logsFilters.to()) {
             predicate = predicate.and(connectionLog -> Instant.parse(connectionLog.getTimestamp()).toEpochMilli() <= logsFilters.to());
+        }
+
+        if (!CollectionUtils.isEmpty(logsFilters.transactionIds())) {
+            predicate = predicate.and(connectionLog -> logsFilters.transactionIds().contains(connectionLog.getTransactionId()));
         }
 
         if (!CollectionUtils.isEmpty(logsFilters.applicationIds())) {
@@ -202,19 +234,30 @@ public class ConnectionLogsCrudServiceInMemory implements ConnectionLogsCrudServ
         }
 
         if (!CollectionUtils.isEmpty(logsFilters.responseTimeRanges())) {
-            predicate =
-                predicate.and(connectionLog ->
-                    logsFilters
-                        .responseTimeRanges()
-                        .stream()
-                        .anyMatch(range ->
+            predicate = predicate.and(connectionLog ->
+                logsFilters
+                    .responseTimeRanges()
+                    .stream()
+                    .anyMatch(
+                        range ->
                             (range.to() == null || range.to() >= connectionLog.getGatewayResponseTime()) &&
                             (range.from() == null || range.from() <= connectionLog.getGatewayResponseTime())
-                        )
-                );
+                    )
+            );
+        }
+
+        var uri = logsFilters.uri();
+        if (StringUtils.hasLength(uri)) {
+            var normalizedUri = getNormalizedUri(uri);
+            predicate = predicate.and(connectionLog -> connectionLog.getUri().startsWith(normalizedUri));
         }
 
         return predicate;
+    }
+
+    private static @NonNull String getNormalizedUri(String uri) {
+        var beginningSlash = uri.startsWith("/") ? "" : "/";
+        return beginningSlash + (uri.endsWith("*") ? uri.substring(0, uri.length() - 1) : uri);
     }
 
     private static Predicate<ConnectionLogDetail> getConnectionLogDetailsPredicate(SearchLogsFilters logsFilters) {
@@ -233,51 +276,50 @@ public class ConnectionLogsCrudServiceInMemory implements ConnectionLogsCrudServ
         }
 
         if (!CollectionUtils.isEmpty(logsFilters.methods())) {
-            predicate =
-                predicate.and(connectionLog ->
+            predicate = predicate.and(
+                connectionLog ->
                     connectionLog.getEntrypointRequest() != null &&
                     logsFilters.methods().contains(HttpMethod.valueOf(connectionLog.getEntrypointRequest().getMethod()))
-                );
+            );
         }
 
         if (!CollectionUtils.isEmpty(logsFilters.statuses())) {
-            predicate =
-                predicate.and(connectionLog ->
+            predicate = predicate.and(
+                connectionLog ->
                     connectionLog.getEntrypointResponse() != null &&
                     logsFilters.statuses().contains(connectionLog.getEntrypointResponse().getStatus())
-                );
+            );
         }
 
         if (null != logsFilters.bodyText() && !logsFilters.bodyText().isBlank()) {
-            predicate =
-                predicate.and(connectionLogDetail -> {
-                    if (
-                        connectionLogDetail.getEntrypointRequest() != null &&
-                        connectionLogDetail.getEntrypointRequest().getBody() != null &&
-                        connectionLogDetail.getEntrypointRequest().getBody().contains(logsFilters.bodyText())
-                    ) {
-                        return true;
-                    }
-                    if (
-                        connectionLogDetail.getEntrypointResponse() != null &&
-                        connectionLogDetail.getEntrypointResponse().getBody() != null &&
-                        connectionLogDetail.getEntrypointResponse().getBody().contains(logsFilters.bodyText())
-                    ) {
-                        return true;
-                    }
-                    if (
-                        connectionLogDetail.getEndpointRequest() != null &&
-                        connectionLogDetail.getEndpointRequest().getBody() != null &&
-                        connectionLogDetail.getEndpointRequest().getBody().contains(logsFilters.bodyText())
-                    ) {
-                        return true;
-                    }
-                    return (
-                        connectionLogDetail.getEndpointResponse() != null &&
-                        connectionLogDetail.getEndpointResponse().getBody() != null &&
-                        connectionLogDetail.getEndpointResponse().getBody().contains(logsFilters.bodyText())
-                    );
-                });
+            predicate = predicate.and(connectionLogDetail -> {
+                if (
+                    connectionLogDetail.getEntrypointRequest() != null &&
+                    connectionLogDetail.getEntrypointRequest().getBody() != null &&
+                    connectionLogDetail.getEntrypointRequest().getBody().contains(logsFilters.bodyText())
+                ) {
+                    return true;
+                }
+                if (
+                    connectionLogDetail.getEntrypointResponse() != null &&
+                    connectionLogDetail.getEntrypointResponse().getBody() != null &&
+                    connectionLogDetail.getEntrypointResponse().getBody().contains(logsFilters.bodyText())
+                ) {
+                    return true;
+                }
+                if (
+                    connectionLogDetail.getEndpointRequest() != null &&
+                    connectionLogDetail.getEndpointRequest().getBody() != null &&
+                    connectionLogDetail.getEndpointRequest().getBody().contains(logsFilters.bodyText())
+                ) {
+                    return true;
+                }
+                return (
+                    connectionLogDetail.getEndpointResponse() != null &&
+                    connectionLogDetail.getEndpointResponse().getBody() != null &&
+                    connectionLogDetail.getEndpointResponse().getBody().contains(logsFilters.bodyText())
+                );
+            });
         }
 
         return predicate;

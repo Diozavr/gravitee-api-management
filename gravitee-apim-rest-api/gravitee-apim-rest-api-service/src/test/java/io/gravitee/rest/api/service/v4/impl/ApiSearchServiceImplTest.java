@@ -164,17 +164,16 @@ public class ApiSearchServiceImplTest {
         );
 
         var apiMapper = new ApiMapper(new ObjectMapper(), planServiceV4, flowServiceV4, parameterService, workflowService, categoryMapper);
-        apiSearchService =
-            new ApiSearchServiceImpl(
-                apiRepository,
-                apiMapper,
-                new GenericApiMapper(apiMapper, apiConverter),
-                primaryOwnerService,
-                categoryService,
-                searchEngineService,
-                apiAuthorizationService,
-                integrationRepository
-            );
+        apiSearchService = new ApiSearchServiceImpl(
+            apiRepository,
+            apiMapper,
+            new GenericApiMapper(apiMapper, apiConverter),
+            primaryOwnerService,
+            categoryService,
+            searchEngineService,
+            apiAuthorizationService,
+            integrationRepository
+        );
 
         reset(searchEngineService);
 
@@ -192,10 +191,10 @@ public class ApiSearchServiceImplTest {
         api.setType(ApiType.MESSAGE);
         api.setDefinition(
             "{\"definitionVersion\" : \"4.0.0\", " +
-            "\"type\": \"message\", " +
-            "\"listeners\" : " +
-            "   [{ \"type\" : \"http\", \"paths\" : [{ \"path\": \"/context\"}]" +
-            "}] }"
+                "\"type\": \"message\", " +
+                "\"listeners\" : " +
+                "   [{ \"type\" : \"http\", \"paths\" : [{ \"path\": \"/context\"}]" +
+                "}] }"
         );
         api.setEnvironmentId("DEFAULT");
 
@@ -227,10 +226,10 @@ public class ApiSearchServiceImplTest {
         api.setType(ApiType.MESSAGE);
         api.setDefinition(
             "{\"definitionVersion\" : \"4.0.0\", " +
-            "\"type\": \"message\", " +
-            "\"listeners\" : " +
-            "   [{ \"type\" : \"http\", \"paths\" : [{ \"path\": \"/context\"}]" +
-            "}] }"
+                "\"type\": \"message\", " +
+                "\"listeners\" : " +
+                "   [{ \"type\" : \"http\", \"paths\" : [{ \"path\": \"/context\"}]" +
+                "}] }"
         );
         api.setEnvironmentId("DEFAULT");
 
@@ -278,10 +277,43 @@ public class ApiSearchServiceImplTest {
         userEntity.setId("user");
         when(primaryOwnerService.getPrimaryOwner(any(), eq(API_ID))).thenReturn(new PrimaryOwnerEntity(userEntity));
 
-        final GenericApiEntity indexableApi = apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        final GenericApiEntity indexableApi = apiSearchService.findGenericById(
+            GraviteeContext.getExecutionContext(),
+            API_ID,
+            true,
+            true,
+            true
+        );
 
         assertThat(indexableApi).isNotNull();
         assertThat(indexableApi).isInstanceOf(ApiEntity.class);
+    }
+
+    @Test
+    public void should_find_V4_GenericApi_without_API_fLows() throws TechnicalException {
+        Api api = new Api();
+        api.setId(API_ID);
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.PROXY);
+        api.setEnvironmentId("DEFAULT");
+
+        when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
+        UserEntity userEntity = new UserEntity();
+        userEntity.setId("user");
+        when(primaryOwnerService.getPrimaryOwner(any(), eq(API_ID))).thenReturn(new PrimaryOwnerEntity(userEntity));
+
+        final GenericApiEntity indexableApi = apiSearchService.findGenericById(
+            GraviteeContext.getExecutionContext(),
+            API_ID,
+            false,
+            false,
+            false
+        );
+
+        assertThat(indexableApi).isNotNull();
+        assertThat(indexableApi).isInstanceOf(ApiEntity.class);
+        verify(flowServiceV4, times(0)).findByReference(any(), any());
+        verify(planServiceV4, times(0)).findByApi(any(), any());
     }
 
     @Test
@@ -296,7 +328,13 @@ public class ApiSearchServiceImplTest {
         userEntity.setId("user");
         when(primaryOwnerService.getPrimaryOwner(any(), eq(API_ID))).thenReturn(new PrimaryOwnerEntity(userEntity));
 
-        final GenericApiEntity indexableApi = apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        final GenericApiEntity indexableApi = apiSearchService.findGenericById(
+            GraviteeContext.getExecutionContext(),
+            API_ID,
+            true,
+            true,
+            true
+        );
 
         assertThat(indexableApi).isNotNull();
         assertThat(indexableApi).isInstanceOf(io.gravitee.rest.api.model.api.ApiEntity.class);
@@ -325,7 +363,13 @@ public class ApiSearchServiceImplTest {
         category2.setId(categoryId2);
         category2.setKey(categoryKey2);
         when(categoryService.findAll("DEFAULT")).thenReturn(List.of(category1, category2));
-        final GenericApiEntity indexableApi = apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        final GenericApiEntity indexableApi = apiSearchService.findGenericById(
+            GraviteeContext.getExecutionContext(),
+            API_ID,
+            true,
+            true,
+            true
+        );
 
         assertThat(indexableApi).isNotNull();
         assertThat(indexableApi).isInstanceOf(io.gravitee.rest.api.model.api.ApiEntity.class);
@@ -378,8 +422,9 @@ public class ApiSearchServiceImplTest {
         api2.setId("api2");
         api2.setName("api2");
 
-        when(apiRepository.search(eq(new ApiCriteria.Builder().environmentId("DEFAULT").build()), isNull(), eq(ApiFieldFilter.allFields())))
-            .thenReturn(Stream.of(api1));
+        when(
+            apiRepository.search(eq(new ApiCriteria.Builder().environmentId("DEFAULT").build()), isNull(), eq(ApiFieldFilter.allFields()))
+        ).thenReturn(Stream.of(api1));
 
         UserEntity admin = new UserEntity();
         admin.setId("admin");
@@ -413,8 +458,7 @@ public class ApiSearchServiceImplTest {
                 isNull(),
                 eq(ApiFieldFilter.allFields())
             )
-        )
-            .thenReturn(Stream.of(api1));
+        ).thenReturn(Stream.of(api1));
 
         UserEntity admin = new UserEntity();
         admin.setId("admin");
@@ -466,8 +510,7 @@ public class ApiSearchServiceImplTest {
                 isNull(),
                 eq(ApiFieldFilter.allFields())
             )
-        )
-            .thenReturn(Stream.of(api1));
+        ).thenReturn(Stream.of(api1));
 
         CategoryEntity category = new CategoryEntity();
         category.setId("cat1");

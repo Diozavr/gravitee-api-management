@@ -90,6 +90,8 @@ public class SubscriptionKeysResourceTest extends AbstractResourceTest {
 
         SubscriptionEntity subscriptionEntity = new SubscriptionEntity();
         subscriptionEntity.setApi(API);
+        subscriptionEntity.setReferenceId(API);
+        subscriptionEntity.setReferenceType("API");
         subscriptionEntity.setApplication(APPLICATION);
         doReturn(subscriptionEntity).when(subscriptionService).findById(eq(SUBSCRIPTION));
         doReturn(true).when(permissionService).hasPermission(any(), any(), any(), any());
@@ -192,11 +194,12 @@ public class SubscriptionKeysResourceTest extends AbstractResourceTest {
     public void should_revoke_key() {
         subscriptionCrudServiceInMemory.initWith(
             List.of(
-                fixtures.core.model.SubscriptionFixtures
-                    .aSubscription()
+                fixtures.core.model.SubscriptionFixtures.aSubscription()
                     .toBuilder()
                     .id(SUBSCRIPTION)
                     .apiId(API)
+                    .referenceId(API)
+                    .referenceType(io.gravitee.apim.core.subscription.model.SubscriptionReferenceType.API)
                     .applicationId(APPLICATION)
                     .build()
             )
@@ -233,8 +236,9 @@ public class SubscriptionKeysResourceTest extends AbstractResourceTest {
                 eq(APPLICATION),
                 eq(RolePermissionAction.UPDATE)
             );
-        assertThat(target(SUBSCRIPTION).path("keys/" + KEY + "/_revoke").request().post(null).getStatus())
-            .isEqualTo(HttpStatusCode.FORBIDDEN_403);
+        assertThat(target(SUBSCRIPTION).path("keys/" + KEY + "/_revoke").request().post(null).getStatus()).isEqualTo(
+            HttpStatusCode.FORBIDDEN_403
+        );
     }
 
     @Test
@@ -260,11 +264,12 @@ public class SubscriptionKeysResourceTest extends AbstractResourceTest {
 
         subscriptionCrudServiceInMemory.initWith(
             List.of(
-                fixtures.core.model.SubscriptionFixtures
-                    .aSubscription()
+                fixtures.core.model.SubscriptionFixtures.aSubscription()
                     .toBuilder()
                     .id(SUBSCRIPTION)
                     .apiId(API)
+                    .referenceId(API)
+                    .referenceType(io.gravitee.apim.core.subscription.model.SubscriptionReferenceType.API)
                     .applicationId(APPLICATION)
                     .build()
             )
@@ -276,8 +281,9 @@ public class SubscriptionKeysResourceTest extends AbstractResourceTest {
             List.of(ApiKeyFixtures.anApiKey().toBuilder().key(KEY).applicationId(APPLICATION).subscriptions(List.of(SUBSCRIPTION)).build())
         );
 
-        assertThat(target(SUBSCRIPTION).path("keys/" + KEY + "/_revoke").request().post(null).getStatus())
-            .isEqualTo(HttpStatusCode.NO_CONTENT_204);
+        assertThat(target(SUBSCRIPTION).path("keys/" + KEY + "/_revoke").request().post(null).getStatus()).isEqualTo(
+            HttpStatusCode.NO_CONTENT_204
+        );
     }
 
     @Test
@@ -303,11 +309,12 @@ public class SubscriptionKeysResourceTest extends AbstractResourceTest {
 
         subscriptionCrudServiceInMemory.initWith(
             List.of(
-                fixtures.core.model.SubscriptionFixtures
-                    .aSubscription()
+                fixtures.core.model.SubscriptionFixtures.aSubscription()
                     .toBuilder()
                     .id(SUBSCRIPTION)
                     .apiId(API)
+                    .referenceId(API)
+                    .referenceType(io.gravitee.apim.core.subscription.model.SubscriptionReferenceType.API)
                     .applicationId(APPLICATION)
                     .build()
             )
@@ -319,7 +326,8 @@ public class SubscriptionKeysResourceTest extends AbstractResourceTest {
             List.of(ApiKeyFixtures.anApiKey().toBuilder().key(KEY).applicationId(APPLICATION).subscriptions(List.of(SUBSCRIPTION)).build())
         );
 
-        assertThat(target(SUBSCRIPTION).path("keys/" + KEY + "/_revoke").request().post(null).getStatus())
-            .isEqualTo(HttpStatusCode.NO_CONTENT_204);
+        assertThat(target(SUBSCRIPTION).path("keys/" + KEY + "/_revoke").request().post(null).getStatus()).isEqualTo(
+            HttpStatusCode.NO_CONTENT_204
+        );
     }
 }

@@ -62,6 +62,8 @@ public class ApplicationSubscriptionResourceTest extends AbstractResourceTest {
         fakeSubscriptionEntity = new SubscriptionEntity();
         fakeSubscriptionEntity.setId(SUBSCRIPTION_ID);
         fakeSubscriptionEntity.setApi(API_ID);
+        fakeSubscriptionEntity.setReferenceId(API_ID);
+        fakeSubscriptionEntity.setReferenceType("API");
         fakeSubscriptionEntity.setPlan(PLAN_ID);
         fakeSubscriptionEntity.setApplication(APPLICATION_ID);
 
@@ -79,7 +81,9 @@ public class ApplicationSubscriptionResourceTest extends AbstractResourceTest {
 
         ApiEntity apiV2 = new ApiEntity();
         apiV2.setPrimaryOwner(new PrimaryOwnerEntity());
-        when(apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), eq(API_ID))).thenReturn(apiV2);
+        when(
+            apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), eq(API_ID), eq(false), eq(false), eq(false))
+        ).thenReturn(apiV2);
 
         PlanEntity planV2 = new PlanEntity();
         planV2.setSecurity(PlanSecurityType.OAUTH2);
@@ -99,7 +103,9 @@ public class ApplicationSubscriptionResourceTest extends AbstractResourceTest {
 
         io.gravitee.rest.api.model.v4.api.ApiEntity apiV4 = new io.gravitee.rest.api.model.v4.api.ApiEntity();
         apiV4.setPrimaryOwner(new PrimaryOwnerEntity());
-        when(apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), eq(API_ID))).thenReturn(apiV4);
+        when(
+            apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), eq(API_ID), eq(false), eq(false), eq(false))
+        ).thenReturn(apiV4);
 
         io.gravitee.rest.api.model.v4.plan.PlanEntity planV4 = new io.gravitee.rest.api.model.v4.plan.PlanEntity();
         PlanSecurity planSecurity = new PlanSecurity();
@@ -119,8 +125,9 @@ public class ApplicationSubscriptionResourceTest extends AbstractResourceTest {
         when(subscriptionService.findById(SUBSCRIPTION_ID)).thenReturn(fakeSubscriptionEntity);
         UpdateSubscriptionConfigurationEntity updateSubscriptionConfigurationEntity = new UpdateSubscriptionConfigurationEntity();
 
-        when(subscriptionService.update(eq(GraviteeContext.getExecutionContext()), any(UpdateSubscriptionConfigurationEntity.class)))
-            .thenReturn(new SubscriptionEntity());
+        when(
+            subscriptionService.update(eq(GraviteeContext.getExecutionContext()), any(UpdateSubscriptionConfigurationEntity.class))
+        ).thenReturn(new SubscriptionEntity());
 
         Response response = envTarget(SUBSCRIPTION_ID).request().put(json(updateSubscriptionConfigurationEntity));
 
@@ -135,7 +142,9 @@ public class ApplicationSubscriptionResourceTest extends AbstractResourceTest {
         when(subscriptionService.findById(SUBSCRIPTION_ID)).thenReturn(fakeSubscriptionEntity);
         io.gravitee.rest.api.model.v4.api.ApiEntity apiV4 = new io.gravitee.rest.api.model.v4.api.ApiEntity();
         apiV4.setPrimaryOwner(new PrimaryOwnerEntity());
-        when(apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), eq(API_ID))).thenReturn(apiV4);
+        when(
+            apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), eq(API_ID), eq(false), eq(false), eq(false))
+        ).thenReturn(apiV4);
 
         when(userService.findById(eq(GraviteeContext.getExecutionContext()), any(), anyBoolean())).thenReturn(mock(UserEntity.class));
         io.gravitee.rest.api.model.v4.plan.PlanEntity planV4 = new io.gravitee.rest.api.model.v4.plan.PlanEntity();
@@ -160,7 +169,9 @@ public class ApplicationSubscriptionResourceTest extends AbstractResourceTest {
         when(subscriptionService.findById(SUBSCRIPTION_ID)).thenReturn(fakeSubscriptionEntity);
         io.gravitee.rest.api.model.v4.api.ApiEntity apiV4 = new io.gravitee.rest.api.model.v4.api.ApiEntity();
         apiV4.setPrimaryOwner(new PrimaryOwnerEntity());
-        when(apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), eq(API_ID))).thenReturn(apiV4);
+        when(
+            apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), eq(API_ID), eq(false), eq(false), eq(false))
+        ).thenReturn(apiV4);
 
         when(userService.findById(eq(GraviteeContext.getExecutionContext()), any(), anyBoolean())).thenReturn(mock(UserEntity.class));
         io.gravitee.rest.api.model.v4.plan.PlanEntity planV4 = new io.gravitee.rest.api.model.v4.plan.PlanEntity();

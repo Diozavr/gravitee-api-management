@@ -16,6 +16,7 @@
 package io.gravitee.apim.integration.tests.messages.websocket;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.graviteesource.entrypoint.websocket.WebSocketEntrypointConnectorFactory;
 import io.gravitee.apim.gateway.tests.sdk.annotations.DeployApi;
@@ -24,7 +25,6 @@ import io.gravitee.apim.gateway.tests.sdk.connector.EntrypointBuilder;
 import io.gravitee.apim.integration.tests.messages.AbstractKafkaEndpointIntegrationTest;
 import io.gravitee.gateway.reactive.api.qos.Qos;
 import io.gravitee.plugin.entrypoint.EntrypointConnectorPlugin;
-import io.reactivex.rxjava3.subscribers.TestSubscriber;
 import io.vertx.rxjava3.core.Vertx;
 import io.vertx.rxjava3.core.buffer.Buffer;
 import io.vertx.rxjava3.core.http.HttpClient;
@@ -69,32 +69,25 @@ class WebsocketEntrypointKafkaEndpointIntegrationTest extends AbstractKafkaEndpo
         blockingPublishToKafka(producer, "message3");
         producer.close();
 
-        final TestSubscriber<Buffer> obs = httpClient.rxWebSocket("/test-" + qos.getLabel()).flatMapPublisher(WebSocket::toFlowable).test();
+        final var obs = httpClient.rxWebSocket("/test-" + qos.getLabel()).flatMapPublisher(WebSocket::toFlowable).test();
 
         // We expect 3 binary frame, for 3 messages
+        await()
+            .atMost(30, TimeUnit.SECONDS)
+            .until(() -> obs.values().size() >= 3);
         obs
-            .awaitCount(3)
-            .assertValueAt(
-                0,
-                frame -> {
-                    assertThat(frame).hasToString("message1");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                1,
-                frame -> {
-                    assertThat(frame).hasToString("message2");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                2,
-                frame -> {
-                    assertThat(frame).hasToString("message3");
-                    return true;
-                }
-            )
+            .assertValueAt(0, frame -> {
+                assertThat(frame).hasToString("message1");
+                return true;
+            })
+            .assertValueAt(1, frame -> {
+                assertThat(frame).hasToString("message2");
+                return true;
+            })
+            .assertValueAt(2, frame -> {
+                assertThat(frame).hasToString("message3");
+                return true;
+            })
             .assertNoErrors();
     }
 
@@ -123,27 +116,18 @@ class WebsocketEntrypointKafkaEndpointIntegrationTest extends AbstractKafkaEndpo
             .take(3)
             .test()
             .awaitDone(30, TimeUnit.SECONDS)
-            .assertValueAt(
-                0,
-                message -> {
-                    assertThat(new String(message.value())).hasToString("message1");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                1,
-                message -> {
-                    assertThat(new String(message.value())).hasToString("message2");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                2,
-                message -> {
-                    assertThat(new String(message.value())).hasToString("message3");
-                    return true;
-                }
-            )
+            .assertValueAt(0, message -> {
+                assertThat(new String(message.value())).hasToString("message1");
+                return true;
+            })
+            .assertValueAt(1, message -> {
+                assertThat(new String(message.value())).hasToString("message2");
+                return true;
+            })
+            .assertValueAt(2, message -> {
+                assertThat(new String(message.value())).hasToString("message3");
+                return true;
+            })
             .assertComplete();
 
         kafkaConsumer.close().blockingAwait(30, TimeUnit.SECONDS);
@@ -152,7 +136,7 @@ class WebsocketEntrypointKafkaEndpointIntegrationTest extends AbstractKafkaEndpo
     @Test
     @DeployApi({ "/apis/v4/messages/websocket/websocket-entrypoint-kafka-endpoint-publisher-subscriber.json" })
     void should_received_published_messages(HttpClient httpClient, Vertx vertx) {
-        httpClient
+        var obs = httpClient
             .rxWebSocket("/test")
             .flatMapPublisher(websocket ->
                 // Write text frame
@@ -165,29 +149,23 @@ class WebsocketEntrypointKafkaEndpointIntegrationTest extends AbstractKafkaEndpo
                     .<Buffer>toFlowable()
                     .mergeWith(websocket.toFlowable())
             )
-            .test()
-            .awaitCount(3)
-            .assertValueAt(
-                0,
-                frame -> {
-                    assertThat(frame).hasToString("message1");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                1,
-                frame -> {
-                    assertThat(frame).hasToString("message2");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                2,
-                frame -> {
-                    assertThat(frame).hasToString("message3");
-                    return true;
-                }
-            )
+            .test();
+        await()
+            .atMost(30, TimeUnit.SECONDS)
+            .until(() -> obs.values().size() >= 3);
+        obs
+            .assertValueAt(0, frame -> {
+                assertThat(frame).hasToString("message1");
+                return true;
+            })
+            .assertValueAt(1, frame -> {
+                assertThat(frame).hasToString("message2");
+                return true;
+            })
+            .assertValueAt(2, frame -> {
+                assertThat(frame).hasToString("message3");
+                return true;
+            })
             .assertNoErrors();
 
         // Configure a KafkaConsumer to read messages published on topic test-topic.
@@ -197,27 +175,18 @@ class WebsocketEntrypointKafkaEndpointIntegrationTest extends AbstractKafkaEndpo
             .take(3)
             .test()
             .awaitDone(30, TimeUnit.SECONDS)
-            .assertValueAt(
-                0,
-                message -> {
-                    assertThat(new String(message.value())).hasToString("message1");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                1,
-                message -> {
-                    assertThat(new String(message.value())).hasToString("message2");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                2,
-                message -> {
-                    assertThat(new String(message.value())).hasToString("message3");
-                    return true;
-                }
-            )
+            .assertValueAt(0, message -> {
+                assertThat(new String(message.value())).hasToString("message1");
+                return true;
+            })
+            .assertValueAt(1, message -> {
+                assertThat(new String(message.value())).hasToString("message2");
+                return true;
+            })
+            .assertValueAt(2, message -> {
+                assertThat(new String(message.value())).hasToString("message3");
+                return true;
+            })
             .assertComplete();
 
         kafkaConsumer.close().blockingAwait(30, TimeUnit.SECONDS);

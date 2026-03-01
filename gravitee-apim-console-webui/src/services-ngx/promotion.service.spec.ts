@@ -40,10 +40,10 @@ describe('PromotionService', () => {
   });
 
   describe('listPromotionTargets', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const environments: PromotionTarget[] = [fakePromotionTarget(), fakePromotionTarget()];
 
-      promotionService.listPromotionTargets().subscribe((result) => {
+      promotionService.listPromotionTargets().subscribe(result => {
         expect(result).toEqual(environments);
         done();
       });
@@ -58,21 +58,21 @@ describe('PromotionService', () => {
   });
 
   describe('promote', () => {
-    it('should call the API', (done) => {
+    it('should ask for API promotion', done => {
       const promotionTarget = fakePromotionTarget({
         installationId: 'inst#1',
         id: 'env#1',
       });
       const promotion = fakePromotion();
 
-      promotionService.promote('apiId', promotionTarget).subscribe((result) => {
+      promotionService.promote('apiId', promotionTarget).subscribe(result => {
         expect(result).toEqual(promotion);
         done();
       });
 
       const req = httpTestingController.expectOne({
         method: 'POST',
-        url: `${CONSTANTS_TESTING.env.baseURL}/apis/apiId/_promote`,
+        url: `${CONSTANTS_TESTING.env.v2BaseURL}/apis/apiId/_promote`,
       });
       expect(req.request.body).toEqual({
         targetEnvCockpitId: 'env#1',
@@ -83,18 +83,18 @@ describe('PromotionService', () => {
   });
 
   describe('processPromotion', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const promotion = fakePromotion();
       const isPromotionAccepted = true;
 
-      promotionService.processPromotion(promotion.id, isPromotionAccepted).subscribe((result) => {
+      promotionService.processPromotion(promotion.id, isPromotionAccepted).subscribe(result => {
         expect(result).toEqual(promotion);
         done();
       });
 
       httpTestingController
         .expectOne(
-          `${CONSTANTS_TESTING.org.baseURL}/promotions/${promotion.id}/_process`,
+          `${CONSTANTS_TESTING.org.v2BaseURL}/promotions/${promotion.id}/_process`,
           // Need to cast because this function doesn't accept boolean
           isPromotionAccepted as any,
         )
@@ -103,11 +103,11 @@ describe('PromotionService', () => {
   });
 
   describe('listPromotion', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const promotion1 = fakePromotion();
       const promotion2 = fakePromotion();
 
-      promotionService.listPromotion({ apiId: 'api1', statuses: ['CREATED', 'TO_BE_VALIDATED'] }).subscribe((result) => {
+      promotionService.listPromotion({ apiId: 'api1', statuses: ['CREATED', 'TO_BE_VALIDATED'] }).subscribe(result => {
         expect(result).toEqual([promotion1, promotion2]);
         done();
       });

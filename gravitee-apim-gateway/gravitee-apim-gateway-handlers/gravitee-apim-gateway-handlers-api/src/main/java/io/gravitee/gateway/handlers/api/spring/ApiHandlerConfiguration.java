@@ -33,6 +33,7 @@ import io.gravitee.gateway.handlers.api.manager.endpoint.ApiManagementEndpoint;
 import io.gravitee.gateway.handlers.api.manager.endpoint.ApisManagementEndpoint;
 import io.gravitee.gateway.handlers.api.manager.endpoint.NodeApisEndpointInitializer;
 import io.gravitee.gateway.handlers.api.manager.impl.ApiManagerImpl;
+import io.gravitee.gateway.handlers.api.registry.ApiProductRegistry;
 import io.gravitee.gateway.handlers.api.services.ApiKeyCacheService;
 import io.gravitee.gateway.handlers.api.services.SubscriptionCacheService;
 import io.gravitee.gateway.platform.organization.manager.OrganizationManager;
@@ -42,6 +43,7 @@ import io.gravitee.gateway.policy.impl.PolicyFactoryCreatorImpl;
 import io.gravitee.gateway.policy.impl.PolicyPluginFactoryImpl;
 import io.gravitee.gateway.reactive.core.condition.CompositeConditionFilter;
 import io.gravitee.gateway.reactive.core.condition.ExpressionLanguageConditionFilter;
+import io.gravitee.gateway.reactive.core.connection.ConnectionDrainManager;
 import io.gravitee.gateway.reactive.flow.condition.evaluation.HttpMethodConditionFilter;
 import io.gravitee.gateway.reactive.flow.condition.evaluation.PathBasedConditionFilter;
 import io.gravitee.gateway.reactive.handlers.api.processor.ApiProcessorChainFactory;
@@ -55,6 +57,7 @@ import io.gravitee.gateway.reactive.reactor.v4.reactor.ReactorFactory;
 import io.gravitee.gateway.reactor.handler.HttpAcceptorFactory;
 import io.gravitee.gateway.reactor.handler.context.ApiTemplateVariableProviderFactory;
 import io.gravitee.gateway.report.ReporterService;
+import io.gravitee.gateway.report.guard.LogGuardService;
 import io.gravitee.gateway.security.core.SubscriptionTrustStoreLoaderManager;
 import io.gravitee.node.api.Node;
 import io.gravitee.node.api.license.LicenseManager;
@@ -94,9 +97,10 @@ public class ApiHandlerConfiguration {
         EventManager eventManager,
         GatewayConfiguration gatewayConfiguration,
         LicenseManager licenseManager,
-        DataEncryptor dataEncryptor
+        DataEncryptor dataEncryptor,
+        @Autowired(required = false) ApiProductRegistry apiProductRegistry
     ) {
-        return new ApiManagerImpl(eventManager, gatewayConfiguration, licenseManager, dataEncryptor);
+        return new ApiManagerImpl(eventManager, gatewayConfiguration, licenseManager, dataEncryptor, apiProductRegistry);
     }
 
     @Bean
@@ -189,7 +193,8 @@ public class ApiHandlerConfiguration {
         OpenTelemetryConfiguration openTelemetryConfiguration,
         OpenTelemetryFactory openTelemetryFactory,
         @Autowired(required = false) List<InstrumenterTracerFactory> instrumenterTracerFactories,
-        DictionaryManager dictionaryManager
+        DictionaryManager dictionaryManager,
+        LogGuardService logGuardService
     ) {
         return new ApiReactorHandlerFactory(
             applicationContext,
@@ -209,7 +214,8 @@ public class ApiHandlerConfiguration {
             openTelemetryConfiguration,
             openTelemetryFactory,
             instrumenterTracerFactories,
-            dictionaryManager
+            dictionaryManager,
+            logGuardService
         );
     }
 
@@ -262,7 +268,9 @@ public class ApiHandlerConfiguration {
         OpenTelemetryFactory openTelemetryFactory,
         @Autowired(required = false) List<InstrumenterTracerFactory> instrumenterTracerFactories,
         GatewayConfiguration gatewayConfiguration,
-        DictionaryManager dictionaryManager
+        DictionaryManager dictionaryManager,
+        LogGuardService logGuardService,
+        ConnectionDrainManager connectionDrainManager
     ) {
         return new DefaultApiReactorFactory(
             applicationContext,
@@ -284,7 +292,9 @@ public class ApiHandlerConfiguration {
             openTelemetryFactory,
             instrumenterTracerFactories,
             gatewayConfiguration,
-            dictionaryManager
+            dictionaryManager,
+            logGuardService,
+            connectionDrainManager
         );
     }
 

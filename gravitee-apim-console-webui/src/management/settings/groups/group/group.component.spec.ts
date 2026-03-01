@@ -34,11 +34,11 @@ import { MatAutocompleteHarness } from '@angular/material/autocomplete/testing';
 import { MatSlideToggleHarness } from '@angular/material/slide-toggle/testing';
 
 import { GroupComponent } from './group.component';
+import { Member } from './membershipState';
 
 import { Group } from '../../../../entities/group/group';
 import { GioTestingPermissionProvider } from '../../../../shared/components/gio-permission/gio-permission.service';
 import { CONSTANTS_TESTING, GioTestingModule } from '../../../../shared/testing';
-import { Member } from '../../../../entities/management-api-v2';
 import { Invitation } from '../../../../entities/invitation/invitation';
 import { Role } from '../../../../entities/role/role';
 import { EnvironmentSettingsService } from '../../../../services-ngx/environment-settings.service';
@@ -80,14 +80,12 @@ describe('GroupComponent', () => {
     {
       id: '1',
       displayName: 'Test Member 1',
-      roles: [
-        { name: 'OWNER', scope: 'API' },
-        { name: 'OWNER', scope: 'APPLICATION' },
-        {
-          name: 'OWNER',
-          scope: 'INTEGRATION',
-        },
-      ],
+      roles: {
+        API: 'OWNER',
+        APPLICATION: 'OWNER',
+        INTEGRATION: 'OWNER',
+        CLUSTER: 'USER',
+      },
     },
   ];
 
@@ -201,7 +199,7 @@ describe('GroupComponent', () => {
     it('should submit form to create group', async () => {
       expectGetDefaultRoles();
       const spy = jest.spyOn(router, 'navigate');
-      await getNameInput().then((input) => input.setValue('Group 1'));
+      await getNameInput().then(input => input.setValue('Group 1'));
       const saveBar = await getSaveBar();
       expect(await saveBar.isVisible()).toEqual(true);
       expect(await saveBar.isSubmitButtonVisible()).toEqual(true);
@@ -233,6 +231,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       expect(component.groupForm.getRawValue()).toEqual({
@@ -257,6 +256,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const nameInputHarness = await getNameInput();
@@ -271,6 +271,7 @@ describe('GroupComponent', () => {
         MatInputHarness.with({ selector: '[formControlName="maxNumberOfMembers"]' }),
       );
       expect(await maxNoOfMembersHarness.isDisabled()).toEqual(true);
+      expect(component.memberColumnDefs.length).toEqual(6);
     });
 
     it('should submit form to update group', async () => {
@@ -280,9 +281,10 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
-      await getNameInput().then((input) => input.setValue('Test Group 1'));
+      await getNameInput().then(input => input.setValue('Test Group 1'));
       const saveBar = await getSaveBar();
       expect(await saveBar.isVisible()).toEqual(true);
       expect(await saveBar.isSubmitButtonVisible()).toEqual(true);
@@ -302,6 +304,7 @@ describe('GroupComponent', () => {
     it('should add group to existing APIs', async () => {
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await harnessLoader.getHarness(MatButtonHarness.with({ text: 'Add Group To Existing APIs' }));
@@ -320,6 +323,7 @@ describe('GroupComponent', () => {
     it('should add group to existing applications', async () => {
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await harnessLoader.getHarness(MatButtonHarness.with({ text: 'Add Group To Existing Applications' }));
@@ -347,12 +351,13 @@ describe('GroupComponent', () => {
     it('should display list of group members', async () => {
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const tableHarness = await harnessLoader.getHarness(MatTableHarness.with({ selector: '#membersDataTable' }));
       const rows = await tableHarness.getRows();
       expect(rows.length).toEqual(1);
-      const cell = await rows[0].getCells({ columnName: 'name' }).then((cells) => cells[0]);
+      const cell = await rows[0].getCells({ columnName: 'name' }).then(cells => cells[0]);
       const text = await cell.getText();
       expect(text).toEqual('Test Member 1');
     });
@@ -360,11 +365,12 @@ describe('GroupComponent', () => {
     it('should delete member', async () => {
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const tableHarness = await harnessLoader.getHarness(MatTableHarness.with({ selector: '#membersDataTable' }));
       const rows = await tableHarness.getRows();
-      const cell = await rows[0].getCells({ columnName: 'actions' }).then((cells) => cells[0]);
+      const cell = await rows[0].getCells({ columnName: 'actions' }).then(cells => cells[0]);
       const deleteButton = await cell.getHarness(MatButtonHarness.with({ selector: '[mattooltip="Remove member from group"]' }));
       await deleteButton.click();
       const dialogHarness = await rootLoader.getHarness(MatDialogHarness);
@@ -376,25 +382,29 @@ describe('GroupComponent', () => {
     it('should update member', async () => {
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const tableHarness = await harnessLoader.getHarness(MatTableHarness.with({ selector: '#membersDataTable' }));
       const rows = await tableHarness.getRows();
-      const cell = await rows[0].getCells({ columnName: 'actions' }).then((cells) => cells[0]);
+      const cell = await rows[0].getCells({ columnName: 'actions' }).then(cells => cells[0]);
       const editButton = await cell.getHarness(MatButtonHarness.with({ selector: '[mattooltip="Modify member settings"]' }));
       await editButton.click();
       const dialogHarness = await rootLoader.getHarness(MatDialogHarness);
       const matSelectHarnesses = await dialogHarness.getAllHarnesses(MatSelectHarness);
-      expect(matSelectHarnesses.length).toEqual(3);
+      expect(matSelectHarnesses.length).toEqual(4);
       await matSelectHarnesses[0].open();
       const apiRoleOptions = await matSelectHarnesses[0].getOptions();
       await apiRoleOptions[2].click();
       await matSelectHarnesses[1].open();
-      const applicationRoleOptions = await matSelectHarnesses[1].getOptions();
+      const applicationRoleOptions = await matSelectHarnesses[1].getOptions({ text: /USER/ });
       await applicationRoleOptions[0].click();
       await matSelectHarnesses[2].open();
       const integrationRoleOptions = await matSelectHarnesses[2].getOptions();
       await integrationRoleOptions[0].click();
+      await matSelectHarnesses[3].open();
+      const clusterRoleOptions = await matSelectHarnesses[3].getOptions();
+      await clusterRoleOptions[0].click();
       const groupAdminHarness = await dialogHarness.getHarness(MatSlideToggleHarness.with({ selector: '[formControlName="groupAdmin"]' }));
       expect(await groupAdminHarness.isDisabled()).toEqual(false);
       await groupAdminHarness.check();
@@ -402,8 +412,9 @@ describe('GroupComponent', () => {
       await confirmButtonHarness.click();
       expectAddOrUpdateMembership('1', 'testmember1', [
         { name: 'REVIEWER', scope: 'API' },
-        { name: 'OWNER', scope: 'APPLICATION' },
+        { name: 'USER', scope: 'APPLICATION' },
         { name: 'OWNER', scope: 'INTEGRATION' },
+        { name: 'USER', scope: 'CLUSTER' },
         { name: 'ADMIN', scope: 'GROUP' },
       ]);
     });
@@ -420,6 +431,7 @@ describe('GroupComponent', () => {
     it('should display list of invitations', async () => {
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const tabGroupHarness = await harnessLoader.getHarness(MatTabGroupHarness);
@@ -429,7 +441,7 @@ describe('GroupComponent', () => {
       const tableHarness = await harnessLoader.getHarness(MatTableHarness.with({ selector: '#invitationsDataTable' }));
       const rows = await tableHarness.getRows();
       expect(rows.length).toEqual(1);
-      const cell = await rows[0].getCells({ columnName: 'guestEmail' }).then((cells) => cells[0]);
+      const cell = await rows[0].getCells({ columnName: 'guestEmail' }).then(cells => cells[0]);
       const text = await cell.getText();
       expect(text).toEqual('temp@temp.com');
     });
@@ -437,6 +449,7 @@ describe('GroupComponent', () => {
     it('should delete invitation', async () => {
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const tabGroupHarness = await harnessLoader.getHarness(MatTabGroupHarness);
@@ -445,7 +458,7 @@ describe('GroupComponent', () => {
       expectGetInvitations();
       const tableHarness = await harnessLoader.getHarness(MatTableHarness.with({ selector: '#invitationsDataTable' }));
       const rows = await tableHarness.getRows();
-      const cell = await rows[0].getCells({ columnName: 'guestActions' }).then((cells) => cells[0]);
+      const cell = await rows[0].getCells({ columnName: 'guestActions' }).then(cells => cells[0]);
       const deleteButton = await cell.getHarness(MatButtonHarness.with({ selector: '[mattooltip="Delete invitation"]' }));
       await deleteButton.click();
       const dialogHarness = await rootLoader.getHarness(MatDialogHarness);
@@ -466,12 +479,13 @@ describe('GroupComponent', () => {
     it('should display list of associated applications', async () => {
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const tableHarness = await harnessLoader.getHarness(MatTableHarness.with({ selector: '#groupApplicationsDataTable' }));
       const rows = await tableHarness.getRows();
       expect(rows.length).toEqual(1);
-      const cell = await rows[0].getCells({ columnName: 'applicationName' }).then((cells) => cells[0]);
+      const cell = await rows[0].getCells({ columnName: 'applicationName' }).then(cells => cells[0]);
       const text = await cell.getText();
       expect(text).toEqual('Test Application 1');
     });
@@ -488,12 +502,13 @@ describe('GroupComponent', () => {
     it('should display list of associated APIs', async () => {
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const tableHarness = await harnessLoader.getHarness(MatTableHarness.with({ selector: '#groupApisDataTable' }));
       const rows = await tableHarness.getRows();
       expect(rows.length).toEqual(1);
-      const cell = await rows[0].getCells({ columnName: 'apiName' }).then((cells) => cells[0]);
+      const cell = await rows[0].getCells({ columnName: 'apiName' }).then(cells => cells[0]);
       const text = await cell.getText();
       expect(text).toEqual('Test API 1 Private');
     });
@@ -519,6 +534,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await getButtonByTooltipText('Search and invite users to the group');
@@ -530,7 +546,7 @@ describe('GroupComponent', () => {
       await userSearchMenuItem.click();
       const dialogHarness = await rootLoader.getHarness(MatDialogHarness);
       const matSelectHarnesses = await dialogHarness.getAllHarnesses(MatSelectHarness);
-      expect(matSelectHarnesses.length).toEqual(3);
+      expect(matSelectHarnesses.length).toEqual(4);
       await matSelectHarnesses[0].open();
       const apiRoleOptions = await matSelectHarnesses[0].getOptions();
       expect(await apiRoleOptions[3].isSelected()).toEqual(true);
@@ -549,28 +565,25 @@ describe('GroupComponent', () => {
         {
           id: '1',
           displayName: 'Test Member 1',
-          roles: [
-            { name: 'OWNER', scope: 'API' },
-            { name: 'OWNER', scope: 'APPLICATION' },
-            {
-              name: 'OWNER',
-              scope: 'INTEGRATION',
-            },
-          ],
+          roles: {
+            API: 'OWNER',
+            APPLICATION: 'OWNER',
+            INTEGRATION: 'OWNER',
+            CLUSTER: 'USER',
+          },
         },
         {
           id: '2',
           displayName: 'Test Member 2',
-          roles: [
-            { name: 'OWNER', scope: 'API' },
-            { name: 'OWNER', scope: 'APPLICATION' },
-            {
-              name: 'OWNER',
-              scope: 'INTEGRATION',
-            },
-          ],
+          roles: {
+            API: 'OWNER',
+            APPLICATION: 'OWNER',
+            INTEGRATION: 'OWNER',
+            CLUSTER: 'USER',
+          },
         },
       ]);
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await getButtonByTooltipText('Search and invite users to the group');
@@ -585,6 +598,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await getButtonByTooltipText('Search and invite users to the group');
@@ -613,6 +627,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await getButtonByTooltipText('Search and invite users to the group');
@@ -644,6 +659,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await getButtonByTooltipText('Search and invite users to the group');
@@ -675,6 +691,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await getButtonByTooltipText('Search and invite users to the group');
@@ -712,6 +729,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await getButtonByTooltipText('Search and invite users to the group');
@@ -723,7 +741,7 @@ describe('GroupComponent', () => {
       await userSearchMenuItem.click();
       const dialogHarness = await rootLoader.getHarness(MatDialogHarness);
       const matSelectHarnesses = await dialogHarness.getAllHarnesses(MatSelectHarness);
-      expect(matSelectHarnesses.length).toEqual(3);
+      expect(matSelectHarnesses.length).toEqual(4);
       await matSelectHarnesses[0].open();
       const apiRoleOptions = await matSelectHarnesses[0].getOptions();
       await apiRoleOptions[2].click();
@@ -743,6 +761,7 @@ describe('GroupComponent', () => {
         { name: 'REVIEWER', scope: 'API' },
         { name: 'OWNER', scope: 'APPLICATION' },
         { name: 'OWNER', scope: 'INTEGRATION' },
+        { name: 'USER', scope: 'CLUSTER' },
       ]);
     });
 
@@ -765,6 +784,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await getButtonByTooltipText('Search and invite users to the group');
@@ -804,6 +824,7 @@ describe('GroupComponent', () => {
       fixture.detectChanges();
       expectGetDefaultRoles();
       expectGetGroupMembers();
+      expectGetCurrentUser();
       expectGetGroupAPIs();
       expectGetGroupApplications();
       const buttonHarness = await getButtonByTooltipText('Search and invite users to the group');
@@ -853,6 +874,13 @@ describe('GroupComponent', () => {
       },
     ]);
     expectGetRolesList('INTEGRATION', [{ id: '6', name: 'OWNER', scope: 'INTEGRATION' }]);
+    expectGetRolesList('CLUSTER', [
+      {
+        id: '8',
+        name: 'USER',
+        scope: 'CLUSTER',
+      },
+    ]);
   }
 
   function expectGetRolesList(type: string, roles: Role[] = ROLES) {
@@ -943,5 +971,9 @@ describe('GroupComponent', () => {
       application_role: 'OWNER',
     };
     expect(req.request.body).toEqual(invitation);
+  }
+
+  function expectGetCurrentUser() {
+    httpTestingController.expectOne({ url: `${CONSTANTS_TESTING.org.baseURL}/user`, method: 'GET' });
   }
 });

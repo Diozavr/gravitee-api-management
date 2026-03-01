@@ -16,8 +16,10 @@
 package io.gravitee.gateway.reactive.reactor.processor;
 
 import io.gravitee.gateway.env.GatewayConfiguration;
+import io.gravitee.gateway.reactive.core.connection.ConnectionDrainManager;
 import io.gravitee.gateway.reactive.core.processor.Processor;
-import io.gravitee.gateway.reactive.reactor.processor.forward.XForwardForProcessor;
+import io.gravitee.gateway.reactive.reactor.processor.connection.ConnectionDrainProcessor;
+import io.gravitee.gateway.reactive.reactor.processor.forward.XForwardProcessor;
 import io.gravitee.gateway.reactive.reactor.processor.metrics.MetricsProcessor;
 import io.gravitee.gateway.reactive.reactor.processor.tracing.TraceContextProcessor;
 import io.gravitee.gateway.reactive.reactor.processor.transaction.TransactionPreProcessorFactory;
@@ -37,6 +39,7 @@ public class DefaultPlatformProcessorChainFactory extends AbstractPlatformProces
     private final boolean xForwardProcessor;
     private final boolean traceContext;
     private final GatewayConfiguration gatewayConfiguration;
+    private final ConnectionDrainManager connectionDrainManager;
 
     public DefaultPlatformProcessorChainFactory(
         TransactionPreProcessorFactory transactionHandlerFactory,
@@ -46,23 +49,25 @@ public class DefaultPlatformProcessorChainFactory extends AbstractPlatformProces
         AlertEventProducer eventProducer,
         Node node,
         String port,
-        boolean tracing,
-        GatewayConfiguration gatewayConfiguration
+        GatewayConfiguration gatewayConfiguration,
+        ConnectionDrainManager connectionDrainManager
     ) {
-        super(transactionHandlerFactory, reporterService, eventProducer, node, port, tracing);
+        super(transactionHandlerFactory, reporterService, eventProducer, node, port);
         this.traceContext = traceContext;
         this.xForwardProcessor = xForwardProcessor;
         this.gatewayConfiguration = gatewayConfiguration;
+        this.connectionDrainManager = connectionDrainManager;
     }
 
     @Override
     protected List<Processor> buildPreProcessorList() {
         List<Processor> preProcessorList = new ArrayList<>();
+        preProcessorList.add(new ConnectionDrainProcessor(connectionDrainManager));
         preProcessorList.add(transactionHandlerFactory.create());
         preProcessorList.add(new MetricsProcessor(gatewayConfiguration));
 
         if (xForwardProcessor) {
-            preProcessorList.add(new XForwardForProcessor());
+            preProcessorList.add(new XForwardProcessor());
         }
 
         // Trace context is executed before the transaction to ensure that we can use the traceparent span value as the

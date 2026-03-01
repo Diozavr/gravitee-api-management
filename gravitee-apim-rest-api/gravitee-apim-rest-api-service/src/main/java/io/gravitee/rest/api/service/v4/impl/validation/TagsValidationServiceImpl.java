@@ -31,7 +31,7 @@ import io.gravitee.rest.api.service.impl.AbstractService;
 import io.gravitee.rest.api.service.v4.validation.TagsValidationService;
 import java.util.HashSet;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -40,7 +40,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class TagsValidationServiceImpl extends AbstractService implements TagsValidationService {
 
     private final TagService tagService;
@@ -63,8 +63,16 @@ public class TagsValidationServiceImpl extends AbstractService implements TagsVa
             tags = tagsToUpdate;
         } else {
             // Filter to keep only those newed or removed
-            tags = existingTags.stream().filter(tag -> !tagsToUpdate.contains(tag)).collect(toSet());
-            tags.addAll(tagsToUpdate.stream().filter(tag -> !existingTags.contains(tag)).collect(toSet()));
+            tags = existingTags
+                .stream()
+                .filter(tag -> !tagsToUpdate.contains(tag))
+                .collect(toSet());
+            tags.addAll(
+                tagsToUpdate
+                    .stream()
+                    .filter(tag -> !existingTags.contains(tag))
+                    .collect(toSet())
+            );
         }
 
         if (!tags.isEmpty()) {
@@ -74,7 +82,10 @@ public class TagsValidationServiceImpl extends AbstractService implements TagsVa
                 TagReferenceType.ORGANIZATION
             );
             if (!userTags.containsAll(tags)) {
-                final String[] notAllowedTags = tags.stream().filter(tag -> !userTags.contains(tag)).toArray(String[]::new);
+                final String[] notAllowedTags = tags
+                    .stream()
+                    .filter(tag -> !userTags.contains(tag))
+                    .toArray(String[]::new);
                 throw new TagNotAllowedException(notAllowedTags);
             }
         }

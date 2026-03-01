@@ -15,7 +15,7 @@
  */
 import { Injectable } from '@angular/core';
 import { filter, map, switchMap, take } from 'rxjs/operators';
-import { interval, Observable, race, timer } from 'rxjs';
+import { EMPTY, interval, Observable, of, throwError } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 
 import { ApiEventsV2Service } from '../../../../services-ngx/api-events-v2.service';
@@ -23,8 +23,8 @@ import { PolicyService } from '../../../../services-ngx/policy.service';
 import { DebugRequest } from '../models/DebugRequest';
 import { convertDebugEventToDebugResponse, DebugResponse } from '../models/DebugResponse';
 import { DebugApiV2Service } from '../../../../services-ngx/debug-api-v2.service';
-import { DebugModeService } from '../debug-mode.service';
-import { DebugEvent } from '../models/DebugEvent';
+import { DEBUG_EVENT_FAILED_ERROR, DebugModeService } from '../debug-mode.service';
+import { DebugEvent, debugStatus } from '../models/DebugEvent';
 
 @Injectable({
   providedIn: 'root',
@@ -40,36 +40,26 @@ export class DebugModeV4Service extends DebugModeService {
   }
 
   public debug(debugRequest: DebugRequest): Observable<DebugResponse> {
-    const maxPollingTime$ = timer(10000).pipe(
-      map<number, DebugResponse>(() => ({
-        isLoading: false,
-        reachedTimeout: true,
-        executionMode: null,
-        request: {},
-        response: {},
-        responsePolicyDebugSteps: [],
-        backendResponse: {},
-        requestPolicyDebugSteps: [],
-        preprocessorStep: {},
-        requestDebugSteps: {},
-        responseDebugSteps: {},
-      })),
-    );
-
-    const pollingEvent$ = this.sendDebugEvent(debugRequest).pipe(
-      // Poll each 1s to find success event. Stops after 10 seconds
+    return this.sendDebugEvent(debugRequest).pipe(
+      // Poll each 1s to find success event.
       switchMap(({ apiId, debugEventId }) => interval(1000).pipe(switchMap(() => this.getDebugEvent(apiId, debugEventId)))),
-      filter((event) => event.status === 'SUCCESS'),
+      switchMap(event => {
+        if (event.status === 'ERROR') {
+          return throwError(() => new Error(DEBUG_EVENT_FAILED_ERROR));
+        }
+        if (event.status === 'SUCCESS') {
+          return of(event);
+        }
+        return EMPTY;
+      }),
       take(1),
       map((event: DebugEvent) => convertDebugEventToDebugResponse(event)),
     );
-
-    return race(maxPollingTime$, pollingEvent$);
   }
 
   private sendDebugEvent(request: DebugRequest): Observable<{ apiId: string; debugEventId: string }> {
     const headersAsMap = (request.headers ?? [])
-      .filter((header) => !!header.value)
+      .filter(header => !!header.value)
       .reduce(
         (acc, current) => {
           acc[current.key] = acc[current.key] ? [...acc[current.key], current.value] : [current.value];
@@ -88,16 +78,16 @@ export class DebugModeV4Service extends DebugModeService {
         },
         apiId,
       )
-      .pipe(map((event) => ({ apiId: apiId, debugEventId: event.id })));
+      .pipe(map(event => ({ apiId: apiId, debugEventId: event.id })));
   }
 
   private getDebugEvent(apiId: string, eventId: string): Observable<DebugEvent> {
     return this.eventService.findById(apiId, eventId).pipe(
-      filter((event) => event.type === 'DEBUG_API'),
-      map((event) => ({
+      filter(event => event.type === 'DEBUG_API'),
+      map(event => ({
         id: event.id,
         payload: JSON.parse(event.payload),
-        status: event.properties.API_DEBUG_STATUS === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
+        status: debugStatus(event.properties.API_DEBUG_STATUS),
       })),
     );
   }

@@ -27,6 +27,8 @@ import io.gravitee.gateway.env.GatewayConfiguration;
 import io.gravitee.gateway.env.RequestClientAuthConfiguration;
 import io.gravitee.gateway.env.RequestTimeoutConfiguration;
 import io.gravitee.gateway.opentelemetry.TracingContext;
+import io.gravitee.gateway.reactive.core.connection.ConnectionDrainManager;
+import io.gravitee.gateway.reactive.core.connection.DefaultConnectionDrainManager;
 import io.gravitee.gateway.reactive.reactor.DefaultHttpRequestDispatcher;
 import io.gravitee.gateway.reactive.reactor.DefaultTcpSocketDispatcher;
 import io.gravitee.gateway.reactive.reactor.HttpRequestDispatcher;
@@ -63,8 +65,7 @@ import io.gravitee.plugin.alert.AlertEventProducer;
 import io.gravitee.secrets.api.discovery.DefinitionSecretRefsFinder;
 import io.vertx.core.Vertx;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -75,10 +76,9 @@ import org.springframework.core.env.Environment;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Configuration
 public class ReactorConfiguration {
-
-    public static final Logger log = LoggerFactory.getLogger(ReactorConfiguration.class);
 
     private static final String HEX_FORMAT = "hex";
 
@@ -135,7 +135,8 @@ public class ReactorConfiguration {
         Node node,
         @Value("${http.port:8082}") String httpPort,
         OpenTelemetryConfiguration openTelemetryConfiguration,
-        GatewayConfiguration gatewayConfiguration
+        GatewayConfiguration gatewayConfiguration,
+        ConnectionDrainManager connectionDrainManager
     ) {
         return new DefaultPlatformProcessorChainFactory(
             transactionHandlerFactory,
@@ -145,8 +146,8 @@ public class ReactorConfiguration {
             eventProducer,
             node,
             httpPort,
-            openTelemetryConfiguration.isTracesEnabled(),
-            gatewayConfiguration
+            gatewayConfiguration,
+            connectionDrainManager
         );
     }
 
@@ -163,7 +164,8 @@ public class ReactorConfiguration {
         RequestTimeoutConfiguration requestTimeoutConfiguration,
         RequestClientAuthConfiguration requestClientAuthConfiguration,
         Vertx vertx,
-        TracingContext tracingContext
+        TracingContext tracingContext,
+        @Value("${reporters.warnings.enabled:true}") boolean warningsEnabled
     ) {
         return new DefaultHttpRequestDispatcher(
             gatewayConfiguration,
@@ -177,7 +179,8 @@ public class ReactorConfiguration {
             tracingContext,
             requestTimeoutConfiguration,
             requestClientAuthConfiguration,
-            vertx
+            vertx,
+            warningsEnabled
         );
     }
 
@@ -185,9 +188,10 @@ public class ReactorConfiguration {
     public TcpSocketDispatcher tcpSocketDispatcher(
         TcpAcceptorResolver tcpAcceptorResolver,
         ComponentProvider globalComponentProvider,
-        IdGenerator idGenerator
+        IdGenerator idGenerator,
+        @Value("${reporters.warnings.enabled:true}") boolean warningsEnabled
     ) {
-        return new DefaultTcpSocketDispatcher(tcpAcceptorResolver, globalComponentProvider, idGenerator);
+        return new DefaultTcpSocketDispatcher(tcpAcceptorResolver, globalComponentProvider, idGenerator, warningsEnabled);
     }
 
     @Bean
@@ -247,7 +251,6 @@ public class ReactorConfiguration {
         ReporterService reporterService,
         @Value("${handlers.notfound.analytics.enabled:false}") boolean notFoundAnalyticsEnabled,
         @Deprecated @Value("${handlers.notfound.log.enabled:false}") boolean notFoundLogEnabled,
-        OpenTelemetryConfiguration openTelemetryConfiguration,
         GatewayConfiguration gatewayConfiguration
     ) {
         return new NotFoundProcessorChainFactory(
@@ -255,7 +258,6 @@ public class ReactorConfiguration {
             environment,
             reporterService,
             notFoundAnalyticsEnabled || notFoundLogEnabled,
-            openTelemetryConfiguration.isTracesEnabled(),
             gatewayConfiguration
         );
     }
@@ -278,5 +280,10 @@ public class ReactorConfiguration {
     @Bean
     public HttpAcceptorFactory httpAcceptorFactory(GatewayConfiguration gatewayConfiguration) {
         return new HttpAcceptorFactory(gatewayConfiguration.allowOverlappingApiContexts());
+    }
+
+    @Bean
+    public ConnectionDrainManager connectionDrainManager() {
+        return new DefaultConnectionDrainManager();
     }
 }

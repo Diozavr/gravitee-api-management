@@ -19,10 +19,12 @@ import io.gravitee.apim.core.plan.model.Plan;
 import io.gravitee.apim.core.plan.query_service.PlanQueryService;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 public class PlanQueryServiceInMemory implements PlanQueryService, InMemoryAlternative<Plan> {
 
@@ -40,17 +42,69 @@ public class PlanQueryServiceInMemory implements PlanQueryService, InMemoryAlter
     public List<Plan> findAllByApiIdAndGeneralConditionsAndIsActive(String apiId, DefinitionVersion definitionVersion, String pageId) {
         return storage
             .stream()
-            .filter(plan ->
-                Objects.equals(apiId, plan.getApiId()) &&
-                Objects.equals(pageId, plan.getGeneralConditions()) &&
-                !(PlanStatus.STAGING.equals(plan.getPlanStatus()) || PlanStatus.CLOSED.equals(plan.getPlanStatus()))
+            .filter(
+                plan ->
+                    Objects.equals(apiId, plan.getReferenceId()) &&
+                    Objects.equals(pageId, plan.getGeneralConditions()) &&
+                    !(PlanStatus.STAGING.equals(plan.getPlanStatus()) || PlanStatus.CLOSED.equals(plan.getPlanStatus()))
             )
             .toList();
     }
 
     @Override
     public List<Plan> findAllByApiId(String apiId) {
-        return storage.stream().filter(plan -> Objects.equals(apiId, plan.getApiId())).map(p -> (Plan) p).toList();
+        return storage
+            .stream()
+            .filter(plan -> Objects.equals(apiId, plan.getReferenceId()))
+            .map(p -> (Plan) p)
+            .toList();
+    }
+
+    @Override
+    public List<Plan> findAllByApiIds(Set<String> apiIds, Set<String> environmentIds) {
+        if (apiIds == null || apiIds.isEmpty() || environmentIds == null || environmentIds.isEmpty()) {
+            return List.of();
+        }
+        return storage
+            .stream()
+            .filter(
+                plan ->
+                    apiIds.contains(plan.getReferenceId()) &&
+                    (plan.getReferenceType() == null || GenericPlanEntity.ReferenceType.API.equals(plan.getReferenceType())) &&
+                    (plan.getEnvironmentId() == null || environmentIds.contains(plan.getEnvironmentId()))
+            )
+            .map(plan -> (Plan) plan)
+            .toList();
+    }
+
+    @Override
+    public List<Plan> findAllForApiProduct(String referenceId) {
+        return storage
+            .stream()
+            .filter(
+                plan ->
+                    Objects.equals(referenceId, plan.getReferenceId()) &&
+                    Objects.equals(GenericPlanEntity.ReferenceType.API_PRODUCT, plan.getReferenceType())
+            )
+            .map(p -> (Plan) p)
+            .toList();
+    }
+
+    @Override
+    public List<Plan> findAllForApiProducts(Set<String> apiProductIds, Set<String> environmentIds) {
+        if (apiProductIds == null || apiProductIds.isEmpty() || environmentIds == null || environmentIds.isEmpty()) {
+            return List.of();
+        }
+        return storage
+            .stream()
+            .filter(
+                plan ->
+                    apiProductIds.contains(plan.getReferenceId()) &&
+                    Objects.equals(GenericPlanEntity.ReferenceType.API_PRODUCT, plan.getReferenceType()) &&
+                    (plan.getEnvironmentId() == null || environmentIds.contains(plan.getEnvironmentId()))
+            )
+            .map(p -> (Plan) p)
+            .toList();
     }
 
     @Override

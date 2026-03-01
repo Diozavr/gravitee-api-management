@@ -15,6 +15,7 @@
  */
 package io.gravitee.repository.management.model;
 
+import io.gravitee.common.utils.TimeProvider;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.Map;
@@ -26,6 +27,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 /**
  * @author Titouan COMPIEGNE (titouan.compiegne at graviteesource.com)
@@ -37,6 +39,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @EqualsAndHashCode
+@ToString
 public class Event implements Serializable {
 
     /**
@@ -91,6 +94,7 @@ public class Event implements Serializable {
         ID("id"),
         API_ID("api_id"),
         SHARED_POLICY_GROUP_ID("shared_policy_group_id"),
+        API_PRODUCT_ID("api_product_id"),
         DICTIONARY_ID("dictionary_id"),
         ORIGIN("origin"),
         USER("user"),
@@ -101,5 +105,17 @@ public class Event implements Serializable {
         GATEWAY_ID("gateway_id");
 
         private final String value;
+    }
+
+    public Event updatePayload(String payload) {
+        this.payload = payload;
+        this.updatedAt = Date.from(TimeProvider.instantNow());
+        return this;
+    }
+
+    public Event updateProperties(String key, String value) {
+        properties.put(key, value);
+        this.updatedAt = Date.from(TimeProvider.instantNow());
+        return this;
     }
 }

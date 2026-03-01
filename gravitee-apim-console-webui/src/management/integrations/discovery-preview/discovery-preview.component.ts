@@ -62,6 +62,7 @@ export class DiscoveryPreviewComponent implements OnInit {
   };
 
   public apisFiltered: IntegrationPreviewApi[] = [];
+  public isPartiallyDiscovered = false;
 
   constructor(
     public readonly integrationsService: IntegrationsService,
@@ -78,7 +79,7 @@ export class DiscoveryPreviewComponent implements OnInit {
     this.integrationsService
       .getIntegration(this.integrationId)
       .pipe(
-        switchMap((integration) => {
+        switchMap(integration => {
           if (isApiIntegration(integration) && integration.agentStatus === AgentStatus.DISCONNECTED) {
             this.snackBarService.error('Agent is DISCONNECTED, make sure your Agent is CONNECTED');
             this.router.navigate(['..'], { relativeTo: this.activatedRoute });
@@ -94,6 +95,7 @@ export class DiscoveryPreviewComponent implements OnInit {
           this.nbTotalInstances = integrationPreview.totalCount;
           this.apisFiltered = integrationPreview.apis;
           this.integrationPreview = integrationPreview;
+          this.isPartiallyDiscovered = integrationPreview.isPartiallyDiscovered;
           this.setupForm(IntegrationPreviewApisState.NEW, this.integrationPreview.newCount);
           this.setupForm(IntegrationPreviewApisState.UPDATE, this.integrationPreview.updateCount);
           this.runFilters(this.filters);
@@ -108,11 +110,8 @@ export class DiscoveryPreviewComponent implements OnInit {
 
   public proceedIngest() {
     this.integrationsService
-      .ingest(
-        this.integrationId,
-        this.apiToIngest().map((api) => api.id),
-      )
-      .subscribe((response) => {
+      .ingest(this.integrationId, this.isPartiallyDiscovered ? [] : this.apiToIngest().map(api => api.id))
+      .subscribe(response => {
         switch (response.status) {
           case 'SUCCESS':
             this.snackBarService.success('Ingestion complete! Your integration is now updated.');
@@ -126,7 +125,7 @@ export class DiscoveryPreviewComponent implements OnInit {
   }
 
   public apiToIngest(): IntegrationPreviewApi[] {
-    return this.integrationPreview?.apis?.filter((api) => this.selectToIngest.has(api.state)) ?? [];
+    return this.integrationPreview?.apis?.filter(api => this.selectToIngest.has(api.state)) ?? [];
   }
 
   private setupForm(controlName: IntegrationPreviewApisState, value: number) {
@@ -137,7 +136,7 @@ export class DiscoveryPreviewComponent implements OnInit {
       this.form.controls[controlName].setValue(value > 0);
       this.selectToIngest.add(controlName);
     }
-    this.form.controls[controlName].valueChanges.subscribe((selected) => {
+    this.form.controls[controlName].valueChanges.subscribe(selected => {
       if (selected) {
         this.selectToIngest.add(controlName);
       } else {

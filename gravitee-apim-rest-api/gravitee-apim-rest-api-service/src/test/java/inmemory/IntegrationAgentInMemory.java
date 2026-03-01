@@ -16,6 +16,7 @@
 package inmemory;
 
 import io.gravitee.apim.core.integration.exception.IntegrationIngestionException;
+import io.gravitee.apim.core.integration.model.DiscoveredApis;
 import io.gravitee.apim.core.integration.model.IngestStarted;
 import io.gravitee.apim.core.integration.model.IntegrationApi;
 import io.gravitee.apim.core.integration.model.IntegrationSubscription;
@@ -61,18 +62,16 @@ public class IntegrationAgentInMemory implements IntegrationAgent, InMemoryAlter
         FederatedApi api,
         SubscriptionParameter subscriptionParameter,
         String subscriptionId,
-        BaseApplicationEntity application
+        BaseApplicationEntity application,
+        Map<String, String> providerMetadata
     ) {
-        subscriptions.compute(
-            integrationId,
-            (integration, subscriptionIds) -> {
-                if (subscriptionIds == null) {
-                    subscriptionIds = new ArrayList<>();
-                }
-                subscriptionIds.add(subscriptionId);
-                return subscriptionIds;
+        subscriptions.compute(integrationId, (integration, subscriptionIds) -> {
+            if (subscriptionIds == null) {
+                subscriptionIds = new ArrayList<>();
             }
-        );
+            subscriptionIds.add(subscriptionId);
+            return subscriptionIds;
+        });
         IntegrationSubscription.Type type;
         if (subscriptionParameter instanceof SubscriptionParameter.ApiKey) {
             type = IntegrationSubscription.Type.API_KEY;
@@ -81,12 +80,16 @@ public class IntegrationAgentInMemory implements IntegrationAgent, InMemoryAlter
         } else {
             throw new IntegrationIngestionException("Unsupported subscription parameter: " + subscriptionParameter);
         }
+        var metadata = new HashMap<>(Map.of("key", "value"));
+        if (!providerMetadata.isEmpty()) {
+            metadata.putAll(providerMetadata);
+        }
         return Single.just(
             new IntegrationSubscription(
                 integrationId,
                 type,
                 String.join("-", type.name(), subscriptionId, application.getId(), application.getName()),
-                Map.of("key", "value")
+                metadata
             )
         );
     }
@@ -100,8 +103,11 @@ public class IntegrationAgentInMemory implements IntegrationAgent, InMemoryAlter
     }
 
     @Override
-    public Flowable<IntegrationApi> discoverApis(String integrationId) {
-        return Flowable.fromIterable(storage).filter(asset -> asset.integrationId().equals(integrationId));
+    public Single<DiscoveredApis> discoverApis(String integrationId) {
+        return Flowable.fromIterable(storage)
+            .filter(asset -> asset.integrationId().equals(integrationId))
+            .toList()
+            .map(discoveredApis -> new DiscoveredApis(discoveredApis, false));
     }
 
     @Override

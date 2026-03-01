@@ -22,10 +22,11 @@ import io.gravitee.repository.jdbc.orm.JdbcObjectMapper;
 import io.gravitee.repository.management.api.WorkflowRepository;
 import io.gravitee.repository.management.model.Workflow;
 import java.sql.Types;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.stream.Stream;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
@@ -33,10 +34,9 @@ import org.springframework.stereotype.Repository;
  * @author Azize ELAMRANI (azize.elamrani at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Repository
 public class JdbcWorkflowRepository extends JdbcAbstractCrudRepository<Workflow, String> implements WorkflowRepository {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(JdbcWorkflowRepository.class);
 
     JdbcWorkflowRepository(@Value("${management.jdbc.prefix:}") String tablePrefix) {
         super(tablePrefix, "workflows");
@@ -44,8 +44,7 @@ public class JdbcWorkflowRepository extends JdbcAbstractCrudRepository<Workflow,
 
     @Override
     protected JdbcObjectMapper<Workflow> buildOrm() {
-        return JdbcObjectMapper
-            .builder(Workflow.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(Workflow.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("reference_type", Types.NVARCHAR, String.class)
             .addColumn("reference_id", Types.NVARCHAR, String.class)
@@ -65,13 +64,13 @@ public class JdbcWorkflowRepository extends JdbcAbstractCrudRepository<Workflow,
     @Override
     public List<Workflow> findByReferenceAndType(final String referenceType, final String referenceId, final String type)
         throws TechnicalException {
-        LOGGER.debug("JdbcWorkflowRepository.findByReferenceAndType({}, {}, {})", referenceType, referenceId, type);
+        log.debug("JdbcWorkflowRepository.findByReferenceAndType({}, {}, {})", referenceType, referenceId, type);
         try {
             return jdbcTemplate.query(
                 getOrm().getSelectAllSql() +
-                " where reference_type = ? and reference_id = ? and " +
-                escapeReservedWord("type") +
-                " = ? order by created_at desc",
+                    " where reference_type = ? and reference_id = ? and " +
+                    escapeReservedWord("type") +
+                    " = ? order by created_at desc",
                 getOrm().getRowMapper(),
                 referenceType,
                 referenceId,
@@ -79,14 +78,41 @@ public class JdbcWorkflowRepository extends JdbcAbstractCrudRepository<Workflow,
             );
         } catch (final Exception ex) {
             final String message = "Failed to find workflows by reference";
-            LOGGER.error(message, ex);
+            log.error(message, ex);
+            throw new TechnicalException(message, ex);
+        }
+    }
+
+    @Override
+    public List<Workflow> findByReferencesAndType(final String referenceType, final Collection<String> referenceIds, final String type)
+        throws TechnicalException {
+        log.debug("JdbcWorkflowRepository.findByReferencesAndType({}, {}, {})", referenceType, referenceIds, type);
+        if (referenceIds == null || referenceIds.isEmpty()) {
+            return List.of();
+        }
+        try {
+            String inClause = getOrm().buildInClause(referenceIds);
+            String sql =
+                getOrm().getSelectAllSql() +
+                " where reference_type = ? and reference_id in (" +
+                inClause +
+                ") and " +
+                escapeReservedWord("type") +
+                " = ? order by created_at desc";
+            Object[] params = Stream.of(Stream.of(referenceType), referenceIds.stream(), Stream.of(type))
+                .flatMap(s -> s)
+                .toArray();
+            return jdbcTemplate.query(sql, getOrm().getRowMapper(), params);
+        } catch (final Exception ex) {
+            final String message = "Failed to find workflows by references";
+            log.error(message, ex);
             throw new TechnicalException(message, ex);
         }
     }
 
     @Override
     public List<String> deleteByReferenceIdAndReferenceType(String referenceId, String referenceType) throws TechnicalException {
-        LOGGER.debug("JdbcWorkflowRepository.deleteByReferenceIdAndReferenceType({}, {})", referenceId, referenceType);
+        log.debug("JdbcWorkflowRepository.deleteByReferenceIdAndReferenceType({}, {})", referenceId, referenceType);
         try {
             final var rows = jdbcTemplate.queryForList(
                 "select id from " + tableName + " where reference_type = ? and reference_id = ?",
@@ -103,10 +129,10 @@ public class JdbcWorkflowRepository extends JdbcAbstractCrudRepository<Workflow,
                 );
             }
 
-            LOGGER.debug("JdbcWorkflowRepository.deleteByReferenceIdAndReferenceType({}, {}) - Done", referenceId, referenceType);
+            log.debug("JdbcWorkflowRepository.deleteByReferenceIdAndReferenceType({}, {}) - Done", referenceId, referenceType);
             return rows;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to delete workflow for refId: {}/{}", referenceId, referenceType, ex);
+            log.error("Failed to delete workflow for refId: {}/{}", referenceId, referenceType, ex);
             throw new TechnicalException("Failed to delete workflow by reference", ex);
         }
     }

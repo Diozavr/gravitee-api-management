@@ -16,7 +16,9 @@
 package io.gravitee.rest.api.service.impl;
 
 import static io.gravitee.repository.management.model.Audit.AuditProperties.USER_FIELD;
-import static io.gravitee.repository.management.model.CustomUserField.AuditEvent.*;
+import static io.gravitee.repository.management.model.CustomUserField.AuditEvent.CUSTOM_USER_FIELD_CREATED;
+import static io.gravitee.repository.management.model.CustomUserField.AuditEvent.CUSTOM_USER_FIELD_DELETED;
+import static io.gravitee.repository.management.model.CustomUserField.AuditEvent.CUSTOM_USER_FIELD_UPDATED;
 import static io.gravitee.repository.management.model.CustomUserFieldReferenceType.ENVIRONMENT;
 import static io.gravitee.repository.management.model.CustomUserFieldReferenceType.ORGANIZATION;
 import static io.gravitee.rest.api.service.sanitizer.CustomFieldSanitizer.formatKeyValue;
@@ -42,8 +44,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -52,10 +53,9 @@ import org.springframework.stereotype.Component;
  * @author Eric LELEU (eric.leleu at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class CustomUserFieldsServiceImpl extends TransactionalService implements CustomUserFieldService {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(CustomUserFieldsServiceImpl.class);
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -79,9 +79,12 @@ public class CustomUserFieldsServiceImpl extends TransactionalService implements
         try {
             final String refId = executionContext.getOrganizationId();
             final CustomUserFieldReferenceType refType = ORGANIZATION;
-            LOGGER.debug("Create custom user field [key={}, refId={}]", newFieldEntity.getKey(), refId);
-            Optional<CustomUserField> existingRecord =
-                this.customUserFieldsRepository.findById(formatKeyValue(newFieldEntity.getKey()), refId, refType);
+            log.debug("Create custom user field [key={}, refId={}]", newFieldEntity.getKey(), refId);
+            Optional<CustomUserField> existingRecord = this.customUserFieldsRepository.findById(
+                formatKeyValue(newFieldEntity.getKey()),
+                refId,
+                refType
+            );
             if (existingRecord.isPresent()) {
                 throw new CustomUserFieldAlreadyExistException(newFieldEntity.getKey());
             } else {
@@ -98,7 +101,7 @@ public class CustomUserFieldsServiceImpl extends TransactionalService implements
                 return map(recorded);
             }
         } catch (TechnicalException e) {
-            LOGGER.error("An error occurs while trying to create CustomUserField", e);
+            log.error("An error occurs while trying to create CustomUserField", e);
             throw new TechnicalManagementException("An error occurs while trying to create CustomUserField", e);
         }
     }
@@ -108,9 +111,12 @@ public class CustomUserFieldsServiceImpl extends TransactionalService implements
         try {
             final String refId = executionContext.getOrganizationId();
             final CustomUserFieldReferenceType refType = ORGANIZATION;
-            LOGGER.debug("Update custom user field [key={}, refId={}]", updateFieldEntity.getKey(), refId);
-            Optional<CustomUserField> existingRecord =
-                this.customUserFieldsRepository.findById(formatKeyValue(updateFieldEntity.getKey()), refId, refType);
+            log.debug("Update custom user field [key={}, refId={}]", updateFieldEntity.getKey(), refId);
+            Optional<CustomUserField> existingRecord = this.customUserFieldsRepository.findById(
+                formatKeyValue(updateFieldEntity.getKey()),
+                refId,
+                refType
+            );
             if (existingRecord.isPresent()) {
                 CustomUserField fieldToUpdate = map(updateFieldEntity);
                 fieldToUpdate.setKey(existingRecord.get().getKey());
@@ -128,7 +134,7 @@ public class CustomUserFieldsServiceImpl extends TransactionalService implements
                 throw new CustomUserFieldNotFoundException(updateFieldEntity.getKey());
             }
         } catch (TechnicalException e) {
-            LOGGER.error("An error occurs while trying to update CustomUserField", e);
+            log.error("An error occurs while trying to update CustomUserField", e);
             throw new TechnicalManagementException("An error occurs while trying to update CustomUserField", e);
         }
     }
@@ -138,21 +144,21 @@ public class CustomUserFieldsServiceImpl extends TransactionalService implements
         try {
             final String refId = executionContext.getOrganizationId();
             final CustomUserFieldReferenceType refType = ORGANIZATION;
-            LOGGER.debug("Delete custom user field [key={}, refId={}]", key, refId);
+            log.debug("Delete custom user field [key={}, refId={}]", key, refId);
             Optional<CustomUserField> existingRecord = this.customUserFieldsRepository.findById(formatKeyValue(key), refId, refType);
             if (existingRecord.isPresent()) {
                 customUserFieldsRepository.delete(formatKeyValue(key), refId, refType);
                 createAuditLog(executionContext, CUSTOM_USER_FIELD_DELETED, new Date(), existingRecord.get(), null);
                 // remove all instance of this field from UserMetadata
                 this.userMetadataService.deleteAllByCustomFieldId(
-                        executionContext,
-                        existingRecord.get().getKey(),
-                        existingRecord.get().getReferenceId(),
-                        existingRecord.get().getReferenceType()
-                    );
+                    executionContext,
+                    existingRecord.get().getKey(),
+                    existingRecord.get().getReferenceId(),
+                    existingRecord.get().getReferenceType()
+                );
             }
         } catch (TechnicalException e) {
-            LOGGER.error("An error occurs while trying to create CustomUserField", e);
+            log.error("An error occurs while trying to create CustomUserField", e);
             throw new TechnicalManagementException("An error occurs while trying to create CustomUserField", e);
         }
     }
@@ -162,11 +168,11 @@ public class CustomUserFieldsServiceImpl extends TransactionalService implements
         try {
             final String refId = executionContext.getOrganizationId();
             final CustomUserFieldReferenceType refType = ORGANIZATION;
-            LOGGER.debug("List all custom user fields [refId={}/refType={}]", refId, refType);
+            log.debug("List all custom user fields [refId={}/refType={}]", refId, refType);
             List<CustomUserField> records = this.customUserFieldsRepository.findByReferenceIdAndReferenceType(refId, refType);
             return records.stream().map(this::map).collect(Collectors.toList());
         } catch (TechnicalException e) {
-            LOGGER.error("An error occurs while trying to list all CustomUserField", e);
+            log.error("An error occurs while trying to list all CustomUserField", e);
             throw new TechnicalManagementException("An error occurs while trying to list all CustomUserField", e);
         }
     }
@@ -183,15 +189,25 @@ public class CustomUserFieldsServiceImpl extends TransactionalService implements
         if (type == ORGANIZATION) {
             auditService.createOrganizationAuditLog(
                 executionContext,
-                executionContext.getOrganizationId(),
-                Collections.singletonMap(USER_FIELD, key),
-                event,
-                createdAt,
-                oldValue,
-                newValue
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.singletonMap(USER_FIELD, key))
+                    .event(event)
+                    .createdAt(createdAt)
+                    .oldValue(oldValue)
+                    .newValue(newValue)
+                    .build()
             );
         } else if (type == ENVIRONMENT) {
-            auditService.createAuditLog(executionContext, Collections.singletonMap(USER_FIELD, key), event, createdAt, oldValue, newValue);
+            auditService.createAuditLog(
+                executionContext,
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.singletonMap(USER_FIELD, key))
+                    .event(event)
+                    .createdAt(createdAt)
+                    .oldValue(oldValue)
+                    .newValue(newValue)
+                    .build()
+            );
         }
     }
 

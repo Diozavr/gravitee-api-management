@@ -34,6 +34,7 @@ import io.gravitee.rest.api.model.permissions.RolePermission;
 import io.gravitee.rest.api.model.permissions.RolePermissionAction;
 import io.gravitee.rest.api.model.subscription.SubscriptionMetadataQuery;
 import io.gravitee.rest.api.model.subscription.SubscriptionQuery;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.portal.rest.mapper.ApiMapper;
 import io.gravitee.rest.api.portal.rest.mapper.KeyMapper;
 import io.gravitee.rest.api.portal.rest.mapper.SubscriptionMapper;
@@ -65,6 +66,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -132,7 +134,8 @@ public class SubscriptionsResource extends AbstractResource {
             }
             SubscriptionEntity createdSubscription = subscriptionService.create(executionContext, newSubscriptionEntity);
 
-            // For consumer convenience, fetch the keys just after the subscription has been created.
+            // For consumer convenience, fetch the keys just after the subscription has been
+            // created.
             List<Key> keys = apiKeyService
                 .findBySubscription(executionContext, createdSubscription.getId())
                 .stream()
@@ -151,28 +154,44 @@ public class SubscriptionsResource extends AbstractResource {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Response getSubscriptions(
-        @QueryParam("apiId") String apiId,
-        @QueryParam("applicationId") String applicationId,
+        @Deprecated @QueryParam("apiId") String apiId,
+        @Deprecated @QueryParam("applicationId") String applicationId,
+        @QueryParam("apiIds") List<String> apiIds,
+        @QueryParam("applicationIds") List<String> applicationIds,
         @QueryParam("statuses") List<SubscriptionStatus> statuses,
         @BeanParam PaginationParam paginationParam
     ) {
+        List<String> effectiveApiIds = resolveApiIds(apiId, apiIds);
+        List<String> effectiveApplicationIds = resolveApplicationIds(applicationId, applicationIds);
+
         final SubscriptionQuery query = new SubscriptionQuery();
-        query.setApi(apiId);
-        query.setApplication(applicationId);
+        if (effectiveApiIds != null && !effectiveApiIds.isEmpty()) {
+            query.setApis(effectiveApiIds);
+        }
         query.setStatuses(statuses);
+        if (apiId == null || apiId.isEmpty()) {
+            query.setReferenceType(GenericPlanEntity.ReferenceType.API);
+        }
 
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
-        if (applicationId == null) {
+        if (effectiveApplicationIds == null || effectiveApplicationIds.isEmpty()) {
             final Set<ApplicationListItem> applications = applicationService.findByUser(executionContext, getAuthenticatedUser());
             if (applications == null || applications.isEmpty()) {
                 return createListResponse(executionContext, emptyList(), paginationParam, paginationParam.hasPagination());
             }
             query.setApplications(applications.stream().map(ApplicationListItem::getId).collect(toSet()));
-        } else if (!hasPermission(executionContext, RolePermission.APPLICATION_SUBSCRIPTION, applicationId, RolePermissionAction.READ)) {
-            throw new ForbiddenAccessException();
+        } else {
+            for (String appId : effectiveApplicationIds) {
+                if (!hasPermission(executionContext, RolePermission.APPLICATION_SUBSCRIPTION, appId, RolePermissionAction.READ)) {
+                    throw new ForbiddenAccessException();
+                }
+            }
+            query.setApplications(effectiveApplicationIds);
         }
 
-        final Collection<SubscriptionEntity> subscriptions = fetchSubscriptions(paginationParam, query);
+        final Page<SubscriptionEntity> pagedResult = fetchSubscriptions(paginationParam, query);
+        List<SubscriptionEntity> subscriptions = pagedResult.getContent();
+        long totalElements = pagedResult.getTotalElements();
 
         if (subscriptions.isEmpty()) {
             return createListResponse(executionContext, subscriptions, paginationParam, null, paginationParam.hasPagination());
@@ -183,13 +202,23 @@ public class SubscriptionsResource extends AbstractResource {
             .map(SubscriptionMapper.INSTANCE::map)
             .collect(Collectors.toList());
 
+        final Metadata metadata = buildSubscriptionMetadata(executionContext, subscriptions, totalElements);
+
+        return createListResponse(executionContext, subscriptionList, paginationParam, metadata.toMap(), paginationParam.hasPagination());
+    }
+
+    private Metadata buildSubscriptionMetadata(
+        ExecutionContext executionContext,
+        List<SubscriptionEntity> subscriptions,
+        long totalElements
+    ) {
         SubscriptionMetadataQuery metadataQuery = new SubscriptionMetadataQuery(
             GraviteeContext.getCurrentOrganization(),
             GraviteeContext.getCurrentEnvironment(),
             subscriptions
         )
             .withApis(true)
-            .withApplications(applicationId == null)
+            .withApplications(true)
             .withPlans(true)
             .withSubscribers(true)
             .includeDetails()
@@ -202,24 +231,45 @@ public class SubscriptionsResource extends AbstractResource {
 
         Metadata metadata = subscriptionService.getMetadata(executionContext, metadataQuery);
 
-        return createListResponse(executionContext, subscriptionList, paginationParam, metadata.toMap(), paginationParam.hasPagination());
+        if (metadata != null) {
+            metadata.put("paginateMetaData", "totalElements", totalElements);
+        }
+        return metadata;
     }
 
-    private Collection<SubscriptionEntity> fetchSubscriptions(PaginationParam paginationParam, SubscriptionQuery query) {
-        if (!paginationParam.hasPagination()) {
-            return subscriptionService.search(GraviteeContext.getExecutionContext(), query);
-        } else {
-            final Page<SubscriptionEntity> pagedSubscriptions = subscriptionService.search(
-                GraviteeContext.getExecutionContext(),
-                query,
-                new PageableImpl(paginationParam.getPage(), paginationParam.getSize())
-            );
-            if (pagedSubscriptions == null) {
-                return emptyList();
-            } else {
-                return pagedSubscriptions.getContent();
-            }
+    private static List<String> resolveApiIds(String apiId, List<String> apiIds) {
+        if (apiIds != null && !apiIds.isEmpty()) {
+            return apiIds;
         }
+        if (apiId != null && !apiId.isBlank()) {
+            return List.of(apiId.trim());
+        }
+        return emptyList();
+    }
+
+    private static List<String> resolveApplicationIds(String applicationId, List<String> applicationIds) {
+        if (applicationIds != null && !applicationIds.isEmpty()) {
+            return applicationIds;
+        }
+        if (applicationId != null && !applicationId.isBlank()) {
+            return List.of(applicationId.trim());
+        }
+        return emptyList();
+    }
+
+    private Page<SubscriptionEntity> fetchSubscriptions(PaginationParam paginationParam, SubscriptionQuery query) {
+        ExecutionContext executionContext = GraviteeContext.getExecutionContext();
+        if (!paginationParam.hasPagination()) {
+            Collection<SubscriptionEntity> resp = subscriptionService.search(executionContext, query);
+            return new Page<>(resp.stream().toList(), 0, resp.size(), resp.size());
+        }
+
+        Page<SubscriptionEntity> pagedSubscriptions = subscriptionService.search(
+            executionContext,
+            query,
+            new PageableImpl(paginationParam.getPage(), paginationParam.getSize())
+        );
+        return Objects.requireNonNullElseGet(pagedSubscriptions, () -> new Page<>(emptyList(), 0, 0, 0));
     }
 
     @Path("{subscriptionId}")

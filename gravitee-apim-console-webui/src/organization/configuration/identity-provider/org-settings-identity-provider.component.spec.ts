@@ -35,6 +35,7 @@ import {
 import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { of } from 'rxjs';
+import { UntypedFormArray, UntypedFormGroup } from '@angular/forms';
 
 import { OrgSettingsIdentityProviderComponent } from './org-settings-identity-provider.component';
 
@@ -643,9 +644,8 @@ describe('OrgSettingsIdentityProviderComponent', () => {
       });
 
       it('should edit group mapping', async () => {
-        // 📝 [ng-reflect-name="0"] is the index of the first group mapping
-        // Select the sub card to edit of groupMappingsCard
-        const groupMappingCardToEdit = await groupMappingsCard.getHarness(MatCardHarness.with({ selector: '[ng-reflect-name="0"]' }));
+        const groupMappingCards = await groupMappingsCard.getAllHarnesses(MatCardHarness);
+        const groupMappingCardToEdit = groupMappingCards[0];
 
         const conditionInput = await groupMappingCardToEdit.getHarness(MatInputHarness.with({ selector: '[formControlName=condition]' }));
         await conditionInput.setValue('new foo');
@@ -677,9 +677,8 @@ describe('OrgSettingsIdentityProviderComponent', () => {
 
         expect(await saveBar.isSubmitButtonInvalid()).toEqual(true);
 
-        // 📝 [ng-reflect-name="0"] is the index of the first group mapping
-        // Select the new card added of groupMappingsCard
-        const groupMappingCardAdded = await groupMappingsCard.getHarness(MatCardHarness.with({ selector: '[ng-reflect-name="1"]' }));
+        const groupMappingCards = await groupMappingsCard.getAllHarnesses(MatCardHarness);
+        const groupMappingCardAdded = groupMappingCards[1];
 
         const conditionInput = await groupMappingCardAdded.getHarness(MatInputHarness.with({ selector: '[formControlName=condition]' }));
         await conditionInput.setValue('new bar');
@@ -704,10 +703,8 @@ describe('OrgSettingsIdentityProviderComponent', () => {
       it('should delete group mapping', async () => {
         const saveBar = await loader.getHarness(GioSaveBarHarness);
 
-        // 📝 [ng-reflect-name="0"] is the index of the group to delete
-        const deleteGroupMappingButton = await groupMappingsCard.getHarness(
-          MatButtonHarness.with({ text: /Delete/, ancestor: '[ng-reflect-name="0"]' }),
-        );
+        const groupMappingCardButtons = await groupMappingsCard.getAllHarnesses(MatButtonHarness);
+        const deleteGroupMappingButton = groupMappingCardButtons[0];
         await deleteGroupMappingButton.click();
 
         expect(await saveBar.isSubmitButtonInvalid()).toEqual(false);
@@ -775,9 +772,8 @@ describe('OrgSettingsIdentityProviderComponent', () => {
       });
 
       it('should edit role mapping', async () => {
-        // 📝 [ng-reflect-name="0"] is the index of the first role mapping
-        // Select the sub card to edit of roleMappingsCard
-        const roleMappingCardToEdit = await roleMappingsCard.getHarness(MatCardHarness.with({ selector: '[ng-reflect-name="0"]' }));
+        const roleMappingCards = await roleMappingsCard.getAllHarnesses(MatCardHarness);
+        const roleMappingCardToEdit = roleMappingCards[0];
 
         const conditionInput = await roleMappingCardToEdit.getHarness(MatInputHarness.with({ selector: '[formControlName=condition]' }));
         await conditionInput.setValue('new foo');
@@ -821,6 +817,44 @@ describe('OrgSettingsIdentityProviderComponent', () => {
         httpTestingController.expectOne(`${CONSTANTS_TESTING.org.baseURL}/configuration/identities/providerId`);
       });
 
+      it('should not set required validator on environment role controls', async () => {
+        const roleMappingsArray = component.identityProviderFormGroup.get('roleMappings') as UntypedFormArray;
+        const roleMappingGroup = roleMappingsArray.at(0) as UntypedFormGroup;
+        const environmentsGroup = roleMappingGroup.get('environments') as UntypedFormGroup;
+
+        const environmentAlphaControl = environmentsGroup.get('environmentAlphaId');
+        const environmentBetaControl = environmentsGroup.get('environmentBetaId');
+
+        expect(environmentAlphaControl.validator).toBeNull();
+        expect(environmentBetaControl.validator).toBeNull();
+      });
+
+      it('should allow empty environment roles but not empty organization roles', async () => {
+        const saveBar = await loader.getHarness(GioSaveBarHarness);
+
+        const addRoleMappingButton = await roleMappingsCard.getHarness(MatButtonHarness.with({ text: /Add role mapping/ }));
+        await addRoleMappingButton.click();
+        const roleMappingCards = await roleMappingsCard.getAllHarnesses(MatCardHarness);
+        const roleMappingCardAdded = roleMappingCards[1];
+
+        const conditionInput = await roleMappingCardAdded.getHarness(MatInputHarness.with({ selector: '[formControlName=condition]' }));
+        await conditionInput.setValue('{true}');
+        const organizationsSelect = await roleMappingCardAdded.getHarness(
+          MatSelectHarness.with({ selector: '[formControlName=organizations]' }),
+        );
+        expect(await organizationsSelect.getValueText()).toEqual(''); // Should be empty
+        const environmentsTable = await roleMappingCardAdded.getHarness(MatTableHarness);
+        const environmentAlphaRow = (await environmentsTable.getRows())[0];
+        const environmentBetaRow = (await environmentsTable.getRows())[1];
+        const alphaSelect = await (await environmentAlphaRow.getCells())[2].getHarness(MatSelectHarness);
+        const betaSelect = await (await environmentBetaRow.getCells())[2].getHarness(MatSelectHarness);
+        expect(await alphaSelect.getValueText()).toEqual('');
+        expect(await betaSelect.getValueText()).toEqual('');
+        expect(await saveBar.isSubmitButtonInvalid()).toEqual(true);
+        await organizationsSelect.clickOptions({ text: 'ROLE_ORG_USER' });
+        expect(await saveBar.isSubmitButtonInvalid()).toEqual(false);
+      });
+
       it('should add role mapping', async () => {
         const saveBar = await loader.getHarness(GioSaveBarHarness);
 
@@ -829,9 +863,8 @@ describe('OrgSettingsIdentityProviderComponent', () => {
 
         expect(await saveBar.isSubmitButtonInvalid()).toEqual(true);
 
-        // 📝 [ng-reflect-name="1"] is the index of the new role mapping added
-        // Select the new card added of roleMappingsCard
-        const roleMappingCardAdded = await roleMappingsCard.getHarness(MatCardHarness.with({ selector: '[ng-reflect-name="1"]' }));
+        const roleMappingCards = await roleMappingsCard.getAllHarnesses(MatCardHarness);
+        const roleMappingCardAdded = roleMappingCards[1];
 
         // Add condition and select role for new role mapping added
         const conditionInput = await roleMappingCardAdded.getHarness(MatInputHarness.with({ selector: '[formControlName=condition]' }));

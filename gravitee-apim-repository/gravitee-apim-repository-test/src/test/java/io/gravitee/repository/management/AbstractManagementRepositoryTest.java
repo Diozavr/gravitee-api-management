@@ -22,6 +22,7 @@ import io.gravitee.node.api.upgrader.UpgraderRepository;
 import io.gravitee.repository.config.AbstractRepositoryTest;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.*;
+import io.gravitee.repository.management.api.ApiProductsRepository;
 import io.gravitee.repository.management.model.*;
 import io.gravitee.repository.management.model.flow.Flow;
 import io.gravitee.repository.media.api.MediaRepository;
@@ -54,6 +55,9 @@ public abstract class AbstractManagementRepositoryTest extends AbstractRepositor
 
     @Inject
     protected CategoryRepository categoryRepository;
+
+    @Inject
+    protected ClientCertificateRepository clientCertificateRepository;
 
     @Inject
     protected GroupRepository groupRepository;
@@ -220,6 +224,30 @@ public abstract class AbstractManagementRepositoryTest extends AbstractRepositor
     @Inject
     protected PortalMenuLinkRepository portalMenuLinkRepository;
 
+    @Inject
+    protected ClusterRepository clusterRepository;
+
+    @Inject
+    protected PortalPageRepository portalPageRepository;
+
+    @Inject
+    protected PortalPageContextRepository portalPageContextRepository;
+
+    @Inject
+    protected PortalNavigationItemRepository portalNavigationItemRepository;
+
+    @Inject
+    protected PortalPageContentRepository portalPageContentRepository;
+
+    @Inject
+    protected CustomDashboardRepository customDashboardRepository;
+
+    @Inject
+    protected ApiProductsRepository apiProductsRepository;
+
+    @Inject
+    protected SubscriptionFormRepository subscriptionFormRepository;
+
     protected void createModel(Object object) throws TechnicalException {
         switch (object) {
             case Application application -> applicationRepository.create(application);
@@ -228,6 +256,7 @@ public abstract class AbstractManagementRepositoryTest extends AbstractRepositor
             case Event event -> eventRepository.create(event);
             case ApiKey apiKey -> apiKeyRepository.create(apiKey);
             case Category category -> categoryRepository.create(category);
+            case ClientCertificate clientCertificate -> clientCertificateRepository.create(clientCertificate);
             case Group group -> groupRepository.create(group);
             case Membership membership -> membershipRepository.create(membership);
             case Plan plan -> planRepository.create(plan);
@@ -262,6 +291,7 @@ public abstract class AbstractManagementRepositoryTest extends AbstractRepositor
             case ScoringReport scoringReport -> scoringReportRepository.create(scoringReport);
             case ScoringRuleset scoringRuleset -> scoringRulesetRepository.create(scoringRuleset);
             case ScoringFunction scoringFunction -> scoringFunctionRepository.create(scoringFunction);
+            case CustomDashboard customDashboard -> customDashboardRepository.create(customDashboard);
             case Dashboard apiQualityRule -> dashboardRepository.create(apiQualityRule);
             case AlertEvent alertEvent -> alertEventRepository.create(alertEvent);
             case Environment environment -> environmentRepository.create(environment);
@@ -293,6 +323,17 @@ public abstract class AbstractManagementRepositoryTest extends AbstractRepositor
             case ApiCategoryOrder apiCategoryOrder -> apiCategoryOrderRepository.create(apiCategoryOrder);
             case SharedPolicyGroup sharedPolicyGroup -> sharedPolicyGroupRepository.create(sharedPolicyGroup);
             case PortalMenuLink portalMenuLink -> portalMenuLinkRepository.create(portalMenuLink);
+            case Cluster cluster -> clusterRepository.create(cluster);
+            case PortalPage portalPage -> portalPageRepository.create(portalPage);
+            case PortalPageContext portalPageContext -> portalPageContextRepository.create(portalPageContext);
+            case io.gravitee.repository.management.model.PortalNavigationItem portalNavigationItem -> portalNavigationItemRepository.create(
+                portalNavigationItem
+            );
+            case io.gravitee.repository.management.model.PortalPageContent portalPageContent -> portalPageContentRepository.create(
+                portalPageContent
+            );
+            case ApiProduct apiProduct -> apiProductsRepository.create(apiProduct);
+            case SubscriptionForm subscriptionForm -> subscriptionFormRepository.create(subscriptionForm);
             case null, default -> {}
         }
     }

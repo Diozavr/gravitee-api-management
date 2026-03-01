@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 The Gravitee team (http://gravitee.io)
+ * Copyright (C) 2024 The Gravitee team (http://gravitee.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { Component, computed, input, output, Signal } from '@angular/core';
-import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 
 interface PaginationVM {
@@ -27,7 +27,7 @@ interface PaginationVM {
 @Component({
   selector: 'app-pagination',
   standalone: true,
-  imports: [MatButton, MatIcon, MatIconButton],
+  imports: [MatButton, MatIcon],
   templateUrl: './pagination.component.html',
   styleUrl: './pagination.component.scss',
 })

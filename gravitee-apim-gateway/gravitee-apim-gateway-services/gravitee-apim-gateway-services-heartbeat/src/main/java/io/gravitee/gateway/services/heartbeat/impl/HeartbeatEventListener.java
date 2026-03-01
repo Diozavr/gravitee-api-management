@@ -20,35 +20,62 @@ import io.gravitee.node.api.cluster.messaging.Message;
 import io.gravitee.node.api.cluster.messaging.MessageListener;
 import io.gravitee.repository.management.api.EventRepository;
 import io.gravitee.repository.management.model.Event;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class HeartbeatEventListener implements MessageListener<Event> {
 
     private final ClusterManager clusterManager;
-
     private final EventRepository eventRepository;
+
+    private final ExecutorService heartbeatExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "gio-heartbeat-listener"));
+
+    private final AtomicBoolean isProcessing = new AtomicBoolean(false);
 
     @Override
     public void onMessage(Message<Event> message) {
         if (clusterManager.self().primary()) {
             Event event = message.content();
-            try {
-                eventRepository.createOrPatch(event);
-            } catch (Exception ex) {
+
+            // Check if already processing a heartbeat event
+            if (!isProcessing.compareAndSet(false, true)) {
                 log.warn(
-                    "An error occurred while trying to create or update the heartbeat event id[{}] type[{}]",
+                    "Discarding heartbeat event id[{}] type[{}] - another heartbeat event is already being processed",
                     event.getId(),
-                    event.getType(),
-                    ex
+                    event.getType()
                 );
+                return;
             }
+
+            heartbeatExecutor.submit(() -> {
+                try {
+                    eventRepository.createOrPatch(event);
+                } catch (Exception ex) {
+                    log.warn(
+                        "An error occurred while trying to create or update the heartbeat event id[{}] type[{}]",
+                        event.getId(),
+                        event.getType(),
+                        ex
+                    );
+                } finally {
+                    isProcessing.set(false);
+                }
+            });
+        }
+    }
+
+    public void shutdownNow() {
+        if (!heartbeatExecutor.isShutdown()) {
+            heartbeatExecutor.shutdownNow();
         }
     }
 }

@@ -19,6 +19,7 @@ import static io.gravitee.common.http.HttpStatusCode.BAD_REQUEST_400;
 import static io.gravitee.common.http.HttpStatusCode.FORBIDDEN_403;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
@@ -103,8 +104,7 @@ public class ApisResource_CreateApiFromSwagger extends AbstractResourceTest {
                 ENVIRONMENT_ID,
                 RolePermissionAction.CREATE
             )
-        )
-            .thenReturn(false);
+        ).thenReturn(false);
 
         // When
         var response = rootTarget().request().post(null);
@@ -117,19 +117,16 @@ public class ApisResource_CreateApiFromSwagger extends AbstractResourceTest {
     @SneakyThrows
     public void should_throw_invalid_paths_exception() {
         // Given
-        when(oaiDomainService.convert(any(), any(), any()))
-            .thenReturn(
-                ImportDefinition
-                    .builder()
-                    .apiExport(
-                        ApiExport
-                            .builder()
-                            .definitionVersion(DefinitionVersion.V4)
-                            .listeners(List.of(HttpListener.builder().paths(List.of(Path.builder().path("/path").build())).build()))
-                            .build()
-                    )
-                    .build()
-            );
+        when(oaiDomainService.convert(any(), any(), any(), anyBoolean(), anyBoolean())).thenReturn(
+            ImportDefinition.builder()
+                .apiExport(
+                    ApiExport.builder()
+                        .definitionVersion(DefinitionVersion.V4)
+                        .listeners(List.of(HttpListener.builder().paths(List.of(Path.builder().path("/path").build())).build()))
+                        .build()
+                )
+                .build()
+        );
         when(createApiDomainService.create(any(), any(), any(), any(), any())).thenThrow(new InvalidPathsException("Invalid paths"));
 
         var resource = Resources.getResource("io/gravitee/rest/api/management/service/openapi-withExtensions.json");

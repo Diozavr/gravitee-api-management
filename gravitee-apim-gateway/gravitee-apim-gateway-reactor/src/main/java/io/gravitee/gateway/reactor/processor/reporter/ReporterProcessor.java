@@ -18,16 +18,15 @@ package io.gravitee.gateway.reactor.processor.reporter;
 import io.gravitee.gateway.api.ExecutionContext;
 import io.gravitee.gateway.core.processor.AbstractProcessor;
 import io.gravitee.gateway.report.ReporterService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.gravitee.reporter.api.http.Metrics;
+import lombok.CustomLog;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class ReporterProcessor extends AbstractProcessor<ExecutionContext> {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(ReporterProcessor.class);
 
     private final ReporterService reporterService;
 
@@ -38,6 +37,8 @@ public class ReporterProcessor extends AbstractProcessor<ExecutionContext> {
     @Override
     public void handle(ExecutionContext context) {
         try {
+            setQuota(context, context.request().metrics());
+
             reporterService.report(context.request().metrics());
 
             if (context.request().metrics().getLog() != null) {
@@ -46,9 +47,26 @@ public class ReporterProcessor extends AbstractProcessor<ExecutionContext> {
                 reporterService.report(context.request().metrics().getLog());
             }
         } catch (Exception ex) {
-            LOGGER.error("An error occurs while reporting metrics", ex);
+            log.error("An error occurs while reporting metrics", ex);
         }
 
         next.handle(context);
+    }
+
+    private static void setQuota(ExecutionContext ctx, Metrics metrics) {
+        addLongMetric(metrics, ExecutionContext.ATTR_QUOTA_COUNT, ctx);
+        addLongMetric(metrics, ExecutionContext.ATTR_QUOTA_LIMIT, ctx);
+    }
+
+    private static void addLongMetric(Metrics metrics, String key, ExecutionContext ctx) {
+        Long value = getLongOrNull(ctx, key);
+        if (value != null) {
+            metrics.putAdditionalMetric("long_" + key.replace(ExecutionContext.ATTR_PREFIX, ""), value);
+        }
+    }
+
+    private static Long getLongOrNull(ExecutionContext ctx, String key) {
+        Object value = ctx.getAttribute(key);
+        return (value instanceof Number) ? ((Number) value).longValue() : null;
     }
 }

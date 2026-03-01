@@ -42,6 +42,10 @@ public interface Permission {
                 return OrganizationPermission.values();
             case INTEGRATION:
                 return IntegrationPermission.values();
+            case CLUSTER:
+                return ClusterPermission.values();
+            case API_PRODUCT:
+                return ApiProductPermission.values();
             default:
                 throw new IllegalArgumentException("[" + scope + "] are not a RolePermission");
         }

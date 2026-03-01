@@ -26,27 +26,25 @@ import io.gravitee.rest.api.model.NewPlanEntity;
 import io.gravitee.rest.api.model.PlanEntity;
 import io.gravitee.rest.api.model.PlanSecurityType;
 import io.gravitee.rest.api.model.PlanStatus;
-import io.gravitee.rest.api.model.PlanType;
 import io.gravitee.rest.api.model.PlanValidationType;
 import io.gravitee.rest.api.model.UpdatePlanEntity;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import java.io.IOException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class PlanConverter {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(PlanConverter.class);
 
     private final ObjectMapper objectMapper;
 
@@ -59,9 +57,12 @@ public class PlanConverter {
 
         entity.setId(plan.getId());
         entity.setCrossId(plan.getCrossId());
+        entity.setHrid(plan.getHrid());
         entity.setName(plan.getName());
         entity.setDescription(plan.getDescription());
-        entity.setApi(plan.getApi());
+        entity.setReferenceId(plan.getReferenceId());
+        entity.setReferenceType(GenericPlanEntity.ReferenceType.valueOf(plan.getReferenceType().name()));
+
         entity.setEnvironmentId(plan.getEnvironmentId());
         entity.setCreatedAt(plan.getCreatedAt());
         entity.setUpdatedAt(plan.getUpdatedAt());
@@ -74,11 +75,9 @@ public class PlanConverter {
                 HashMap<String, List<Rule>> rules = objectMapper.readValue(plan.getDefinition(), new TypeReference<>() {});
                 entity.setPaths(rules);
             } catch (IOException ioe) {
-                LOGGER.error("Unexpected error while generating policy definition", ioe);
+                log.error("Unexpected error while generating policy definition", ioe);
             }
         }
-
-        entity.setType(PlanType.valueOf(plan.getType().name()));
 
         // Backward compatibility
         if (plan.getStatus() != null) {
@@ -138,7 +137,7 @@ public class PlanConverter {
         NewPlanEntity newPlanEntity = new NewPlanEntity();
         newPlanEntity.setId(planEntity.getId());
         newPlanEntity.setCrossId(resetCrossId ? null : planEntity.getCrossId());
-        newPlanEntity.setApi(planEntity.getApi());
+        newPlanEntity.setHrid(planEntity.getHrid());
         newPlanEntity.setName(planEntity.getName());
         newPlanEntity.setDescription(planEntity.getDescription());
         newPlanEntity.setOrder(planEntity.getOrder());
@@ -150,8 +149,8 @@ public class PlanConverter {
             newPlanEntity.setSecurity(planEntity.getSecurity());
         }
         newPlanEntity.setSecurityDefinition(planEntity.getSecurityDefinition());
-        if (planEntity.getType() != null) {
-            newPlanEntity.setType(planEntity.getType());
+        if (planEntity.getReferenceType() != null) {
+            newPlanEntity.setReferenceType(planEntity.getReferenceType());
         }
         if (planEntity.getStatus() != null) {
             newPlanEntity.setStatus(planEntity.getStatus());
@@ -162,9 +161,7 @@ public class PlanConverter {
         if (planEntity.getFlows() != null) {
             newPlanEntity.setFlows(planEntity.getFlows());
         }
-        if (planEntity.getType() != null) {
-            newPlanEntity.setType(planEntity.getType());
-        }
+
         newPlanEntity.setCharacteristics(planEntity.getCharacteristics());
         newPlanEntity.setExcludedGroups(planEntity.getExcludedGroups());
         newPlanEntity.setCommentRequired(planEntity.isCommentRequired());
@@ -172,6 +169,8 @@ public class PlanConverter {
         newPlanEntity.setGeneralConditions(planEntity.getGeneralConditions());
         newPlanEntity.setTags(planEntity.getTags());
         newPlanEntity.setSelectionRule(planEntity.getSelectionRule());
+        newPlanEntity.setReferenceId(planEntity.getReferenceId());
+        newPlanEntity.setReferenceType(planEntity.getReferenceType());
         return newPlanEntity;
     }
 
@@ -179,13 +178,15 @@ public class PlanConverter {
         Plan plan = new Plan();
         plan.setId(newPlan.getId());
         plan.setCrossId(newPlan.getCrossId());
-        plan.setApi(newPlan.getApi());
+        plan.setHrid(newPlan.getHrid());
+        plan.setApi(newPlan.getReferenceId());
+        plan.setReferenceId(newPlan.getReferenceId());
+        plan.setReferenceType(Plan.PlanReferenceType.valueOf(newPlan.getReferenceType().name()));
         plan.setName(newPlan.getName());
         plan.setDescription(newPlan.getDescription());
         plan.setCreatedAt(new Date());
         plan.setUpdatedAt(plan.getCreatedAt());
         plan.setNeedRedeployAt(plan.getCreatedAt());
-        plan.setType(Plan.PlanType.valueOf(newPlan.getType().name()));
         plan.setSecurity(Plan.PlanSecurityType.valueOf(newPlan.getSecurity().name()));
         plan.setSecurityDefinition(newPlan.getSecurityDefinition());
         plan.setStatus(Plan.Status.valueOf(newPlan.getStatus().name()));
@@ -224,7 +225,8 @@ public class PlanConverter {
 
     public io.gravitee.definition.model.Plan toPlanDefinition(PlanEntity plan) {
         io.gravitee.definition.model.Plan planDefinition = new io.gravitee.definition.model.Plan();
-        planDefinition.setApi(plan.getApi());
+        planDefinition.setReferenceId(plan.getReferenceId());
+        planDefinition.setReferenceType(plan.getReferenceType().name());
         planDefinition.setSecurityDefinition(plan.getSecurityDefinition());
         planDefinition.setSecurity(plan.getSecurity().name());
         planDefinition.setFlows(plan.getFlows());
@@ -234,6 +236,8 @@ public class PlanConverter {
         planDefinition.setSelectionRule(plan.getSelectionRule());
         planDefinition.setStatus(plan.getStatus().name());
         planDefinition.setTags(plan.getTags());
+        planDefinition.setReferenceId(plan.getReferenceId());
+        planDefinition.setReferenceType(plan.getReferenceType().name());
         return planDefinition;
     }
 }

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import { IScope } from 'angular';
-
 import { ActivatedRoute, Router } from '@angular/router';
 import { chain, has, now } from 'lodash';
 
@@ -22,6 +21,7 @@ import AnalyticsService from '../../../../services/analytics.service';
 import TenantService from '../../../../services/tenant.service';
 import { ApiService, LogsQuery } from '../../../../services/api.service';
 import { Constants } from '../../../../entities/Constants';
+import { ApiPlanV2Service } from '../../../../services-ngx/api-plan-v2.service';
 
 class ApiAnalyticsLogsControllerAjs {
   private api: any;
@@ -42,6 +42,7 @@ class ApiAnalyticsLogsControllerAjs {
     private $timeout: ng.ITimeoutService,
     private AnalyticsService: AnalyticsService,
     private TenantService: TenantService,
+    private ngApiPlanV2Service: ApiPlanV2Service,
     private $q: ng.IQService,
     private Constants: Constants,
   ) {
@@ -52,7 +53,10 @@ class ApiAnalyticsLogsControllerAjs {
   $onInit() {
     this.$q
       .all({
-        plans: this.ApiService.getApiPlans(this.activatedRoute.snapshot.params.apiId, 'published,closed,deprecated'),
+        plans: this.ngApiPlanV2Service
+          .list(this.activatedRoute.snapshot.params.apiId, undefined, ['PUBLISHED', 'CLOSED', 'DEPRECATED'], undefined, ['-flow'], 1)
+          .toPromise(),
+        // plans: this.ApiService.getApiPlans(this.activatedRoute.snapshot.params.apiId, 'published,closed,deprecated'),
         applications: this.ApiService.getSubscribers(this.activatedRoute.snapshot.params.apiId, null, null, null, ['owner']),
         tenants: this.TenantService.list(),
         resolvedApi: this.ApiService.get(this.activatedRoute.snapshot.params.apiId),
@@ -65,8 +69,8 @@ class ApiAnalyticsLogsControllerAjs {
         };
 
         const hasTenants = chain(this.api.proxy.groups)
-          .map((group) => group.endpoints)
-          .find((endpoint) => has(endpoint, 'tenants'));
+          .map(group => group.endpoints)
+          .find(endpoint => has(endpoint, 'tenants'));
 
         if (hasTenants !== undefined) {
           this.metadata.tenants = tenants.data;
@@ -76,7 +80,7 @@ class ApiAnalyticsLogsControllerAjs {
 
         this.query = this.AnalyticsService.buildQueryFromState(this.activatedRoute.snapshot.queryParams);
 
-        this.$scope.$watch('$ctrl.query.field', (field) => {
+        this.$scope.$watch('$ctrl.query.field', field => {
           if (field && this.init) {
             this.refresh();
           }
@@ -100,7 +104,7 @@ class ApiAnalyticsLogsControllerAjs {
   }
 
   refresh() {
-    this.$q.when(this.ApiService.findLogs(this.api.id, this.query)).then((logs) => {
+    this.$q.when(this.ApiService.findLogs(this.api.id, this.query)).then(logs => {
       this.logs = logs.data;
       this.AnalyticsService.setFetchedLogs(logs.data.logs);
 
@@ -129,7 +133,7 @@ class ApiAnalyticsLogsControllerAjs {
   }
 
   exportAsCSV() {
-    this.ApiService.exportLogsAsCSV(this.api.id, this.query).then((response) => {
+    this.ApiService.exportLogsAsCSV(this.api.id, this.query).then(response => {
       const hiddenElement = document.createElement('a');
       hiddenElement.href = 'data:attachment/csv,' + encodeURIComponent(response.data);
       hiddenElement.target = '_self';
@@ -179,6 +183,7 @@ ApiAnalyticsLogsControllerAjs.$inject = [
   '$timeout',
   'AnalyticsService',
   'TenantService',
+  'ngApiPlanV2Service',
   '$q',
   'Constants',
 ];

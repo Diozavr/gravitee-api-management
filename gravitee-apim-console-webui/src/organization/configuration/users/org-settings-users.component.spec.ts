@@ -66,10 +66,10 @@ describe('OrgSettingsUsersComponent', () => {
       const table = await loader.getHarness(MatTableHarness.with({ selector: '#usersTable' }));
 
       const headerRows = await table.getHeaderRows();
-      const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+      const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
       const rows = await table.getRows();
-      const rowCells = await parallel(() => rows.map((row) => row.getCellTextByIndex()));
+      const rowCells = await parallel(() => rows.map(row => row.getCellTextByIndex()));
 
       expect(headerCells).toEqual([
         {
@@ -81,7 +81,10 @@ describe('OrgSettingsUsersComponent', () => {
           userPicture: '',
         },
       ]);
-      expect(rowCells).toEqual([['No user']]);
+      expect(rowCells).toHaveLength(0);
+
+      const tableElement = await table.host();
+      expect(await tableElement.text()).toContain('No user');
     }));
 
     it('should display table with data', fakeAsync(async () => {
@@ -89,10 +92,10 @@ describe('OrgSettingsUsersComponent', () => {
 
       const table = await loader.getHarness(MatTableHarness.with({ selector: '#usersTable' }));
       const headerRows = await table.getHeaderRows();
-      const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+      const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
       const rows = await table.getRows();
-      const rowCells = await parallel(() => rows.map((row) => row.getCellTextByColumnName()));
+      const rowCells = await parallel(() => rows.map(row => row.getCellTextByColumnName()));
 
       expect(headerCells).toEqual([
         {
@@ -124,7 +127,7 @@ describe('OrgSettingsUsersComponent', () => {
       const table = await loader.getHarness(MatTableHarness.with({ selector: '#usersTable' }));
 
       const rows = await table.getRows();
-      const rowCells = await parallel(() => rows.map((row) => row.getCellTextByColumnName()));
+      const rowCells = await parallel(() => rows.map(row => row.getCellTextByColumnName()));
 
       expect(rowCells).toEqual([
         {

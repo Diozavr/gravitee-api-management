@@ -26,6 +26,9 @@ import io.gravitee.definition.model.v4.nativeapi.NativeEndpointGroup;
 import io.gravitee.definition.model.v4.nativeapi.kafka.KafkaListener;
 import io.gravitee.definition.model.v4.plan.PlanSecurity;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
+import io.gravitee.rest.api.model.PageEntity;
+import io.gravitee.rest.api.model.PageSourceEntity;
+import io.gravitee.rest.api.model.PageType;
 import io.gravitee.rest.api.model.v4.api.ApiEntity;
 import io.gravitee.rest.api.model.v4.api.ExportApiEntity;
 import io.gravitee.rest.api.model.v4.nativeapi.NativeApiEntity;
@@ -36,6 +39,7 @@ import java.sql.Date;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.DisplayNameGeneration;
@@ -50,8 +54,40 @@ import org.junit.jupiter.api.Test;
 class ApiCRDAdapterTest {
 
     @Test
-    void should_convert_to_crd_spec() {
-        var export = exportEntity();
+    void should_convert_to_crd_spec_with_hrid() {
+        var export = exportEntity(true);
+        var spec = ApiCRDAdapter.INSTANCE.toCRDSpec(export, export.getApiEntity());
+        SoftAssertions.assertSoftly(soft -> {
+            soft.assertThat(spec.getId()).isEqualTo("api-id");
+            soft.assertThat(spec.getName()).isEqualTo("api-name");
+            soft.assertThat(spec.getHrid()).isEqualTo("api-hrid");
+            soft.assertThat(spec.getCrossId()).isEqualTo("api-cross-id");
+            soft.assertThat(spec.getListeners()).hasSize(1);
+            soft.assertThat(spec.getEndpointGroups()).hasSize(1);
+            soft.assertThat(spec.getPlans()).hasSize(1);
+            soft.assertThat(spec.getPlans()).containsKey("plan-name");
+        });
+    }
+
+    @Test
+    void should_convert_to_crd_spec_without_hrid() {
+        var export = exportEntity(false);
+        var spec = ApiCRDAdapter.INSTANCE.toCRDSpec(export, export.getApiEntity());
+        SoftAssertions.assertSoftly(soft -> {
+            soft.assertThat(spec.getId()).isEqualTo("api-id");
+            soft.assertThat(spec.getName()).isEqualTo("api-name");
+            soft.assertThat(spec.getHrid()).isNull();
+            soft.assertThat(spec.getCrossId()).isEqualTo("api-cross-id");
+            soft.assertThat(spec.getListeners()).hasSize(1);
+            soft.assertThat(spec.getEndpointGroups()).hasSize(1);
+            soft.assertThat(spec.getPlans()).hasSize(1);
+            soft.assertThat(spec.getPlans()).containsKey("plan-name");
+        });
+    }
+
+    @Test
+    void should_convert_nativeApi_to_crd_spec_with_hrid() {
+        var export = exportNativeApiEntity(true);
         var spec = ApiCRDAdapter.INSTANCE.toCRDSpec(export, export.getApiEntity());
         SoftAssertions.assertSoftly(soft -> {
             soft.assertThat(spec.getId()).isEqualTo("api-id");
@@ -65,8 +101,100 @@ class ApiCRDAdapterTest {
     }
 
     @Test
-    void should_convert_nativeApi_to_crd_spec() {
-        var export = exportNativeApiEntity();
+    void should_remove_page_content() {
+        var export = exportEntity(false);
+        PageSourceEntity source = new PageSourceEntity();
+        source.setType("http-fetcher");
+        export.setPages(
+            List.of(PageEntity.builder().name("page-name").type(PageType.SWAGGER.name()).content("content").source(source).build())
+        );
+        var spec = ApiCRDAdapter.INSTANCE.toCRDSpec(export, export.getApiEntity());
+        SoftAssertions.assertSoftly(soft -> {
+            soft.assertThat(spec.getId()).isEqualTo("api-id");
+            soft.assertThat(spec.getName()).isEqualTo("api-name");
+            soft.assertThat(spec.getCrossId()).isEqualTo("api-cross-id");
+            soft.assertThat(spec.getListeners()).hasSize(1);
+            soft.assertThat(spec.getEndpointGroups()).hasSize(1);
+            soft.assertThat(spec.getPlans()).hasSize(1);
+            soft.assertThat(spec.getPlans()).containsKey("plan-name");
+            soft.assertThat(spec.getPages()).containsKey("page-name");
+            soft.assertThat(spec.getPages().get("page-name").getContent()).isNull();
+        });
+    }
+
+    @Test
+    void should_remove_page() {
+        var export = exportEntity(false);
+        PageSourceEntity source = new PageSourceEntity();
+        source.setType("github-fetcher");
+        export.setPages(
+            List.of(
+                PageEntity.builder()
+                    .metadata(Map.of("graviteeio/fetcher_type", "auto_fetched"))
+                    .name("page-name")
+                    .type(PageType.SWAGGER.name())
+                    .content("content")
+                    .source(source)
+                    .build()
+            )
+        );
+        var spec = ApiCRDAdapter.INSTANCE.toCRDSpec(export, export.getApiEntity());
+        SoftAssertions.assertSoftly(soft -> {
+            soft.assertThat(spec.getId()).isEqualTo("api-id");
+            soft.assertThat(spec.getName()).isEqualTo("api-name");
+            soft.assertThat(spec.getCrossId()).isEqualTo("api-cross-id");
+            soft.assertThat(spec.getListeners()).hasSize(1);
+            soft.assertThat(spec.getEndpointGroups()).hasSize(1);
+            soft.assertThat(spec.getPlans()).hasSize(1);
+            soft.assertThat(spec.getPlans()).containsKey("plan-name");
+            soft.assertThat(spec.getPages()).doesNotContainKey("page-name");
+        });
+    }
+
+    @Test
+    void should_remove_folder() {
+        var export = exportEntity(false);
+        PageSourceEntity source = new PageSourceEntity();
+        source.setType("github-fetcher");
+        export.setPages(List.of(PageEntity.builder().name("page-name").type(PageType.FOLDER.name()).source(source).build()));
+        var spec = ApiCRDAdapter.INSTANCE.toCRDSpec(export, export.getApiEntity());
+        SoftAssertions.assertSoftly(soft -> {
+            soft.assertThat(spec.getId()).isEqualTo("api-id");
+            soft.assertThat(spec.getName()).isEqualTo("api-name");
+            soft.assertThat(spec.getCrossId()).isEqualTo("api-cross-id");
+            soft.assertThat(spec.getListeners()).hasSize(1);
+            soft.assertThat(spec.getEndpointGroups()).hasSize(1);
+            soft.assertThat(spec.getPlans()).hasSize(1);
+            soft.assertThat(spec.getPlans()).containsKey("plan-name");
+            soft.assertThat(spec.getPages()).doesNotContainKey("page-name");
+        });
+    }
+
+    @Test
+    void should_remove_page_content_nativeApi() {
+        var export = exportNativeApiEntity(false);
+        PageSourceEntity source = new PageSourceEntity();
+        source.setType("github-fetcher");
+        export.setPages(
+            List.of(PageEntity.builder().name("page-name").type(PageType.SWAGGER.name()).content("content").source(source).build())
+        );
+        var spec = ApiCRDAdapter.INSTANCE.toCRDSpec(export, export.getApiEntity());
+        SoftAssertions.assertSoftly(soft -> {
+            soft.assertThat(spec.getId()).isEqualTo("api-id");
+            soft.assertThat(spec.getName()).isEqualTo("api-name");
+            soft.assertThat(spec.getCrossId()).isEqualTo("api-cross-id");
+            soft.assertThat(spec.getListeners()).hasSize(1);
+            soft.assertThat(spec.getEndpointGroups()).hasSize(1);
+            soft.assertThat(spec.getPlans()).hasSize(1);
+            soft.assertThat(spec.getPlans()).containsKey("plan-name");
+            soft.assertThat(spec.getPages()).containsKey("page-name");
+            soft.assertThat(spec.getPages().get("page-name").getContent()).isNull();
+        });
+    }
+
+    @Test
+    void should_convert_nativeApi_to_crd_spec_without_hrid() {
+        var export = exportNativeApiEntity(false);
         var spec = ApiCRDAdapter.INSTANCE.toCRDSpec(export, export.getApiEntity());
         SoftAssertions.assertSoftly(soft -> {
             soft.assertThat(spec.getId()).isEqualTo("api-id");
@@ -81,7 +209,7 @@ class ApiCRDAdapterTest {
 
     @Test
     void should_exclude_closed_plans_from_crd_spec() {
-        var export = exportEntity();
+        var export = exportEntity(true);
         Set<GenericPlanEntity> plansWithOneClosedPlan = new HashSet<>(export.getPlans());
         plansWithOneClosedPlan.add(PlanEntity.builder().status(PlanStatus.CLOSED).name("closed-plan").build());
         export.setPlans(plansWithOneClosedPlan);
@@ -91,57 +219,53 @@ class ApiCRDAdapterTest {
 
     @Test
     void should_resolve_conflicts_with_plan_names_in_crd_spec() {
-        var export = exportEntity();
+        var export = exportEntity(false);
         var then = Instant.now();
         var plansWithConflictingNames = Set.of(
-            PlanEntity
-                .builder()
+            PlanEntity.builder()
                 .createdAt(Date.from(then))
-                .id("api-key-1")
-                .name("api-key")
+                .id("api-123-plan-1")
+                .hrid("plan-1")
+                .name("api key")
                 .security(PlanSecurity.builder().type("API_KEY").build())
                 .build(),
-            PlanEntity
-                .builder()
+            PlanEntity.builder()
                 .createdAt(Date.from(then.plusMillis(1)))
-                .id("api-key-2")
-                .name("api-key")
+                .id("api-123-plan-2")
+                .name("api key")
                 .security(PlanSecurity.builder().type("API_KEY").build())
                 .build(),
-            PlanEntity
-                .builder()
+            PlanEntity.builder()
                 .createdAt(Date.from(then.plusMillis(2)))
-                .id("api-key-3")
-                .name("api-key")
+                .id("api-123-plan-3")
+                .name("api key")
                 .security(PlanSecurity.builder().type("API_KEY").build())
                 .build()
         );
         export.setPlans(plansWithConflictingNames);
         var spec = ApiCRDAdapter.INSTANCE.toCRDSpec(export, export.getApiEntity());
         assertThat(spec.getPlans()).hasSize(3);
+        assertThat(spec.getPlans()).containsKey("api-key");
     }
 
-    private static ExportApiEntity exportEntity() {
-        return ExportApiEntity
-            .builder()
+    private static ExportApiEntity exportEntity(boolean withHrid) {
+        return ExportApiEntity.builder()
             .apiEntity(
-                ApiEntity
-                    .builder()
+                ApiEntity.builder()
                     .name("api-name")
                     .id("api-id")
                     .crossId("api-cross-id")
+                    .hrid(withHrid ? "api-hrid" : null)
                     .listeners(List.of(HttpListener.builder().paths(List.of(new Path("/api-path"))).build()))
                     .endpointGroups(
                         List.of(
-                            EndpointGroup
-                                .builder()
+                            EndpointGroup.builder()
                                 .name("default-group")
                                 .type("http-proxy")
                                 .sharedConfiguration("{}")
                                 .endpoints(
                                     List.of(
-                                        Endpoint
-                                            .builder()
+                                        Endpoint.builder()
                                             .name("default-endpoint")
                                             .type("http-proxy")
                                             .inheritConfiguration(true)
@@ -154,31 +278,37 @@ class ApiCRDAdapterTest {
                     )
                     .build()
             )
-            .plans(Set.of(PlanEntity.builder().name("plan-name").id("plan-id").security(new PlanSecurity("key-less", "{}")).build()))
+            .plans(
+                Set.of(
+                    PlanEntity.builder()
+                        .hrid(withHrid ? "plan-hrid" : null)
+                        .name("plan-name")
+                        .id("plan-id")
+                        .security(new PlanSecurity("key-less", "{}"))
+                        .build()
+                )
+            )
             .build();
     }
 
-    private static ExportApiEntity exportNativeApiEntity() {
-        return ExportApiEntity
-            .builder()
+    private static ExportApiEntity exportNativeApiEntity(boolean withHrid) {
+        return ExportApiEntity.builder()
             .apiEntity(
-                NativeApiEntity
-                    .builder()
+                NativeApiEntity.builder()
                     .name("api-name")
                     .id("api-id")
                     .crossId("api-cross-id")
+                    .hrid(withHrid ? "api-hrid" : null)
                     .listeners(List.of(KafkaListener.builder().host("myapi").build()))
                     .endpointGroups(
                         List.of(
-                            NativeEndpointGroup
-                                .builder()
+                            NativeEndpointGroup.builder()
                                 .name("default-group")
                                 .type("kafka")
                                 .sharedConfiguration("{}")
                                 .endpoints(
                                     List.of(
-                                        NativeEndpoint
-                                            .builder()
+                                        NativeEndpoint.builder()
                                             .name("default-endpoint")
                                             .type("kafka")
                                             .inheritConfiguration(true)
@@ -191,7 +321,16 @@ class ApiCRDAdapterTest {
                     )
                     .build()
             )
-            .plans(Set.of(NativePlanEntity.builder().name("plan-name").id("plan-id").security(new PlanSecurity("key-less", "{}")).build()))
+            .plans(
+                Set.of(
+                    NativePlanEntity.builder()
+                        .hrid(withHrid ? "plan-hrid" : null)
+                        .name("plan-name")
+                        .id("plan-id")
+                        .security(new PlanSecurity("key-less", "{}"))
+                        .build()
+                )
+            )
             .build();
     }
 }

@@ -106,9 +106,9 @@ public class Flow {
      */
     private List<FlowStep> interact = new ArrayList<>();
     /**
-     * Flow connect steps
+     * Flow entrypoint connect steps (Native APIs)
      */
-    private List<FlowStep> connect = new ArrayList<>();
+    private List<FlowStep> entrypointConnect = new ArrayList<>();
 
     /**
      * Path operator
@@ -165,6 +165,7 @@ public class Flow {
         this.response = other.response;
         this.subscribe = other.subscribe;
         this.publish = other.publish;
+        this.entrypointConnect = other.entrypointConnect;
         this.path = other.path;
         this.operator = other.operator;
         this.methods = other.methods;

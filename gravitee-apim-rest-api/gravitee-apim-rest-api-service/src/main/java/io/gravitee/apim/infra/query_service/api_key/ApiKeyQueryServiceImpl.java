@@ -20,6 +20,7 @@ import io.gravitee.apim.core.api_key.query_service.ApiKeyQueryService;
 import io.gravitee.apim.infra.adapter.ApiKeyAdapter;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.ApiKeyRepository;
+import io.gravitee.repository.management.model.SubscriptionReferenceType;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -72,6 +73,31 @@ public class ApiKeyQueryServiceImpl implements ApiKeyQueryService {
         } catch (TechnicalException e) {
             throw new TechnicalManagementException(
                 "An error occurs while trying to find API keys by subscription id: " + subscriptionId,
+                e
+            );
+        }
+    }
+
+    @Override
+    public Optional<ApiKeyEntity> findByKeyAndReferenceIdAndReferenceType(String key, String referenceId, String referenceType) {
+        try {
+            if (
+                !SubscriptionReferenceType.API.name().equals(referenceType) &&
+                !SubscriptionReferenceType.API_PRODUCT.name().equals(referenceType)
+            ) {
+                throw new IllegalArgumentException("Unsupported reference type: " + referenceType);
+            }
+            return apiKeyRepository
+                .findByKeyAndReferenceIdAndReferenceType(key, referenceId, referenceType)
+                .map(ApiKeyAdapter.INSTANCE::toEntity);
+        } catch (TechnicalException e) {
+            throw new TechnicalManagementException(
+                String.format(
+                    "An error occurs while trying to find API key by [key=%s], [referenceId=%s], [referenceType=%s]",
+                    key,
+                    referenceId,
+                    referenceType
+                ),
                 e
             );
         }

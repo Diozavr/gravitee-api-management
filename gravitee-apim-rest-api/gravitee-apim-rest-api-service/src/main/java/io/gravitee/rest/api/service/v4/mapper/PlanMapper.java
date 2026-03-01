@@ -27,6 +27,7 @@ import io.gravitee.repository.management.model.Api;
 import io.gravitee.repository.management.model.Plan;
 import io.gravitee.rest.api.model.v4.nativeapi.NativePlanEntity;
 import io.gravitee.rest.api.model.v4.plan.BasePlanEntity;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.model.v4.plan.NewPlanEntity;
 import io.gravitee.rest.api.model.v4.plan.PlanEntity;
 import io.gravitee.rest.api.model.v4.plan.PlanSecurityType;
@@ -37,7 +38,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 
 /**
@@ -45,7 +46,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component("PlanMapperV4")
-@Slf4j
+@CustomLog
 public class PlanMapper {
 
     public PlanEntity toEntity(Plan plan, List<Flow> flows) {
@@ -58,11 +59,11 @@ public class PlanMapper {
 
     private <T extends BasePlanEntity> T toEntity(Plan plan, T entity) {
         entity.setId(plan.getId());
+        entity.setHrid(plan.getHrid());
         entity.setDefinitionVersion(plan.getDefinitionVersion());
         entity.setCrossId(plan.getCrossId());
         entity.setName(plan.getName());
         entity.setDescription(plan.getDescription());
-        entity.setApiId(plan.getApi());
         entity.setEnvironmentId(plan.getEnvironmentId());
         entity.setCreatedAt(plan.getCreatedAt());
         entity.setUpdatedAt(plan.getUpdatedAt());
@@ -71,7 +72,6 @@ public class PlanMapper {
         entity.setPublishedAt(plan.getPublishedAt());
         entity.setOrder(plan.getOrder());
         entity.setExcludedGroups(plan.getExcludedGroups());
-        entity.setType(PlanType.valueOf(plan.getType().name()));
         entity.setApiType(plan.getApiType());
         if (plan.getMode() != null) {
             entity.setMode(PlanMode.valueOf(plan.getMode().name()));
@@ -100,6 +100,10 @@ public class PlanMapper {
         entity.setTags(plan.getTags());
         entity.setSelectionRule(plan.getSelectionRule());
         entity.setGeneralConditions(plan.getGeneralConditions());
+        entity.setGeneralConditionsHrid(plan.getGeneralConditionsHrid());
+        entity.setApiId(plan.getReferenceId());
+        entity.setReferenceId(plan.getReferenceId());
+        entity.setReferenceType(GenericPlanEntity.ReferenceType.valueOf(plan.getReferenceType().name()));
         return entity;
     }
 
@@ -109,13 +113,13 @@ public class PlanMapper {
         plan.setId(newPlanEntity.getId());
         plan.setCrossId(newPlanEntity.getCrossId());
         plan.setDefinitionVersion(DefinitionVersion.V4);
-        plan.setApi(newPlanEntity.getApiId());
+        plan.setReferenceId(newPlanEntity.getReferenceId());
+        plan.setReferenceType(Plan.PlanReferenceType.valueOf(newPlanEntity.getReferenceType().name()));
         plan.setName(newPlanEntity.getName());
         plan.setDescription(newPlanEntity.getDescription());
         plan.setCreatedAt(new Date());
         plan.setUpdatedAt(plan.getCreatedAt());
         plan.setNeedRedeployAt(plan.getCreatedAt());
-        plan.setType(Plan.PlanType.valueOf(newPlanEntity.getType().name()));
         plan.setMode(Plan.PlanMode.valueOf(newPlanEntity.getMode().name()));
         if (newPlanEntity.getMode() == PlanMode.STANDARD && newPlanEntity.getSecurity() != null) {
             PlanSecurityType planSecurityType = PlanSecurityType.valueOfLabel(newPlanEntity.getSecurity().getType());
@@ -129,6 +133,7 @@ public class PlanMapper {
         plan.setTags(newPlanEntity.getTags());
         plan.setSelectionRule(newPlanEntity.getSelectionRule());
         plan.setGeneralConditions(newPlanEntity.getGeneralConditions());
+        plan.setGeneralConditionsHrid(newPlanEntity.getGeneralConditionsHrid());
         plan.setOrder(newPlanEntity.getOrder());
         plan.setApiType(api.getType());
 
@@ -148,7 +153,7 @@ public class PlanMapper {
     }
 
     public List<io.gravitee.definition.model.v4.plan.Plan> toDefinitions(final Set<PlanEntity> planEntities) {
-        return planEntities.stream().map(this::toDefinition).collect(Collectors.toList());
+        return planEntities.stream().map(this::toDefinition).toList();
     }
 
     public io.gravitee.definition.model.v4.plan.Plan toDefinition(final PlanEntity planEntity) {
@@ -158,7 +163,7 @@ public class PlanMapper {
     }
 
     public List<NativePlan> toNativeDefinitions(final Set<NativePlanEntity> planEntities) {
-        return planEntities.stream().map(this::toNativeDefinition).collect(Collectors.toList());
+        return planEntities.stream().map(this::toNativeDefinition).toList();
     }
 
     public NativePlan toNativeDefinition(final NativePlanEntity planEntity) {
@@ -193,6 +198,7 @@ public class PlanMapper {
         updatePlanEntity.setCommentRequired(planEntity.isCommentRequired());
         updatePlanEntity.setCommentMessage(planEntity.getCommentMessage());
         updatePlanEntity.setGeneralConditions(planEntity.getGeneralConditions());
+        updatePlanEntity.setGeneralConditionsHrid(planEntity.getGeneralConditionsHrid());
         updatePlanEntity.setTags(planEntity.getTags());
         updatePlanEntity.setSelectionRule(planEntity.getSelectionRule());
         updatePlanEntity.setFlows(planEntity.getFlows());
@@ -207,6 +213,7 @@ public class PlanMapper {
         NewPlanEntity newPlanEntity = new NewPlanEntity();
         newPlanEntity.setId(planEntity.getId());
         newPlanEntity.setCrossId(resetCrossId ? null : planEntity.getCrossId());
+        newPlanEntity.setReferenceId(planEntity.getReferenceId());
         newPlanEntity.setApiId(planEntity.getApiId());
         newPlanEntity.setName(planEntity.getName());
         newPlanEntity.setDescription(planEntity.getDescription());
@@ -219,17 +226,14 @@ public class PlanMapper {
             newPlanEntity.setSecurity(planEntity.getSecurity());
         }
         newPlanEntity.setSecurity(planEntity.getSecurity());
-        if (planEntity.getType() != null) {
-            newPlanEntity.setType(planEntity.getType());
+        if (planEntity.getReferenceType() != null) {
+            newPlanEntity.setReferenceType(planEntity.getReferenceType());
         }
         if (planEntity.getStatus() != null) {
             newPlanEntity.setStatus(planEntity.getStatus());
         }
         if (planEntity.getFlows() != null) {
             newPlanEntity.setFlows(planEntity.getFlows());
-        }
-        if (planEntity.getType() != null) {
-            newPlanEntity.setType(planEntity.getType());
         }
         if (planEntity.getMode() != null) {
             newPlanEntity.setMode(planEntity.getMode());
@@ -239,6 +243,7 @@ public class PlanMapper {
         newPlanEntity.setCommentRequired(planEntity.isCommentRequired());
         newPlanEntity.setCommentMessage(planEntity.getCommentMessage());
         newPlanEntity.setGeneralConditions(planEntity.getGeneralConditions());
+        newPlanEntity.setGeneralConditionsHrid(planEntity.getGeneralConditionsHrid());
         newPlanEntity.setTags(planEntity.getTags());
         newPlanEntity.setSelectionRule(planEntity.getSelectionRule());
         return newPlanEntity;

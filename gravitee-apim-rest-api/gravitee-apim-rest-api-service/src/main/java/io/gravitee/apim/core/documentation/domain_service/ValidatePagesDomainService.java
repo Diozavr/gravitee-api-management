@@ -23,14 +23,12 @@ import io.gravitee.apim.core.documentation.model.factory.PageModelFactory;
 import io.gravitee.apim.core.utils.StringUtils;
 import io.gravitee.apim.core.validation.Validator;
 import io.gravitee.rest.api.service.common.IdBuilder;
-import io.gravitee.rest.api.service.common.UuidString;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
@@ -38,16 +36,16 @@ import lombok.extern.slf4j.Slf4j;
  */
 @DomainService
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class ValidatePagesDomainService implements Validator<ValidatePagesDomainService.Input> {
 
     private final ValidatePageSourceDomainService pageSourceValidator;
     private final ValidatePageAccessControlsDomainService accessControlsValidator;
     private final DocumentationValidationDomainService validationDomainService;
 
-    public record Input(AuditInfo auditInfo, String apiId, String hrid, Map<String, PageCRD> pages) implements Validator.Input {
+    public record Input(AuditInfo auditInfo, String apiId, String apiHrid, Map<String, PageCRD> pages) implements Validator.Input {
         ValidatePagesDomainService.Input sanitized(Map<String, PageCRD> sanitizedPages) {
-            return new ValidatePagesDomainService.Input(auditInfo, apiId, hrid, sanitizedPages);
+            return new ValidatePagesDomainService.Input(auditInfo, apiId, apiHrid, sanitizedPages);
         }
     }
 
@@ -64,10 +62,15 @@ public class ValidatePagesDomainService implements Validator<ValidatePagesDomain
 
         input.pages.forEach((k, v) -> {
             try {
-                Page page = PageModelFactory.fromCRDSpec(v);
+                Page page = PageModelFactory.fromCRDSpec(k, v);
                 page.setReferenceId(input.apiId());
-                if (page.getId() == null && input.hrid() != null) {
-                    page.setId(IdBuilder.builder(input.auditInfo, input.hrid).withExtraId(k).buildId());
+                if (page.getId() == null) {
+                    page.setId(IdBuilder.builder(input.auditInfo, input.apiHrid).withExtraId(k).buildId());
+                    v.setId(page.getId());
+                }
+                page.setHrid(k);
+                if (v.getParentId() == null && v.getParentHrid() != null) {
+                    page.setParentId(IdBuilder.builder(input.auditInfo, input.apiHrid).withExtraId(v.getParentHrid()).buildId());
                 }
 
                 pageSourceValidator

@@ -25,13 +25,13 @@ import io.reactivex.rxjava3.core.Maybe;
 import io.vertx.redis.client.Response;
 import io.vertx.redis.client.ResponseType;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class RedisDistributedSyncStateRepository implements DistributedSyncStateRepository {
 
     private static final String REDIS_KEY_PREFIX = "distributed_sync_state" + REDIS_KEY_SEPARATOR;
@@ -48,12 +48,14 @@ public class RedisDistributedSyncStateRepository implements DistributedSyncState
 
     @Override
     public Maybe<DistributedSyncState> findByClusterId(final String clusterId) {
-        return Maybe
-            .defer(() ->
-                Maybe.fromCompletionStage(
-                    redisClient.redisApi().flatMap(redisAPI -> redisAPI.hgetall(REDIS_KEY_PREFIX + clusterId)).toCompletionStage()
-                )
+        return Maybe.defer(() ->
+            Maybe.fromCompletionStage(
+                redisClient
+                    .redisApi()
+                    .flatMap(redisAPI -> redisAPI.hgetall(REDIS_KEY_PREFIX + clusterId))
+                    .toCompletionStage()
             )
+        )
             .filter(response -> response.type() == ResponseType.MULTI && response.size() != 0)
             .map(item -> {
                 DistributedSyncState.DistributedSyncStateBuilder distributedSyncStateBuilder = DistributedSyncState.builder();

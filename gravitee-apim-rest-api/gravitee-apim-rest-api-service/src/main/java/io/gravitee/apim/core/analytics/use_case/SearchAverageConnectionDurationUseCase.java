@@ -26,10 +26,10 @@ import io.gravitee.rest.api.model.v4.analytics.AverageConnectionDuration;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import java.time.Instant;
 import java.util.Optional;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 @UseCase
 public class SearchAverageConnectionDurationUseCase {
@@ -49,12 +49,12 @@ public class SearchAverageConnectionDurationUseCase {
     private void validateApiRequirements(Input input) {
         final Api api = apiCrudService.get(input.apiId);
         validateApiDefinitionVersion(api.getDefinitionVersion(), input.apiId);
-        validateApiIsNotTcp(api.getApiDefinitionHttpV4());
+        validateApiIsNotTcp(api);
         validateApiMultiTenancyAccess(api, input.environmentId);
     }
 
-    private void validateApiIsNotTcp(io.gravitee.definition.model.v4.Api apiDefinitionV4) {
-        if (apiDefinitionV4.isTcpProxy()) {
+    private void validateApiIsNotTcp(Api api) {
+        if (api.isTcpProxy()) {
             throw new IllegalArgumentException("Analytics are not supported for TCP Proxy APIs");
         }
     }

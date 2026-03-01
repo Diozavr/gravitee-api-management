@@ -15,6 +15,7 @@
  */
 package io.gravitee.rest.api.service.impl;
 
+import static io.gravitee.repository.management.model.Plan.AuditEvent.PLAN_CREATED;
 import static java.util.Collections.singletonMap;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -25,7 +26,7 @@ import io.gravitee.definition.jackson.datatype.GraviteeMapper;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.AuditRepository;
 import io.gravitee.repository.management.model.Audit;
-import io.gravitee.repository.management.model.Plan;
+import io.gravitee.rest.api.service.AuditService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.common.GraviteeContext;
 import java.util.Collections;
@@ -59,17 +60,19 @@ public class AuditService_CreateTest {
 
         auditService.createApiAuditLog(
             executionContext,
-            apiId,
-            Collections.singletonMap(Audit.AuditProperties.PLAN, "123"),
-            Plan.AuditEvent.PLAN_CREATED,
-            createdAt,
-            singletonMap("name", "Joe"),
-            singletonMap("name", "Bar")
+            AuditService.AuditLogData.builder()
+                .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, "123"))
+                .event(PLAN_CREATED)
+                .createdAt(createdAt)
+                .oldValue(singletonMap("name", "Joe"))
+                .newValue(singletonMap("name", "Bar"))
+                .build(),
+            apiId
         );
 
-        verify(auditRepository, times(1))
-            .create(
-                argThat(arg ->
+        verify(auditRepository, times(1)).create(
+            argThat(
+                arg ->
                     arg != null &&
                     !arg.getId().isEmpty() &&
                     arg.getOrganizationId().equals("DEFAULT") &&
@@ -79,8 +82,8 @@ public class AuditService_CreateTest {
                     arg.getCreatedAt().equals(createdAt) &&
                     arg.getProperties().equals(Collections.singletonMap(Audit.AuditProperties.PLAN.name(), "123")) &&
                     arg.getPatch().toString().equals("[{\"op\":\"replace\",\"path\":\"/name\",\"value\":\"Bar\"}]")
-                )
-            );
+            )
+        );
     }
 
     @Test
@@ -93,17 +96,19 @@ public class AuditService_CreateTest {
 
         auditService.createApplicationAuditLog(
             executionContext,
-            applicationId,
-            Collections.singletonMap(Audit.AuditProperties.PLAN, "123"),
-            Plan.AuditEvent.PLAN_CREATED,
-            createdAt,
-            singletonMap("name", "Joe"),
-            singletonMap("name", "Bar")
+            AuditService.AuditLogData.builder()
+                .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, "123"))
+                .event(PLAN_CREATED)
+                .createdAt(createdAt)
+                .oldValue(singletonMap("name", "Joe"))
+                .newValue(singletonMap("name", "Bar"))
+                .build(),
+            applicationId
         );
 
-        verify(auditRepository, times(1))
-            .create(
-                argThat(arg ->
+        verify(auditRepository, times(1)).create(
+            argThat(
+                arg ->
                     arg != null &&
                     !arg.getId().isEmpty() &&
                     arg.getOrganizationId().equals("DEFAULT") &&
@@ -113,8 +118,44 @@ public class AuditService_CreateTest {
                     arg.getCreatedAt().equals(createdAt) &&
                     arg.getProperties().equals(Collections.singletonMap(Audit.AuditProperties.PLAN.name(), "123")) &&
                     arg.getPatch().toString().equals("[{\"op\":\"replace\",\"path\":\"/name\",\"value\":\"Bar\"}]")
-                )
-            );
+            )
+        );
+    }
+
+    @Test
+    public void should_createApiProductAuditLog() throws TechnicalException {
+        ExecutionContext executionContext = GraviteeContext.getExecutionContext();
+        String apiProductId = "apiProductId";
+        Date createdAt = new Date(1486771200000L);
+
+        when(auditRepository.create(any())).thenReturn(new Audit());
+
+        auditService.createApiProductAuditLog(
+            executionContext,
+            AuditService.AuditLogData.builder()
+                .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, "123"))
+                .event(PLAN_CREATED)
+                .createdAt(createdAt)
+                .oldValue(singletonMap("name", "Joe"))
+                .newValue(singletonMap("name", "Bar"))
+                .build(),
+            apiProductId
+        );
+
+        verify(auditRepository, times(1)).create(
+            argThat(
+                arg ->
+                    arg != null &&
+                    !arg.getId().isEmpty() &&
+                    arg.getOrganizationId().equals("DEFAULT") &&
+                    arg.getEnvironmentId().equals("DEFAULT") &&
+                    arg.getReferenceType().equals(Audit.AuditReferenceType.API_PRODUCT) &&
+                    arg.getReferenceId().equals(apiProductId) &&
+                    arg.getCreatedAt().equals(createdAt) &&
+                    arg.getProperties().equals(Collections.singletonMap(Audit.AuditProperties.PLAN.name(), "123")) &&
+                    arg.getPatch().toString().equals("[{\"op\":\"replace\",\"path\":\"/name\",\"value\":\"Bar\"}]")
+            )
+        );
     }
 
     @Test
@@ -126,16 +167,18 @@ public class AuditService_CreateTest {
 
         auditService.createAuditLog(
             executionContext,
-            Collections.singletonMap(Audit.AuditProperties.PLAN, "123"),
-            Plan.AuditEvent.PLAN_CREATED,
-            createdAt,
-            singletonMap("name", "Joe"),
-            singletonMap("name", "Bar")
+            AuditService.AuditLogData.builder()
+                .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, "123"))
+                .event(PLAN_CREATED)
+                .createdAt(createdAt)
+                .oldValue(singletonMap("name", "Joe"))
+                .newValue(singletonMap("name", "Bar"))
+                .build()
         );
 
-        verify(auditRepository, times(1))
-            .create(
-                argThat(arg ->
+        verify(auditRepository, times(1)).create(
+            argThat(
+                arg ->
                     arg != null &&
                     !arg.getId().isEmpty() &&
                     arg.getOrganizationId().equals("DEFAULT") &&
@@ -145,8 +188,8 @@ public class AuditService_CreateTest {
                     arg.getCreatedAt().equals(createdAt) &&
                     arg.getProperties().equals(Collections.singletonMap(Audit.AuditProperties.PLAN.name(), "123")) &&
                     arg.getPatch().toString().equals("[{\"op\":\"replace\",\"path\":\"/name\",\"value\":\"Bar\"}]")
-                )
-            );
+            )
+        );
     }
 
     @Test
@@ -158,16 +201,18 @@ public class AuditService_CreateTest {
 
         auditService.createAuditLog(
             executionContext,
-            Collections.singletonMap(Audit.AuditProperties.PLAN, "123"),
-            Plan.AuditEvent.PLAN_CREATED,
-            createdAt,
-            singletonMap("name", "Joe"),
-            singletonMap("name", "Bar")
+            AuditService.AuditLogData.builder()
+                .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, "123"))
+                .event(PLAN_CREATED)
+                .createdAt(createdAt)
+                .oldValue(singletonMap("name", "Joe"))
+                .newValue(singletonMap("name", "Bar"))
+                .build()
         );
 
-        verify(auditRepository, times(1))
-            .create(
-                argThat(arg ->
+        verify(auditRepository, times(1)).create(
+            argThat(
+                arg ->
                     arg != null &&
                     !arg.getId().isEmpty() &&
                     arg.getOrganizationId().equals(executionContext.getOrganizationId()) &&
@@ -177,7 +222,7 @@ public class AuditService_CreateTest {
                     arg.getCreatedAt().equals(createdAt) &&
                     arg.getProperties().equals(Collections.singletonMap(Audit.AuditProperties.PLAN.name(), "123")) &&
                     arg.getPatch().toString().equals("[{\"op\":\"replace\",\"path\":\"/name\",\"value\":\"Bar\"}]")
-                )
-            );
+            )
+        );
     }
 }

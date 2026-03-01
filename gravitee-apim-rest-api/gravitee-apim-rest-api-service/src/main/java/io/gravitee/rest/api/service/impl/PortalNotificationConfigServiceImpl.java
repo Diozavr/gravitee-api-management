@@ -19,20 +19,22 @@ import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.PortalNotificationConfigRepository;
 import io.gravitee.repository.management.model.NotificationReferenceType;
 import io.gravitee.repository.management.model.PortalNotificationConfig;
+import io.gravitee.rest.api.model.GroupEntity;
 import io.gravitee.rest.api.model.MembershipReferenceType;
 import io.gravitee.rest.api.model.notification.NotificationConfigType;
 import io.gravitee.rest.api.model.notification.PortalNotificationConfigEntity;
+import io.gravitee.rest.api.service.GroupService;
 import io.gravitee.rest.api.service.MembershipService;
 import io.gravitee.rest.api.service.PortalNotificationConfigService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.common.GraviteeContext;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -40,20 +42,22 @@ import org.springframework.stereotype.Component;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class PortalNotificationConfigServiceImpl extends AbstractService implements PortalNotificationConfigService {
 
-    private final Logger LOGGER = LoggerFactory.getLogger(PortalNotificationConfigServiceImpl.class);
-
     private final PortalNotificationConfigRepository portalNotificationConfigRepository;
     private final MembershipService membershipService;
+    private final GroupService groupService;
 
     public PortalNotificationConfigServiceImpl(
         @Lazy PortalNotificationConfigRepository portalNotificationConfigRepository,
-        MembershipService membershipService
+        MembershipService membershipService,
+        GroupService groupService
     ) {
         this.portalNotificationConfigRepository = portalNotificationConfigRepository;
         this.membershipService = membershipService;
+        this.groupService = groupService;
     }
 
     @Override
@@ -89,7 +93,7 @@ public class PortalNotificationConfigServiceImpl extends AbstractService impleme
                 }
             }
         } catch (TechnicalException te) {
-            LOGGER.error("An error occurs while trying to save the notification settings {}", notificationEntity, te);
+            log.error("An error occurs while trying to save the notification settings {}", notificationEntity, te);
             throw new TechnicalManagementException(
                 "An error occurs while trying to save the notification settings " + notificationEntity,
                 te
@@ -108,14 +112,16 @@ public class PortalNotificationConfigServiceImpl extends AbstractService impleme
             if (optionalConfig.isPresent()) {
                 return convert(optionalConfig.get());
             }
-            return PortalNotificationConfigEntity.newDefaultEmpty(
+            var notif = PortalNotificationConfigEntity.newDefaultEmpty(
                 user,
                 referenceType.name(),
                 referenceId,
                 GraviteeContext.getExecutionContext().getOrganizationId()
             );
+            notif.setGroupHooks(findGroupHooks(GraviteeContext.getExecutionContext(), user, referenceType, referenceId));
+            return notif;
         } catch (TechnicalException te) {
-            LOGGER.error("An error occurs while trying to get the notification settings {}/{}/{}", user, referenceType, referenceId, te);
+            log.error("An error occurs while trying to get the notification settings {}/{}/{}", user, referenceType, referenceId, te);
             throw new TechnicalManagementException(
                 "An error occurs while trying to get the notification settings " + user + "/" + referenceType + "/" + referenceId,
                 te
@@ -128,7 +134,7 @@ public class PortalNotificationConfigServiceImpl extends AbstractService impleme
         try {
             portalNotificationConfigRepository.deleteByUser(user);
         } catch (TechnicalException te) {
-            LOGGER.error("An error occurs while trying to delete notification settings for user {}", user, te);
+            log.error("An error occurs while trying to delete notification settings for user {}", user, te);
             throw new TechnicalManagementException("An error occurs while trying to delete notification settings for user " + user, te);
         }
     }
@@ -138,12 +144,7 @@ public class PortalNotificationConfigServiceImpl extends AbstractService impleme
         try {
             portalNotificationConfigRepository.deleteByReferenceIdAndReferenceType(referenceId, referenceType);
         } catch (TechnicalException te) {
-            LOGGER.error(
-                "An error occurs while trying to delete notification settings for reference {} / {}",
-                referenceType,
-                referenceId,
-                te
-            );
+            log.error("An error occurs while trying to delete notification settings for reference {} / {}", referenceType, referenceId, te);
             throw new TechnicalManagementException(
                 "An error occurs while trying to delete notification settings for reference " + referenceType + " / " + referenceId,
                 te
@@ -179,8 +180,7 @@ public class PortalNotificationConfigServiceImpl extends AbstractService impleme
     }
 
     private PortalNotificationConfig convert(PortalNotificationConfigEntity entity) {
-        return PortalNotificationConfig
-            .builder()
+        return PortalNotificationConfig.builder()
             .referenceType(NotificationReferenceType.valueOf(entity.getReferenceType()))
             .referenceId(entity.getReferenceId())
             .user(entity.getUser())
@@ -201,6 +201,50 @@ public class PortalNotificationConfigServiceImpl extends AbstractService impleme
         entity.setGroups(List.copyOf(portalNotificationConfig.getGroups()));
         entity.setOrigin(portalNotificationConfig.getOrigin());
         entity.setOrganizationId(portalNotificationConfig.getOrganizationId());
+        entity.setGroupHooks(
+            findGroupHooks(
+                GraviteeContext.getExecutionContext(),
+                portalNotificationConfig.getUser(),
+                portalNotificationConfig.getReferenceType(),
+                portalNotificationConfig.getReferenceId()
+            )
+        );
         return entity;
+    }
+
+    private Set<String> findGroupHooks(
+        ExecutionContext executionContext,
+        String userId,
+        NotificationReferenceType referenceType,
+        String referenceId
+    ) {
+        try {
+            if (referenceType != NotificationReferenceType.API) {
+                return Set.of();
+            }
+            var primaryOwnerUserId = membershipService.getPrimaryOwnerUserId(
+                executionContext.getOrganizationId(),
+                MembershipReferenceType.API,
+                referenceId
+            );
+
+            var poNotif = portalNotificationConfigRepository.findById(primaryOwnerUserId, referenceType, referenceId);
+
+            var poNotifGroups = poNotif.map(PortalNotificationConfig::getGroups).orElse(Set.of());
+
+            if (poNotifGroups.isEmpty()) {
+                return Set.of();
+            }
+
+            var poNotifHooks = poNotif.map(PortalNotificationConfig::getHooks).orElse(List.of());
+
+            var groupIds = groupService.findByUser(userId).stream().map(GroupEntity::getId).toList();
+
+            var hasGroupHooks = groupIds.stream().anyMatch(poNotifGroups::contains);
+
+            return hasGroupHooks ? new HashSet<>(poNotifHooks) : Set.of();
+        } catch (TechnicalException e) {
+            throw new TechnicalManagementException(e);
+        }
     }
 }

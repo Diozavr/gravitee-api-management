@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.function.BiFunction;
 import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -30,40 +31,40 @@ import lombok.RequiredArgsConstructor;
  */
 @RequiredArgsConstructor
 public enum SamplingType {
-    PROBABILITY(
-        "probability",
-        (value, validationLimit) -> {
-            try {
-                double parseDouble = Double.parseDouble(value);
-                return parseDouble >= 0.01 && parseDouble <= ((ValidationLimit.ProbabilityLimit) validationLimit).getLimit();
-            } catch (Exception e) {
-                return false;
-            }
+    PROBABILITY("probability", (value, validationLimit) -> {
+        try {
+            double parseDouble = Double.parseDouble(value);
+            return parseDouble >= 0.01 && parseDouble <= ((ValidationLimit.ProbabilityLimit) validationLimit).getLimit();
+        } catch (Exception e) {
+            return false;
         }
-    ),
-    TEMPORAL(
-        "temporal",
-        (value, validationLimit) -> {
-            try {
-                Duration duration = DurationParser.parse(value);
-                Duration minDuration = Duration.parse(((ValidationLimit.TemporalLimit) validationLimit).getLimit());
-                return duration != null && duration.compareTo(minDuration) >= 0;
-            } catch (Exception e) {
-                return false;
-            }
+    }),
+    TEMPORAL("temporal", (value, validationLimit) -> {
+        try {
+            Duration duration = DurationParser.parse(value);
+            Duration minDuration = Duration.parse(((ValidationLimit.TemporalLimit) validationLimit).getLimit());
+            return duration != null && duration.compareTo(minDuration) >= 0;
+        } catch (Exception e) {
+            return false;
         }
-    ),
-    COUNT(
-        "count",
-        (value, validationLimit) -> {
-            try {
-                int count = Integer.parseInt(value);
-                return count >= ((ValidationLimit.CountLimit) validationLimit).getLimit();
-            } catch (Exception e) {
-                return false;
-            }
+    }),
+    COUNT("count", (value, validationLimit) -> {
+        try {
+            int count = Integer.parseInt(value);
+            return count >= ((ValidationLimit.CountLimit) validationLimit).getLimit();
+        } catch (Exception e) {
+            return false;
         }
-    );
+    }),
+    WINDOWED_COUNT("windowed_count", (value, validationLimit) -> {
+        try {
+            var windowedCount = Sampling.parseWindowedCount(value);
+            var maxWindowedCount = Sampling.parseWindowedCount(((ValidationLimit.WindowedCountLimit) validationLimit).getLimit());
+            return windowedCount.ratePerSeconds() <= maxWindowedCount.ratePerSeconds();
+        } catch (Exception e) {
+            return false;
+        }
+    });
 
     private static final Map<String, SamplingType> LABELS_MAP = Map.of(
         PROBABILITY.label,
@@ -71,20 +72,19 @@ public enum SamplingType {
         TEMPORAL.label,
         TEMPORAL,
         COUNT.label,
-        COUNT
+        COUNT,
+        WINDOWED_COUNT.label,
+        WINDOWED_COUNT
     );
 
     @JsonValue
+    @Getter
     private final String label;
 
     @JsonIgnore
     private final BiFunction<String, ValidationLimit<?>, Boolean> validationFunction;
 
-    public String getLabel() {
-        return label;
-    }
-
-    public boolean validate(final String value, final ValidationLimit validationLimit) {
+    public boolean validate(final String value, final ValidationLimit<?> validationLimit) {
         return validationFunction.apply(value, validationLimit);
     }
 
@@ -129,6 +129,17 @@ public enum SamplingType {
             @Override
             String getLimit() {
                 return temporal;
+            }
+        }
+
+        @AllArgsConstructor
+        public static class WindowedCountLimit extends ValidationLimit<String> {
+
+            private String windowedCount;
+
+            @Override
+            String getLimit() {
+                return windowedCount;
             }
         }
     }

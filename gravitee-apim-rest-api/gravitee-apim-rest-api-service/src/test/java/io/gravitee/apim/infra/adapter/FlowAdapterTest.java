@@ -25,6 +25,7 @@ import io.gravitee.definition.model.flow.PathOperator;
 import io.gravitee.definition.model.v4.flow.selector.ChannelSelector;
 import io.gravitee.definition.model.v4.flow.selector.ConditionSelector;
 import io.gravitee.definition.model.v4.flow.selector.HttpSelector;
+import io.gravitee.definition.model.v4.flow.selector.McpSelector;
 import io.gravitee.definition.model.v4.flow.step.Step;
 import io.gravitee.repository.management.model.flow.Flow;
 import io.gravitee.repository.management.model.flow.FlowConsumer;
@@ -34,6 +35,7 @@ import io.gravitee.repository.management.model.flow.FlowStep;
 import io.gravitee.repository.management.model.flow.selector.FlowChannelSelector;
 import io.gravitee.repository.management.model.flow.selector.FlowConditionSelector;
 import io.gravitee.repository.management.model.flow.selector.FlowHttpSelector;
+import io.gravitee.repository.management.model.flow.selector.FlowMcpSelector;
 import io.gravitee.repository.management.model.flow.selector.FlowOperator;
 import io.gravitee.rest.api.service.common.UuidString;
 import java.sql.Date;
@@ -65,27 +67,25 @@ class FlowAdapterTest {
 
     @Test
     void should_convert_from_v4_flow_to_repository() {
-        var model = FlowFixtures
-            .aProxyFlowV4()
+        var model = FlowFixtures.aProxyFlowV4()
             .toBuilder()
             .tags(Set.of("tag1"))
             .selectors(
                 List.of(
                     HttpSelector.builder().path("/").pathOperator(Operator.STARTS_WITH).methods(Set.of(HttpMethod.GET)).build(),
-                    ChannelSelector
-                        .builder()
+                    ChannelSelector.builder()
                         .channel("/")
                         .channelOperator(Operator.STARTS_WITH)
                         .entrypoints(Set.of("sse"))
                         .operations(Set.of(ChannelSelector.Operation.PUBLISH))
                         .build(),
-                    ConditionSelector.builder().condition("my-condition").build()
+                    ConditionSelector.builder().condition("my-condition").build(),
+                    McpSelector.builder().methods(Set.of("mcp")).build()
                 )
             )
             .request(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-1")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -96,8 +96,7 @@ class FlowAdapterTest {
             )
             .response(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-2")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -108,8 +107,7 @@ class FlowAdapterTest {
             )
             .publish(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-3")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -120,8 +118,7 @@ class FlowAdapterTest {
             )
             .subscribe(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-4")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -146,23 +143,22 @@ class FlowAdapterTest {
             soft.assertThat(result.getTags()).containsExactly("tag1");
             soft
                 .assertThat(result.getSelectors())
-                .hasSize(3)
+                .hasSize(4)
                 .containsOnly(
                     FlowHttpSelector.builder().path("/").pathOperator(FlowOperator.STARTS_WITH).methods(Set.of(HttpMethod.GET)).build(),
-                    FlowChannelSelector
-                        .builder()
+                    FlowChannelSelector.builder()
                         .channel("/")
                         .channelOperator(FlowOperator.STARTS_WITH)
                         .entrypoints(Set.of("sse"))
                         .operations(Set.of(FlowChannelSelector.Operation.PUBLISH))
                         .build(),
-                    FlowConditionSelector.builder().condition("my-condition").build()
+                    FlowConditionSelector.builder().condition("my-condition").build(),
+                    FlowMcpSelector.builder().methods(Set.of("mcp")).build()
                 );
             soft
                 .assertThat(result.getRequest())
                 .containsOnly(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-1")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -173,8 +169,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getResponse())
                 .containsOnly(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-2")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -185,8 +180,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getPublish())
                 .containsOnly(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-3")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -197,8 +191,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getSubscribe())
                 .containsOnly(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-4")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -211,27 +204,25 @@ class FlowAdapterTest {
 
     @Test
     void should_update_repository_with_v4_flow_to_repository() {
-        var model = FlowFixtures
-            .aProxyFlowV4()
+        var model = FlowFixtures.aProxyFlowV4()
             .toBuilder()
             .tags(Set.of("tag1"))
             .selectors(
                 List.of(
                     HttpSelector.builder().path("/").pathOperator(Operator.STARTS_WITH).methods(Set.of(HttpMethod.GET)).build(),
-                    ChannelSelector
-                        .builder()
+                    ChannelSelector.builder()
                         .channel("/")
                         .channelOperator(Operator.STARTS_WITH)
                         .entrypoints(Set.of("sse"))
                         .operations(Set.of(ChannelSelector.Operation.PUBLISH))
                         .build(),
-                    ConditionSelector.builder().condition("my-condition").build()
+                    ConditionSelector.builder().condition("my-condition").build(),
+                    McpSelector.builder().methods(Set.of("mcp")).build()
                 )
             )
             .request(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-1")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -242,8 +233,7 @@ class FlowAdapterTest {
             )
             .response(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-2")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -254,8 +244,7 @@ class FlowAdapterTest {
             )
             .publish(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-3")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -266,8 +255,7 @@ class FlowAdapterTest {
             )
             .subscribe(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-4")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -289,8 +277,7 @@ class FlowAdapterTest {
             .request(List.of())
             .response(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-updated-step-name-2")
                         .policy("a-updated-policy")
                         .description("my-updated-step-description")
@@ -301,8 +288,7 @@ class FlowAdapterTest {
             )
             .publish(
                 List.of(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-updated-step-name-3")
                         .policy("a-updated-policy")
                         .description("my-updated-step-description")
@@ -330,8 +316,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(updatedResult.getResponse())
                 .containsOnly(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-updated-step-name-2")
                         .policy("a-updated-policy")
                         .description("my-updated-step-description")
@@ -342,8 +327,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(updatedResult.getPublish())
                 .containsOnly(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-updated-step-name-3")
                         .policy("a-updated-policy")
                         .description("my-updated-step-description")
@@ -379,8 +363,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getPre())
                 .containsOnly(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-1")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -391,8 +374,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getPost())
                 .containsOnly(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-2")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -405,28 +387,26 @@ class FlowAdapterTest {
 
     @Test
     void should_convert_from_repository_to_flow_v4() {
-        var repository = Flow
-            .builder()
+        var repository = Flow.builder()
             .name("my-flow")
             .enabled(true)
             .tags(Set.of("tag1"))
             .selectors(
                 List.of(
                     FlowHttpSelector.builder().path("/").pathOperator(FlowOperator.STARTS_WITH).methods(Set.of(HttpMethod.GET)).build(),
-                    FlowChannelSelector
-                        .builder()
+                    FlowChannelSelector.builder()
                         .channel("/")
                         .channelOperator(FlowOperator.STARTS_WITH)
                         .entrypoints(Set.of("sse"))
                         .operations(Set.of(FlowChannelSelector.Operation.PUBLISH))
                         .build(),
-                    FlowConditionSelector.builder().condition("my-condition").build()
+                    FlowConditionSelector.builder().condition("my-condition").build(),
+                    FlowMcpSelector.builder().methods(Set.of("mcp")).build()
                 )
             )
             .request(
                 List.of(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-1")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -437,8 +417,7 @@ class FlowAdapterTest {
             )
             .response(
                 List.of(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-2")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -449,8 +428,7 @@ class FlowAdapterTest {
             )
             .publish(
                 List.of(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-3")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -461,8 +439,7 @@ class FlowAdapterTest {
             )
             .subscribe(
                 List.of(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-4")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -481,23 +458,22 @@ class FlowAdapterTest {
             soft.assertThat(result.getTags()).containsExactly("tag1");
             soft
                 .assertThat(result.getSelectors())
-                .hasSize(3)
+                .hasSize(4)
                 .containsOnly(
                     HttpSelector.builder().path("/").pathOperator(Operator.STARTS_WITH).methods(Set.of(HttpMethod.GET)).build(),
-                    ChannelSelector
-                        .builder()
+                    ChannelSelector.builder()
                         .channel("/")
                         .channelOperator(Operator.STARTS_WITH)
                         .entrypoints(Set.of("sse"))
                         .operations(Set.of(ChannelSelector.Operation.PUBLISH))
                         .build(),
-                    ConditionSelector.builder().condition("my-condition").build()
+                    ConditionSelector.builder().condition("my-condition").build(),
+                    McpSelector.builder().methods(Set.of("mcp")).build()
                 );
             soft
                 .assertThat(result.getRequest())
                 .containsOnly(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-1")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -508,8 +484,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getResponse())
                 .containsOnly(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-2")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -520,8 +495,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getPublish())
                 .containsOnly(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-3")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -532,8 +506,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getSubscribe())
                 .containsOnly(
-                    Step
-                        .builder()
+                    Step.builder()
                         .name("my-step-name-4")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -546,8 +519,7 @@ class FlowAdapterTest {
 
     @Test
     void should_convert_from_repository_to_flow_v2() {
-        var repository = Flow
-            .builder()
+        var repository = Flow.builder()
             .name("my-flow")
             .enabled(true)
             .tags(Set.of("tag1"))
@@ -558,8 +530,7 @@ class FlowAdapterTest {
             .methods(Set.of(HttpMethod.GET))
             .pre(
                 List.of(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-1")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -570,8 +541,7 @@ class FlowAdapterTest {
             )
             .post(
                 List.of(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-2")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -582,8 +552,7 @@ class FlowAdapterTest {
             )
             .publish(
                 List.of(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-3")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -594,8 +563,7 @@ class FlowAdapterTest {
             )
             .subscribe(
                 List.of(
-                    FlowStep
-                        .builder()
+                    FlowStep.builder()
                         .name("my-step-name-4")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -620,8 +588,7 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getPre())
                 .containsOnly(
-                    io.gravitee.definition.model.flow.Step
-                        .builder()
+                    io.gravitee.definition.model.flow.Step.builder()
                         .name("my-step-name-1")
                         .policy("a-policy")
                         .description("my-step-description")
@@ -632,9 +599,224 @@ class FlowAdapterTest {
             soft
                 .assertThat(result.getPost())
                 .containsOnly(
-                    io.gravitee.definition.model.flow.Step
-                        .builder()
+                    io.gravitee.definition.model.flow.Step.builder()
                         .name("my-step-name-2")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                );
+        });
+    }
+
+    @Test
+    void should_convert_from_native_flow_to_repository() {
+        var model = io.gravitee.definition.model.v4.nativeapi.NativeFlow.builder()
+            .name("my-native-flow")
+            .enabled(true)
+            .tags(Set.of("tag1"))
+            .entrypointConnect(
+                List.of(
+                    Step.builder()
+                        .name("my-step-name-entrypoint-connect")
+                        .policy("ip-filtering")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{\"blacklistIps\":[\"127.0.0.1\"]}")
+                        .build()
+                )
+            )
+            .interact(
+                List.of(
+                    Step.builder()
+                        .name("my-step-name-interact")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                )
+            )
+            .publish(
+                List.of(
+                    Step.builder()
+                        .name("my-step-name-publish")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                )
+            )
+            .subscribe(
+                List.of(
+                    Step.builder()
+                        .name("my-step-name-subscribe")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                )
+            )
+            .build();
+
+        var result = FlowAdapter.INSTANCE.toRepository(model, FlowReferenceType.API, "api-id", 12);
+
+        SoftAssertions.assertSoftly(soft -> {
+            soft.assertThat(result.getId()).isEqualTo("generated-id");
+            soft.assertThat(result.getReferenceType()).isEqualTo(FlowReferenceType.API);
+            soft.assertThat(result.getReferenceId()).isEqualTo("api-id");
+            soft.assertThat(result.getName()).isEqualTo("my-native-flow");
+            soft.assertThat(result.isEnabled()).isTrue();
+            soft.assertThat(result.getCreatedAt()).isEqualTo(Date.from(INSTANT_NOW));
+            soft.assertThat(result.getUpdatedAt()).isEqualTo(Date.from(INSTANT_NOW));
+            soft.assertThat(result.getOrder()).isEqualTo(12);
+            soft.assertThat(result.getTags()).containsExactly("tag1");
+            soft
+                .assertThat(result.getEntrypointConnect())
+                .containsOnly(
+                    FlowStep.builder()
+                        .name("my-step-name-entrypoint-connect")
+                        .policy("ip-filtering")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{\"blacklistIps\":[\"127.0.0.1\"]}")
+                        .build()
+                );
+            soft
+                .assertThat(result.getInteract())
+                .containsOnly(
+                    FlowStep.builder()
+                        .name("my-step-name-interact")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                );
+            soft
+                .assertThat(result.getPublish())
+                .containsOnly(
+                    FlowStep.builder()
+                        .name("my-step-name-publish")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                );
+            soft
+                .assertThat(result.getSubscribe())
+                .containsOnly(
+                    FlowStep.builder()
+                        .name("my-step-name-subscribe")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                );
+        });
+    }
+
+    @Test
+    void should_convert_from_repository_to_native_flow() {
+        var repository = Flow.builder()
+            .name("my-native-flow")
+            .enabled(true)
+            .tags(Set.of("tag1"))
+            .entrypointConnect(
+                List.of(
+                    FlowStep.builder()
+                        .name("my-step-name-entrypoint-connect")
+                        .policy("ip-filtering")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{\"blacklistIps\":[\"127.0.0.1\"]}")
+                        .build()
+                )
+            )
+            .interact(
+                List.of(
+                    FlowStep.builder()
+                        .name("my-step-name-interact")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                )
+            )
+            .publish(
+                List.of(
+                    FlowStep.builder()
+                        .name("my-step-name-publish")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                )
+            )
+            .subscribe(
+                List.of(
+                    FlowStep.builder()
+                        .name("my-step-name-subscribe")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                )
+            )
+            .build();
+
+        var result = FlowAdapter.INSTANCE.toNativeFlow(repository);
+
+        SoftAssertions.assertSoftly(soft -> {
+            soft.assertThat(result.getName()).isEqualTo("my-native-flow");
+            soft.assertThat(result.isEnabled()).isTrue();
+            soft.assertThat(result.getTags()).containsExactly("tag1");
+            soft
+                .assertThat(result.getEntrypointConnect())
+                .containsOnly(
+                    Step.builder()
+                        .name("my-step-name-entrypoint-connect")
+                        .policy("ip-filtering")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{\"blacklistIps\":[\"127.0.0.1\"]}")
+                        .build()
+                );
+            soft
+                .assertThat(result.getInteract())
+                .containsOnly(
+                    Step.builder()
+                        .name("my-step-name-interact")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                );
+            soft
+                .assertThat(result.getPublish())
+                .containsOnly(
+                    Step.builder()
+                        .name("my-step-name-publish")
+                        .policy("a-policy")
+                        .description("my-step-description")
+                        .condition("my-step-condition")
+                        .configuration("{}")
+                        .build()
+                );
+            soft
+                .assertThat(result.getSubscribe())
+                .containsOnly(
+                    Step.builder()
+                        .name("my-step-name-subscribe")
                         .policy("a-policy")
                         .description("my-step-description")
                         .condition("my-step-condition")

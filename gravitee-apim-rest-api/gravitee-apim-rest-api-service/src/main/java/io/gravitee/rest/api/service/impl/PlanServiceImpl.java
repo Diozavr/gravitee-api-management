@@ -33,7 +33,6 @@ import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.flow.Flow;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.ApiRepository;
-import io.gravitee.repository.management.api.GroupRepository;
 import io.gravitee.repository.management.api.PlanRepository;
 import io.gravitee.repository.management.model.Api;
 import io.gravitee.repository.management.model.Audit;
@@ -47,6 +46,8 @@ import io.gravitee.rest.api.model.PlanEntity;
 import io.gravitee.rest.api.model.PlanSecurityEntity;
 import io.gravitee.rest.api.model.PlanSecurityType;
 import io.gravitee.rest.api.model.PlansConfigurationEntity;
+import io.gravitee.rest.api.model.SubscriptionEntity;
+import io.gravitee.rest.api.model.SubscriptionStatus;
 import io.gravitee.rest.api.model.UpdatePlanEntity;
 import io.gravitee.rest.api.model.parameters.Key;
 import io.gravitee.rest.api.model.parameters.ParameterReferenceType;
@@ -90,8 +91,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -101,6 +101,7 @@ import org.springframework.stereotype.Component;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class PlanServiceImpl extends AbstractService implements PlanService {
 
@@ -110,7 +111,6 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
         new PlanSecurityEntity("api_key", "API Key", "api-key"),
         new PlanSecurityEntity("key_less", "Keyless (public)", "")
     );
-    private final Logger logger = LoggerFactory.getLogger(PlanServiceImpl.class);
 
     @Lazy
     @Autowired
@@ -163,17 +163,19 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
 
     @Override
     public Set<PlanEntity> findByApi(final ExecutionContext executionContext, final String api) {
-        return planSearchService.findByApi(executionContext, api).stream().flatMap(this::map).collect(Collectors.toSet());
+        return planSearchService.findByApi(executionContext, api, true).stream().flatMap(this::map).collect(Collectors.toSet());
     }
 
     @Override
     public PlanEntity create(final ExecutionContext executionContext, NewPlanEntity newPlan) {
         try {
-            logger.debug("Create a new plan {} for API {}", newPlan.getName(), newPlan.getApi());
+            log.debug("Create a new plan {} for API {}", newPlan.getName(), newPlan.getReferenceId());
 
             assertPlanSecurityIsAllowed(executionContext, newPlan.getSecurity());
 
-            Api api = apiRepository.findById(newPlan.getApi()).orElseThrow(() -> new ApiNotFoundException(newPlan.getApi()));
+            Api api = apiRepository
+                .findById(newPlan.getReferenceId())
+                .orElseThrow(() -> new ApiNotFoundException(newPlan.getReferenceId()));
 
             if (api.getApiLifecycleState() == DEPRECATED) {
                 throw new ApiDeprecatedException(api.getName());
@@ -181,7 +183,7 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
 
             validateTags(newPlan.getTags(), api);
 
-            String id = newPlan.getId() != null && UUID.fromString(newPlan.getId()) != null ? newPlan.getId() : UuidString.generateRandom();
+            String id = newPlan.getId() != null ? newPlan.getId() : UuidString.generateRandom();
 
             newPlan.setId(id);
             Plan plan = planConverter.toPlan(newPlan, getApiDefinitionVersion(api));
@@ -192,24 +194,26 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
 
             auditService.createApiAuditLog(
                 executionContext,
-                newPlan.getApi(),
-                Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()),
-                PLAN_CREATED,
-                plan.getCreatedAt(),
-                null,
-                plan
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()))
+                    .event(PLAN_CREATED)
+                    .createdAt(plan.getCreatedAt())
+                    .oldValue(null)
+                    .newValue(plan)
+                    .build(),
+                newPlan.getReferenceId()
             );
             return convert(plan);
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to create a plan {} for API {}", newPlan.getName(), newPlan.getApi(), ex);
+            log.error("An error occurs while trying to create a plan {} for API {}", newPlan.getName(), newPlan.getReferenceId(), ex);
             throw new TechnicalManagementException(
-                String.format("An error occurs while trying to create a plan %s for API %s", newPlan.getName(), newPlan.getApi()),
+                String.format("An error occurs while trying to create a plan %s for API %s", newPlan.getName(), newPlan.getReferenceId()),
                 ex
             );
         } catch (JsonProcessingException jse) {
-            logger.error("Unexpected error while generating plan definition", jse);
+            log.error("Unexpected error while generating plan definition", jse);
             throw new TechnicalManagementException(
-                String.format("An error occurs while trying to create a plan %s for API %s", newPlan.getName(), newPlan.getApi()),
+                String.format("An error occurs while trying to create a plan %s for API %s", newPlan.getName(), newPlan.getReferenceId()),
                 jse
             );
         }
@@ -233,12 +237,14 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
 
     public PlanEntity update(final ExecutionContext executionContext, UpdatePlanEntity updatePlan, boolean fromImport) {
         try {
-            logger.debug("Update plan {}", updatePlan.getName());
+            log.debug("Update plan {}", updatePlan.getName());
 
             Plan oldPlan = planRepository.findById(updatePlan.getId()).orElseThrow(() -> new PlanNotFoundException(updatePlan.getId()));
             assertPlanSecurityIsAllowed(executionContext, PlanSecurityType.valueOf(oldPlan.getSecurity().name()));
 
-            Api api = apiRepository.findById(oldPlan.getApi()).orElseThrow(() -> new ApiNotFoundException(oldPlan.getApi()));
+            Api api = apiRepository
+                .findById(oldPlan.getReferenceId())
+                .orElseThrow(() -> new ApiNotFoundException(oldPlan.getReferenceId()));
             if (getApiDefinitionVersion(api) == V2 && updatePlan.getFlows() == null) {
                 throw new PlanFlowRequiredException(updatePlan.getId());
             }
@@ -246,14 +252,18 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
             Plan newPlan = new Plan();
             //copy immutable values
             newPlan.setId(oldPlan.getId());
+            newPlan.setHrid(oldPlan.getHrid());
             newPlan.setSecurity(oldPlan.getSecurity());
             newPlan.setType(oldPlan.getType());
             newPlan.setStatus(oldPlan.getStatus());
             newPlan.setOrder(oldPlan.getOrder());
-            newPlan.setApi(oldPlan.getApi());
+            newPlan.setApi(oldPlan.getReferenceId());
+            newPlan.setReferenceId(oldPlan.getReferenceId());
+            newPlan.setReferenceType(oldPlan.getReferenceType());
             newPlan.setCreatedAt(oldPlan.getCreatedAt());
             newPlan.setPublishedAt(oldPlan.getPublishedAt());
             newPlan.setClosedAt(oldPlan.getClosedAt());
+            newPlan.setEnvironmentId(oldPlan.getEnvironmentId());
             // for existing plans, needRedeployAt doesn't exist. We have to initalize it
             if (oldPlan.getNeedRedeployAt() == null) {
                 newPlan.setNeedRedeployAt(oldPlan.getUpdatedAt());
@@ -316,23 +326,25 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
 
             auditService.createApiAuditLog(
                 executionContext,
-                newPlan.getApi(),
-                Collections.singletonMap(Audit.AuditProperties.PLAN, newPlan.getId()),
-                PLAN_UPDATED,
-                newPlan.getUpdatedAt(),
-                oldPlan,
-                newPlan
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, newPlan.getId()))
+                    .event(PLAN_UPDATED)
+                    .createdAt(newPlan.getUpdatedAt())
+                    .oldValue(oldPlan)
+                    .newValue(newPlan)
+                    .build(),
+                newPlan.getReferenceId()
             );
 
             return convert(newPlan);
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to update plan {}", updatePlan.getName(), ex);
+            log.error("An error occurs while trying to update plan {}", updatePlan.getName(), ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to update plan %s", updatePlan.getName()),
                 ex
             );
         } catch (JsonProcessingException jse) {
-            logger.error("Unexpected error while generating plan definition", jse);
+            log.error("Unexpected error while generating plan definition", jse);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to update a plan %s", updatePlan.getName()),
                 jse
@@ -363,7 +375,7 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
     @Override
     public PlanEntity close(final ExecutionContext executionContext, String planId) {
         try {
-            logger.debug("Close plan {}", planId);
+            log.debug("Close plan {}", planId);
 
             Plan plan = planRepository.findById(planId).orElseThrow(() -> new PlanNotFoundException(planId));
 
@@ -381,8 +393,7 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
 
             // Close subscriptions
             if (plan.getSecurity() != Plan.PlanSecurityType.KEY_LESS) {
-                var auditInfo = AuditInfo
-                    .builder()
+                var auditInfo = AuditInfo.builder()
                     .organizationId(executionContext.getOrganizationId())
                     .environmentId(executionContext.getEnvironmentId())
                     .actor(getAuthenticatedUserAsAuditActor())
@@ -404,22 +415,29 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
             plan = planRepository.update(plan);
 
             // Audit
-            auditService.createApiAuditLog(
-                executionContext,
-                plan.getApi(),
-                Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()),
-                PLAN_CLOSED,
-                plan.getUpdatedAt(),
-                previousPlan,
-                plan
-            );
+            String referenceId = plan.getReferenceId();
+            Plan.PlanReferenceType referenceType = plan.getReferenceType();
+            var auditLogData = AuditService.AuditLogData.builder()
+                .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()))
+                .event(PLAN_CLOSED)
+                .createdAt(plan.getUpdatedAt())
+                .oldValue(previousPlan)
+                .newValue(plan)
+                .build();
+
+            if (referenceType == Plan.PlanReferenceType.API_PRODUCT) {
+                auditService.createApiProductAuditLog(executionContext, auditLogData, referenceId);
+            } else {
+                String apiId = plan.getApi() != null ? plan.getApi() : referenceId;
+                auditService.createApiAuditLog(executionContext, auditLogData, apiId);
+            }
 
             //reorder plan
             reorderedAndSavePlansAfterRemove(plan);
 
             return convert(plan);
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to close plan: {}", planId, ex);
+            log.error("An error occurs while trying to close plan: {}", planId, ex);
             throw new TechnicalManagementException(String.format("An error occurs while trying to close plan: %s", planId), ex);
         }
     }
@@ -427,13 +445,20 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
     @Override
     public void delete(ExecutionContext executionContext, String planId) {
         try {
-            logger.debug("Delete plan {}", planId);
+            log.debug("Delete plan {}", planId);
 
             Plan plan = planRepository.findById(planId).orElseThrow(() -> new PlanNotFoundException(planId));
 
-            if (plan.getSecurity() != Plan.PlanSecurityType.KEY_LESS) {
-                int subscriptions = subscriptionService.findByPlan(executionContext, planId).size();
-                if ((plan.getStatus() == Plan.Status.PUBLISHED || plan.getStatus() == Plan.Status.DEPRECATED) && subscriptions > 0) {
+            if (
+                plan.getSecurity() != Plan.PlanSecurityType.KEY_LESS &&
+                (plan.getStatus() == Plan.Status.PUBLISHED || plan.getStatus() == Plan.Status.DEPRECATED)
+            ) {
+                boolean hasActiveSubscription = subscriptionService
+                    .findByPlan(executionContext, planId)
+                    .stream()
+                    .anyMatch(s -> !s.getStatus().isInactive());
+
+                if (hasActiveSubscription) {
                     throw new PlanWithSubscriptionsException(planId);
                 }
             }
@@ -445,18 +470,20 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
             // Audit
             auditService.createApiAuditLog(
                 executionContext,
-                plan.getApi(),
-                Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()),
-                PLAN_DELETED,
-                new Date(),
-                plan,
-                null
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()))
+                    .event(PLAN_DELETED)
+                    .createdAt(new Date())
+                    .oldValue(plan)
+                    .newValue(null)
+                    .build(),
+                plan.getReferenceId()
             );
 
             //reorder plan
             reorderedAndSavePlansAfterRemove(plan);
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to delete plan: {}", planId, ex);
+            log.error("An error occurs while trying to delete plan: {}", planId, ex);
             throw new TechnicalManagementException(String.format("An error occurs while trying to delete plan: %s", planId), ex);
         }
     }
@@ -464,7 +491,7 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
     @Override
     public PlanEntity publish(final ExecutionContext executionContext, String planId) {
         try {
-            logger.debug("Publish plan {}", planId);
+            log.debug("Publish plan {}", planId);
 
             Plan plan = planRepository.findById(planId).orElseThrow(() -> new PlanNotFoundException(planId));
             Plan previousPlan = new Plan(plan);
@@ -478,7 +505,7 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
 
             checkStatusOfGeneralConditions(plan);
 
-            Set<Plan> plans = planRepository.findByApi(plan.getApi());
+            Set<Plan> plans = planRepository.findByApi(plan.getReferenceId());
             if (plan.getSecurity() == Plan.PlanSecurityType.KEY_LESS) {
                 // Look to other plans if there is already a keyless-published plan
                 long count = plans
@@ -512,17 +539,19 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
             // Audit
             auditService.createApiAuditLog(
                 executionContext,
-                plan.getApi(),
-                Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()),
-                PLAN_PUBLISHED,
-                plan.getUpdatedAt(),
-                previousPlan,
-                plan
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()))
+                    .event(PLAN_PUBLISHED)
+                    .createdAt(plan.getUpdatedAt())
+                    .oldValue(previousPlan)
+                    .newValue(plan)
+                    .build(),
+                plan.getReferenceId()
             );
 
             return convert(plan);
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to publish plan: {}", planId, ex);
+            log.error("An error occurs while trying to publish plan: {}", planId, ex);
             throw new TechnicalManagementException(String.format("An error occurs while trying to publish plan: %s", planId), ex);
         }
     }
@@ -535,7 +564,7 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
     @Override
     public PlanEntity deprecate(final ExecutionContext executionContext, String planId, boolean allowStaging) {
         try {
-            logger.debug("Deprecate plan {}", planId);
+            log.debug("Deprecate plan {}", planId);
 
             Plan plan = planRepository.findById(planId).orElseThrow(() -> new PlanNotFoundException(planId));
             Plan previousPlan = new Plan(plan);
@@ -557,17 +586,19 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
             // Audit
             auditService.createApiAuditLog(
                 executionContext,
-                plan.getApi(),
-                Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()),
-                PLAN_DEPRECATED,
-                plan.getUpdatedAt(),
-                previousPlan,
-                plan
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.singletonMap(Audit.AuditProperties.PLAN, plan.getId()))
+                    .event(PLAN_DEPRECATED)
+                    .createdAt(plan.getUpdatedAt())
+                    .oldValue(previousPlan)
+                    .newValue(plan)
+                    .build(),
+                plan.getReferenceId()
             );
 
             return convert(plan);
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to deprecate plan: {}", planId, ex);
+            log.error("An error occurs while trying to deprecate plan: {}", planId, ex);
             throw new TechnicalManagementException(String.format("An error occurs while trying to deprecate plan: %s", planId), ex);
         }
     }
@@ -580,7 +611,7 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
     }
 
     private Plan reorderAndSavePlans(final Plan planToReorder) throws TechnicalException {
-        final Collection<Plan> plans = planRepository.findByApi(planToReorder.getApi());
+        final Collection<Plan> plans = planRepository.findByApi(planToReorder.getReferenceId());
         Plan[] plansToReorder = plans
             .stream()
             .filter(p -> Plan.Status.PUBLISHED.equals(p.getStatus()) && !Objects.equals(p.getId(), planToReorder.getId()))
@@ -590,7 +621,8 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
         // the new plan order must be between 1 && numbers of published apis
         if (planToReorder.getOrder() < 1) {
             planToReorder.setOrder(1);
-        } else if (planToReorder.getOrder() > plansToReorder.length + 1) { // -1 because we have filtered the plan itself
+        } else if (planToReorder.getOrder() > plansToReorder.length + 1) {
+            // -1 because we have filtered the plan itself
             planToReorder.setOrder(plansToReorder.length + 1);
         }
         try {
@@ -607,13 +639,13 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
             // update the modified plan
             return planRepository.update(planToReorder);
         } catch (final TechnicalException ex) {
-            logger.error("An error occurs while trying to update plan {}", planToReorder.getId(), ex);
+            log.error("An error occurs while trying to update plan {}", planToReorder.getId(), ex);
             throw new TechnicalManagementException("An error occurs while trying to update plan " + planToReorder.getId(), ex);
         }
     }
 
     private void reorderedAndSavePlansAfterRemove(final Plan planRemoved) throws TechnicalException {
-        final Collection<Plan> plans = planRepository.findByApi(planRemoved.getApi());
+        final Collection<Plan> plans = planRepository.findByApi(planRemoved.getReferenceId());
         plans
             .stream()
             .filter(p -> Plan.Status.PUBLISHED.equals(p.getStatus()))
@@ -621,11 +653,10 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
             .forEachOrdered(plan -> {
                 try {
                     if (plan.getOrder() > planRemoved.getOrder()) {
-                        plan.setOrder(plan.getOrder() - 1);
-                        planRepository.update(plan);
+                        planRepository.updateOrder(plan.getId(), plan.getOrder() - 1);
                     }
                 } catch (final TechnicalException ex) {
-                    logger.error("An error occurs while trying to reorder plan {}", plan.getId(), ex);
+                    log.error("An error occurs while trying to reorder plan {}", plan.getId(), ex);
                     throw new TechnicalManagementException("An error occurs while trying to update plan " + plan.getId(), ex);
                 }
             });
@@ -673,7 +704,7 @@ public class PlanServiceImpl extends AbstractService implements PlanService {
         try {
             return objectMapper.readValue(api.getDefinition(), io.gravitee.definition.model.Api.class).getDefinitionVersion();
         } catch (JsonProcessingException | IllegalArgumentException e) {
-            logger.error("Unexpected error while reading API definition", e);
+            log.error("Unexpected error while reading API definition", e);
             return V2;
         }
     }

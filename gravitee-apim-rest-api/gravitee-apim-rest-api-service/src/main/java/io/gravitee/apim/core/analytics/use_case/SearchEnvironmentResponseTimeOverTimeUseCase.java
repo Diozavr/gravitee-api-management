@@ -34,10 +34,10 @@ import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 @UseCase
 public class SearchEnvironmentResponseTimeOverTimeUseCase {
@@ -62,8 +62,7 @@ public class SearchEnvironmentResponseTimeOverTimeUseCase {
     private Map<DefinitionVersion, List<String>> apisIdsForEnv(String envId) {
         return apiQueryService
             .search(
-                ApiSearchCriteria
-                    .builder()
+                ApiSearchCriteria.builder()
                     .environmentId(envId)
                     .definitionVersion(EnumSet.of(DefinitionVersion.V4, DefinitionVersion.V2))
                     .build(),

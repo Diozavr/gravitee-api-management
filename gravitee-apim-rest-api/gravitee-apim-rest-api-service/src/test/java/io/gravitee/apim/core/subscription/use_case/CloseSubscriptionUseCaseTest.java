@@ -54,6 +54,7 @@ import io.gravitee.apim.core.plan.model.Plan;
 import io.gravitee.apim.core.subscription.domain_service.CloseSubscriptionDomainService;
 import io.gravitee.apim.core.subscription.domain_service.RejectSubscriptionDomainService;
 import io.gravitee.apim.core.subscription.model.SubscriptionEntity;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.apim.core.subscription.use_case.CloseSubscriptionUseCase.Input;
 import io.gravitee.apim.core.user.model.BaseUserEntity;
 import io.gravitee.apim.infra.json.jackson.JacksonJsonDiffProcessor;
@@ -128,26 +129,24 @@ class CloseSubscriptionUseCaseTest {
             triggerNotificationService
         );
 
-        usecase =
-            new CloseSubscriptionUseCase(
+        usecase = new CloseSubscriptionUseCase(
+            subscriptionCrudService,
+            new CloseSubscriptionDomainService(
                 subscriptionCrudService,
-                new CloseSubscriptionDomainService(
-                    subscriptionCrudService,
-                    applicationCrudService,
-                    auditDomainService,
-                    triggerNotificationService,
-                    rejectSubscriptionDomainService,
-                    revokeApiKeyDomainService,
-                    apiCrudService,
-                    integrationAgent
-                )
-            );
+                applicationCrudService,
+                auditDomainService,
+                triggerNotificationService,
+                rejectSubscriptionDomainService,
+                revokeApiKeyDomainService,
+                apiCrudService,
+                integrationAgent
+            )
+        );
 
         membershipQueryService.initWith(List.of(anApplicationPrimaryOwnerUserMembership(APPLICATION_ID, USER_ID, ORGANIZATION_ID)));
         applicationCrudService.initWith(
             List.of(
-                ApplicationModelFixtures
-                    .anApplicationEntity()
+                ApplicationModelFixtures.anApplicationEntity()
                     .toBuilder()
                     .id(APPLICATION_ID)
                     .primaryOwner(PrimaryOwnerEntity.builder().id(USER_ID).displayName("Jane").build())
@@ -162,16 +161,14 @@ class CloseSubscriptionUseCaseTest {
 
     @AfterEach
     void tearDown() {
-        Stream
-            .of(
-                apiCrudService,
-                subscriptionCrudService,
-                auditCrudServiceInMemory,
-                applicationCrudService,
-                apiKeyCrudService,
-                planCrudService
-            )
-            .forEach(InMemoryAlternative::reset);
+        Stream.of(
+            apiCrudService,
+            subscriptionCrudService,
+            auditCrudServiceInMemory,
+            applicationCrudService,
+            apiKeyCrudService,
+            planCrudService
+        ).forEach(InMemoryAlternative::reset);
         triggerNotificationService.reset();
     }
 
@@ -187,7 +184,14 @@ class CloseSubscriptionUseCaseTest {
 
         // When
         Throwable throwable = catchThrowable(() ->
-            usecase.execute(Input.builder().subscriptionId(subscription.getId()).apiId("another-api").auditInfo(AUDIT_INFO).build())
+            usecase.execute(
+                Input.builder()
+                    .subscriptionId(subscription.getId())
+                    .referenceId("another-api")
+                    .referenceType(SubscriptionReferenceType.API)
+                    .auditInfo(AUDIT_INFO)
+                    .build()
+            )
         );
 
         // Then
@@ -227,7 +231,13 @@ class CloseSubscriptionUseCaseTest {
         // Given
         var api = givenExistingApi(ApiFixtures.aProxyApiV4());
         var subscription = givenExistingSubscription(
-            SubscriptionFixtures.aSubscription().toBuilder().id(SUBSCRIPTION_ID).apiId(api.getId()).status(status).build()
+            SubscriptionFixtures.aSubscription()
+                .toBuilder()
+                .id(SUBSCRIPTION_ID)
+                .referenceId(api.getId())
+                .referenceType(SubscriptionReferenceType.API)
+                .status(status)
+                .build()
         );
 
         // When
@@ -243,11 +253,11 @@ class CloseSubscriptionUseCaseTest {
         var api = givenExistingApi(ApiFixtures.aProxyApiV4());
         var plan = givenExistingPlan(PlanFixtures.aPlanHttpV4().toBuilder().id("plan-id").build().setPlanStatus(PlanStatus.PUBLISHED));
         givenExistingSubscription(
-            SubscriptionFixtures
-                .aSubscription()
+            SubscriptionFixtures.aSubscription()
                 .toBuilder()
                 .id(SUBSCRIPTION_ID)
-                .apiId(api.getId())
+                .referenceId(api.getId())
+                .referenceType(SubscriptionReferenceType.API)
                 .planId(plan.getId())
                 .status(SubscriptionEntity.Status.PENDING)
                 .build()
@@ -269,11 +279,11 @@ class CloseSubscriptionUseCaseTest {
         var api = givenExistingApi(ApiFixtures.aProxyApiV4());
         var application = givenExistingApplication(BaseApplicationEntity.builder().id(APPLICATION_ID).build());
         givenExistingSubscription(
-            SubscriptionFixtures
-                .aSubscription()
+            SubscriptionFixtures.aSubscription()
                 .toBuilder()
                 .id(SUBSCRIPTION_ID)
-                .apiId(api.getId())
+                .referenceId(api.getId())
+                .referenceType(SubscriptionReferenceType.API)
                 .applicationId(application.getId())
                 .status(status)
                 .build()
@@ -295,12 +305,12 @@ class CloseSubscriptionUseCaseTest {
         var api = givenExistingApi(ApiFixtures.aProxyApiV4());
         var application = givenExistingApplication(BaseApplicationEntity.builder().id(APPLICATION_ID).build());
         givenExistingSubscription(
-            SubscriptionFixtures
-                .aSubscription()
+            SubscriptionFixtures.aSubscription()
                 .toBuilder()
                 .id(SUBSCRIPTION_ID)
                 .applicationId(application.getId())
-                .apiId(api.getId())
+                .referenceId(api.getId())
+                .referenceType(SubscriptionReferenceType.API)
                 .planId("plan-id")
                 .status(status)
                 .build()
@@ -310,12 +320,12 @@ class CloseSubscriptionUseCaseTest {
         usecase.execute(new Input(SUBSCRIPTION_ID, AUDIT_INFO));
 
         // Then
-        assertThat(triggerNotificationService.getApiNotifications())
-            .containsExactly(new SubscriptionClosedApiHookContext(api.getId(), APPLICATION_ID, "plan-id"));
-        assertThat(triggerNotificationService.getApplicationNotifications())
-            .containsExactly(
-                new ApplicationNotification(new SubscriptionClosedApplicationHookContext(APPLICATION_ID, api.getId(), "plan-id"))
-            );
+        assertThat(triggerNotificationService.getApiNotifications()).containsExactly(
+            new SubscriptionClosedApiHookContext(api.getId(), APPLICATION_ID, "plan-id")
+        );
+        assertThat(triggerNotificationService.getApplicationNotifications()).containsExactly(
+            new ApplicationNotification(new SubscriptionClosedApplicationHookContext(APPLICATION_ID, api.getId(), "plan-id"))
+        );
     }
 
     @ParameterizedTest
@@ -325,11 +335,11 @@ class CloseSubscriptionUseCaseTest {
         var api = givenExistingApi(ApiFixtures.aProxyApiV4());
         var application = givenExistingApplication(BaseApplicationEntity.builder().id(APPLICATION_ID).build());
         givenExistingSubscription(
-            SubscriptionFixtures
-                .aSubscription()
+            SubscriptionFixtures.aSubscription()
                 .toBuilder()
                 .id(SUBSCRIPTION_ID)
-                .apiId(api.getId())
+                .referenceId(api.getId())
+                .referenceType(SubscriptionReferenceType.API)
                 .applicationId(application.getId())
                 .status(status)
                 .build()
@@ -378,19 +388,18 @@ class CloseSubscriptionUseCaseTest {
             BaseApplicationEntity.builder().id(APPLICATION_ID).apiKeyMode(ApiKeyMode.SHARED).build()
         );
         var subscription = givenExistingSubscription(
-            SubscriptionFixtures
-                .aSubscription()
+            SubscriptionFixtures.aSubscription()
                 .toBuilder()
                 .id(SUBSCRIPTION_ID)
-                .apiId(api.getId())
+                .referenceId(api.getId())
+                .referenceType(SubscriptionReferenceType.API)
                 .applicationId(application.getId())
                 .status(status)
                 .build()
         );
         givenExistingApiKeysForSubscription(
             List.of(
-                ApiKeyFixtures
-                    .anApiKey()
+                ApiKeyFixtures.anApiKey()
                     .toBuilder()
                     .id("api-key-id")
                     .key("api-key")
@@ -419,11 +428,11 @@ class CloseSubscriptionUseCaseTest {
             BaseApplicationEntity.builder().id(APPLICATION_ID).apiKeyMode(ApiKeyMode.EXCLUSIVE).build()
         );
         var subscription = givenExistingSubscription(
-            SubscriptionFixtures
-                .aSubscription()
+            SubscriptionFixtures.aSubscription()
                 .toBuilder()
                 .id(SUBSCRIPTION_ID)
-                .apiId(api.getId())
+                .referenceId(api.getId())
+                .referenceType(SubscriptionReferenceType.API)
                 .applicationId(application.getId())
                 .status(status)
                 .metadata(Map.of("api-key-provider-id", "value"))
@@ -431,8 +440,7 @@ class CloseSubscriptionUseCaseTest {
         );
         givenExistingApiKeysForSubscription(
             List.of(
-                ApiKeyFixtures
-                    .anApiKey()
+                ApiKeyFixtures.anApiKey()
                     .toBuilder()
                     .id("api-key-id")
                     .key("api-key")

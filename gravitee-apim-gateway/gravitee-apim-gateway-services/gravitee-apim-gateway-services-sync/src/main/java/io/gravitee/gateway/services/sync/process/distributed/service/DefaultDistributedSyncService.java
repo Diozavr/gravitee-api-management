@@ -31,6 +31,7 @@ import io.gravitee.gateway.services.sync.process.distributed.model.DistributedSy
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.accesspoint.AccessPointDeployable;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.api.ApiReactorDeployable;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.apikey.SingleApiKeyDeployable;
+import io.gravitee.gateway.services.sync.process.repository.synchronizer.apiproduct.ApiProductReactorDeployable;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.dictionary.DictionaryDeployable;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.license.LicenseDeployable;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.node.NodeMetadataDeployable;
@@ -47,14 +48,14 @@ import io.gravitee.repository.distributedsync.model.DistributedSyncState;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Date;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class DefaultDistributedSyncService implements DistributedSyncService {
 
@@ -114,8 +115,7 @@ public class DefaultDistributedSyncService implements DistributedSyncService {
         return Completable.defer(() -> {
             if (isPrimaryNode()) {
                 return distributedSyncStateRepository.createOrUpdate(
-                    DistributedSyncState
-                        .builder()
+                    DistributedSyncState.builder()
                         .clusterId(clusterManager.clusterId())
                         .nodeId(node.id())
                         .nodeVersion(Version.RUNTIME_VERSION.toString())
@@ -235,6 +235,20 @@ public class DefaultDistributedSyncService implements DistributedSyncService {
                 return sharedPolicyGroupMapper.to(deployable).flatMapCompletable(distributedEventRepository::createOrUpdate);
             }
             log.debug("Not a primary node, skipping shared policy group event distribution");
+            return Completable.complete();
+        });
+    }
+
+    @Override
+    public Completable distributeIfNeeded(ApiProductReactorDeployable deployable) {
+        return Completable.defer(() -> {
+            if (isPrimaryNode()) {
+                log.debug("Node is primary, distributing API product event for {}", deployable.id());
+                // TODO Phase 2: Add apiProductMapper for distributed events
+                // return apiProductMapper.to(deployable).flatMapCompletable(distributedEventRepository::createOrUpdate);
+                return Completable.complete();
+            }
+            log.debug("Not a primary node, skipping API product event distribution");
             return Completable.complete();
         });
     }

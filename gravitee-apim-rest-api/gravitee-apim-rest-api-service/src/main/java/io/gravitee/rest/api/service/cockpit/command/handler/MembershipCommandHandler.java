@@ -35,8 +35,8 @@ import io.gravitee.rest.api.service.exceptions.RoleNotFoundException;
 import io.reactivex.rxjava3.core.Single;
 import java.util.Collections;
 import java.util.Optional;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -45,7 +45,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class MembershipCommandHandler implements CommandHandler<MembershipCommand, MembershipReply> {
 
     private final UserService userService;
@@ -121,12 +121,12 @@ public class MembershipCommandHandler implements CommandHandler<MembershipComman
         } catch (Exception e) {
             String errorDetails =
                 "Error occurred when trying to assign role [%s] on %s [%s] for cockpit user [%s] and organization [%s].".formatted(
-                        membershipPayload.role(),
-                        membershipPayload.referenceType(),
-                        membershipPayload.referenceId(),
-                        membershipPayload.userId(),
-                        membershipPayload.organizationId()
-                    );
+                    membershipPayload.role(),
+                    membershipPayload.referenceType(),
+                    membershipPayload.referenceId(),
+                    membershipPayload.userId(),
+                    membershipPayload.organizationId()
+                );
             log.error(errorDetails, e);
             return Single.just(new MembershipReply(command.getId(), errorDetails));
         }

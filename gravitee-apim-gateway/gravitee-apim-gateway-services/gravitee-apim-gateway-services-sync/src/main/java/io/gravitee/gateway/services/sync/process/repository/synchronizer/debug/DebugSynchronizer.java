@@ -28,15 +28,15 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class DebugSynchronizer implements RepositorySynchronizer {
 
     private final DebugEventFetcher debugEventFetcher;
@@ -55,8 +55,7 @@ public class DebugSynchronizer implements RepositorySynchronizer {
                 .fetchLatest(from, to, environments)
                 .subscribeOn(Schedulers.from(syncFetcherExecutor))
                 .flatMap(events ->
-                    Flowable
-                        .just(events)
+                    Flowable.just(events)
                         .flatMapIterable(e -> e)
                         .flatMapMaybe(event ->
                             debugMapperMapper
@@ -83,7 +82,8 @@ public class DebugSynchronizer implements RepositorySynchronizer {
                 })
                 .count()
                 .doOnSubscribe(disposable -> launchTime.set(Instant.now().toEpochMilli()))
-                .doOnSuccess(count -> log.debug("{} debug events refreshed in {}ms", count, (System.currentTimeMillis() - launchTime.get()))
+                .doOnSuccess(count ->
+                    log.debug("{} debug events refreshed in {}ms", count, (System.currentTimeMillis() - launchTime.get()))
                 )
                 .ignoreElement();
         }

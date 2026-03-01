@@ -84,7 +84,9 @@ public class ApplicationSubscriptionsResourceTest extends AbstractResourceTest {
 
         ApiEntity foundApi = new ApiEntity();
         foundApi.setPrimaryOwner(mock(PrimaryOwnerEntity.class));
-        when(apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(foundApi);
+        when(
+            apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), any(), eq(false), eq(false), eq(false))
+        ).thenReturn(foundApi);
 
         PlanEntity foundPlan = new PlanEntity();
         foundPlan.setSecurity(PlanSecurityType.OAUTH2);
@@ -116,8 +118,9 @@ public class ApplicationSubscriptionsResourceTest extends AbstractResourceTest {
         newSubscriptionEntity.setPlan(PLAN);
         newSubscriptionEntity.setRequest("request");
 
-        when(planSearchService.findById(eq(GraviteeContext.getExecutionContext()), any()))
-            .thenReturn(mock(io.gravitee.rest.api.model.v4.plan.PlanEntity.class));
+        when(planSearchService.findById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(
+            mock(io.gravitee.rest.api.model.v4.plan.PlanEntity.class)
+        );
 
         SubscriptionEntity createdSubscription = new SubscriptionEntity();
         createdSubscription.setPlan(PLAN);
@@ -127,7 +130,9 @@ public class ApplicationSubscriptionsResourceTest extends AbstractResourceTest {
 
         ApiEntity foundApi = new ApiEntity();
         foundApi.setPrimaryOwner(mock(PrimaryOwnerEntity.class));
-        when(apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(foundApi);
+        when(
+            apiSearchServiceV4.findGenericById(eq(GraviteeContext.getExecutionContext()), any(), eq(false), eq(false), eq(false))
+        ).thenReturn(foundApi);
 
         io.gravitee.rest.api.model.v4.plan.PlanEntity foundPlan = new io.gravitee.rest.api.model.v4.plan.PlanEntity();
         PlanSecurity planSecurity = new PlanSecurity();
@@ -157,8 +162,9 @@ public class ApplicationSubscriptionsResourceTest extends AbstractResourceTest {
     public void shouldGetSubscriptions_expandingSecurity() {
         reset(apiSearchServiceV4, planSearchService, subscriptionService, userService);
 
-        when(subscriptionService.search(eq(GraviteeContext.getExecutionContext()), any(), any(), eq(false), eq(true)))
-            .thenReturn(new Page<>(List.of(new SubscriptionEntity()), 1, 1, 1));
+        when(subscriptionService.search(eq(GraviteeContext.getExecutionContext()), any(), any(), eq(false), eq(true))).thenReturn(
+            new Page<>(List.of(new SubscriptionEntity()), 1, 1, 1)
+        );
         when(subscriptionService.getMetadata(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(mock(Metadata.class));
 
         final Response response = envTarget().path(APPLICATION).path("subscriptions").queryParam("expand", "security").request().get();
@@ -177,8 +183,9 @@ public class ApplicationSubscriptionsResourceTest extends AbstractResourceTest {
     public void shouldGetSubscriptions_WithDefaultStatus() {
         reset(apiSearchServiceV4, planSearchService, subscriptionService, userService);
 
-        when(subscriptionService.search(any(ExecutionContext.class), any(), any(), anyBoolean(), anyBoolean()))
-            .thenReturn(new Page<>(List.of(new SubscriptionEntity()), 1, 1, 1));
+        when(subscriptionService.search(any(ExecutionContext.class), any(), any(), anyBoolean(), anyBoolean())).thenReturn(
+            new Page<>(List.of(new SubscriptionEntity()), 1, 1, 1)
+        );
         when(subscriptionService.getMetadata(any(ExecutionContext.class), any())).thenReturn(mock(Metadata.class));
 
         final Response response = envTarget().path(APPLICATION).path("subscriptions").request().get();
@@ -187,8 +194,13 @@ public class ApplicationSubscriptionsResourceTest extends AbstractResourceTest {
 
         ArgumentCaptor<SubscriptionQuery> subscriptionQueryCaptor = ArgumentCaptor.forClass(SubscriptionQuery.class);
 
-        verify(subscriptionService, times(1))
-            .search(any(ExecutionContext.class), subscriptionQueryCaptor.capture(), any(), anyBoolean(), anyBoolean());
+        verify(subscriptionService, times(1)).search(
+            any(ExecutionContext.class),
+            subscriptionQueryCaptor.capture(),
+            any(),
+            anyBoolean(),
+            anyBoolean()
+        );
 
         SubscriptionQuery subscriptionQuery = subscriptionQueryCaptor.getValue();
         assertThat(subscriptionQuery).extracting(SubscriptionQuery::getStatuses).isEqualTo(List.of(SubscriptionStatus.ACCEPTED));
@@ -198,8 +210,9 @@ public class ApplicationSubscriptionsResourceTest extends AbstractResourceTest {
     public void shouldGetSubscriptions_WithStatusFromQueryParams() {
         reset(apiSearchServiceV4, planSearchService, subscriptionService, userService);
 
-        when(subscriptionService.search(any(ExecutionContext.class), any(), any(), anyBoolean(), anyBoolean()))
-            .thenReturn(new Page<>(List.of(new SubscriptionEntity()), 1, 1, 1));
+        when(subscriptionService.search(any(ExecutionContext.class), any(), any(), anyBoolean(), anyBoolean())).thenReturn(
+            new Page<>(List.of(new SubscriptionEntity()), 1, 1, 1)
+        );
         when(subscriptionService.getMetadata(any(ExecutionContext.class), any())).thenReturn(mock(Metadata.class));
 
         final Response response = envTarget()
@@ -213,8 +226,13 @@ public class ApplicationSubscriptionsResourceTest extends AbstractResourceTest {
 
         ArgumentCaptor<SubscriptionQuery> subscriptionQueryCaptor = ArgumentCaptor.forClass(SubscriptionQuery.class);
 
-        verify(subscriptionService, times(1))
-            .search(any(ExecutionContext.class), subscriptionQueryCaptor.capture(), any(), anyBoolean(), anyBoolean());
+        verify(subscriptionService, times(1)).search(
+            any(ExecutionContext.class),
+            subscriptionQueryCaptor.capture(),
+            any(),
+            anyBoolean(),
+            anyBoolean()
+        );
 
         SubscriptionQuery subscriptionQuery = subscriptionQueryCaptor.getValue();
         assertThat(subscriptionQuery)

@@ -19,4 +19,7 @@ public enum ApiProtocolType {
     HTTP_PROXY,
     HTTP_MESSAGE,
     NATIVE_KAFKA,
+    MCP_PROXY,
+    LLM_PROXY,
+    A2A_PROXY,
 }

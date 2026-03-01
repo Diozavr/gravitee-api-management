@@ -35,8 +35,8 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
-            - gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}
+            - gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
+            - gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}
     description: Restore Maven cache for a dedicated job
   cmd-save-maven-job-cache:
     parameters:
@@ -49,7 +49,7 @@ commands:
           name: Exclude all APIM artefacts from cache.
           command: rm -rf ~/.m2/repository/io/gravitee/apim
       - save_cache:
-          key: gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
+          key: gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
           paths:
             - ~/.m2
           when: always
@@ -67,8 +67,10 @@ commands:
   cmd-install-yarn:
     steps:
       - run:
-          name: Yarn Set Version Stable
-          command: yarn set version 4.1.1
+          name: Enable Corepack and Set Yarn Version
+          command: |-
+            corepack enable || sudo corepack enable
+                    yarn set version 4.1.1
   cmd-webui-install:
     parameters:
       apim-ui-project:
@@ -127,7 +129,7 @@ jobs:
   job-validate:
     docker:
       - image: cimg/openjdk:21.0.5
-    resource_class: small
+    resource_class: medium
     steps:
       - checkout
       - attach_workspace:
@@ -136,7 +138,7 @@ jobs:
           jobName: job-validate
       - run:
           name: Validate project
-          command: mvn -s .gravitee.settings.xml validate --no-transfer-progress -Pall-modules,integration-tests-modules -T 2C
+          command: mvn -s .gravitee.settings.xml validate -Dgravitee.archrules.skip=true --no-transfer-progress -Pall-modules,integration-tests-modules -T 2C
       - cmd-notify-on-failure
       - cmd-save-maven-job-cache:
           jobName: job-validate
@@ -152,7 +154,7 @@ jobs:
           jobName: job-build
       - run:
           name: Build project
-          command: mvn -s .gravitee.settings.xml clean install --no-transfer-progress --update-snapshots -DskipTests -Dskip.validation=true -T 2C -Dbundle=dev -P all-modules,integration-tests-modules -DwithJavadoc
+          command: mvn -s .gravitee.settings.xml clean install --no-transfer-progress --update-snapshots -DskipTests -Dskip.validation=true -Dgravitee.archrules.skip=false -T 2C -Dbundle=dev -P all-modules,integration-tests-modules -DwithJavadoc
           environment:
             BUILD_ID: "1234"
             BUILD_NUMBER: "1234"
@@ -161,7 +163,7 @@ jobs:
       - save_cache:
           paths:
             - ~/.m2/repository/io/gravitee/apim
-          key: gravitee-api-management-v12-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+          key: gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
           when: on_success
       - cmd-save-maven-job-cache:
           jobName: job-build
@@ -198,7 +200,7 @@ jobs:
             - gravitee-apim-e2e/lib/portal-webclient-sdk
   job-e2e-lint-build:
     docker:
-      - image: cimg/node:20.11.1
+      - image: cimg/node:22.12.0
     resource_class: small
     steps:
       - checkout
@@ -258,16 +260,16 @@ jobs:
               export V4_EMULATION_ENGINE_DEFAULT=no
             fi
             if [ -z "<< parameters.apim_client_tag >>" ]; then
-              APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=master-latest APIM_CLIENT_REGISTRY=graviteeio.azurecr.io APIM_CLIENT_TAG=master-latest yarn test:api:<< parameters.database >>
+              APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=master-784ff35 APIM_CLIENT_REGISTRY=graviteeio.azurecr.io APIM_CLIENT_TAG=master-784ff35 yarn test:api:<< parameters.database >>
             else 
               if [[ "<< parameters.apim_client_tag >>" == *"@"* ]]; then
                 echo "Using custom registry for client"
                 CLIENT_REGISTRY=$(echo "<< parameters.apim_client_tag >>" | cut -f1 -d@)
                 CLIENT_TAG=$(echo "<< parameters.apim_client_tag >>" | cut -f2 -d@)
-                APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=master-latest APIM_CLIENT_REGISTRY=${CLIENT_REGISTRY} APIM_CLIENT_TAG=${CLIENT_TAG} yarn test:api:<< parameters.database >>
+                APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=master-784ff35 APIM_CLIENT_REGISTRY=${CLIENT_REGISTRY} APIM_CLIENT_TAG=${CLIENT_TAG} yarn test:api:<< parameters.database >>
               else
                 echo "Using ACR registry for client"
-                APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=master-latest APIM_CLIENT_REGISTRY=graviteeio.azurecr.io APIM_CLIENT_TAG=<< parameters.apim_client_tag >> yarn test:api:<< parameters.database >>
+                APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=master-784ff35 APIM_CLIENT_REGISTRY=graviteeio.azurecr.io APIM_CLIENT_TAG=<< parameters.apim_client_tag >> yarn test:api:<< parameters.database >>
               fi
             fi
       - cmd-docker-logout
@@ -324,12 +326,12 @@ workflows:
                 - bridge
               apim_client_tag:
                 - master-latest
+                - 4.10.x-latest
+                - graviteeio@4.10.0
+                - 4.9.x-latest
+                - graviteeio@4.9.0
                 - 4.8.x-latest
                 - graviteeio@4.8.0
-                - 4.7.x-latest
-                - graviteeio@4.7.0
-                - 4.6.x-latest
-                - graviteeio@4.6.0
 orbs:
   keeper: gravitee-io/keeper@0.7.0
   slack: circleci/slack@4.12.5

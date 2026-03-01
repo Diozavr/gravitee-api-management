@@ -22,11 +22,11 @@ import io.gravitee.repository.management.model.ScoringRuleset;
 import java.sql.Types;
 import java.util.Date;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
-@Slf4j
+@CustomLog
 @Repository
 public class JdbcScoringRulesetRepository extends JdbcAbstractCrudRepository<ScoringRuleset, String> implements ScoringRulesetRepository {
 
@@ -41,8 +41,7 @@ public class JdbcScoringRulesetRepository extends JdbcAbstractCrudRepository<Sco
 
     @Override
     protected JdbcObjectMapper<ScoringRuleset> buildOrm() {
-        return JdbcObjectMapper
-            .builder(ScoringRuleset.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(ScoringRuleset.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("name", Types.NVARCHAR, String.class)
             .addColumn("description", Types.NVARCHAR, String.class)

@@ -17,5 +17,6 @@
 import { ChannelSelector } from './channelSelector';
 import { ConditionSelector } from './conditionSelector';
 import { HttpSelector } from './httpSelector';
+import { McpSelector } from './McpSelector';
 
-export type Selector = HttpSelector | ChannelSelector | ConditionSelector;
+export type Selector = HttpSelector | ChannelSelector | ConditionSelector | McpSelector;

@@ -35,6 +35,7 @@ import io.gravitee.repository.management.api.ApiRepository;
 import io.gravitee.repository.management.api.PlanRepository;
 import io.gravitee.repository.management.model.Api;
 import io.gravitee.repository.management.model.Plan;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.model.v4.plan.PlanType;
 import io.gravitee.rest.api.model.v4.plan.PlanValidationType;
 import io.gravitee.rest.api.service.exceptions.PlanNotFoundException;
@@ -77,19 +78,19 @@ public class PlanCrudServiceImplTest {
             // Given
             var planId = "plan-id";
             var apiId = "api-id";
-            when(planRepository.findById(planId))
-                .thenAnswer(invocation -> Optional.of(planV4().id(invocation.getArgument(0)).api(apiId).build()));
-            when(apiRepository.findById(any(String.class)))
-                .thenAnswer(invocation ->
-                    Optional.of(Api.builder().id(invocation.getArgument(0)).definitionVersion(DefinitionVersion.V4).build())
-                );
+            when(planRepository.findById(planId)).thenAnswer(invocation ->
+                Optional.of(planV4().id(invocation.getArgument(0)).referenceId(apiId).build())
+            );
+            when(apiRepository.findById(any(String.class))).thenAnswer(invocation ->
+                Optional.of(Api.builder().id(invocation.getArgument(0)).definitionVersion(DefinitionVersion.V4).build())
+            );
 
             // When
             var plan = service.getById(planId);
 
             // Then
             SoftAssertions.assertSoftly(soft -> {
-                soft.assertThat(plan.getApiId()).isEqualTo(apiId);
+                soft.assertThat(plan.getReferenceId()).isEqualTo(apiId);
                 soft.assertThat(plan.getDefinitionVersion()).isEqualTo(DefinitionVersion.V4);
                 soft.assertThat(plan.getCharacteristics()).containsExactly("characteristic-1");
                 soft.assertThat(plan.getClosedAt()).isEqualTo(Instant.parse("2020-02-04T20:22:02.00Z").atZone(ZoneOffset.UTC));
@@ -123,19 +124,19 @@ public class PlanCrudServiceImplTest {
             // Given
             var planId = "plan-id";
             var apiId = "api-id";
-            when(planRepository.findById(planId))
-                .thenAnswer(invocation -> Optional.of(planV2().id(invocation.getArgument(0)).api(apiId).build()));
-            when(apiRepository.findById(any(String.class)))
-                .thenAnswer(invocation ->
-                    Optional.of(Api.builder().id(invocation.getArgument(0)).definitionVersion(DefinitionVersion.V2).build())
-                );
+            when(planRepository.findById(planId)).thenAnswer(invocation ->
+                Optional.of(planV2().id(invocation.getArgument(0)).referenceId(apiId).build())
+            );
+            when(apiRepository.findById(any(String.class))).thenAnswer(invocation ->
+                Optional.of(Api.builder().id(invocation.getArgument(0)).definitionVersion(DefinitionVersion.V2).build())
+            );
 
             // When
             var plan = service.getById(planId);
 
             // Then
             SoftAssertions.assertSoftly(soft -> {
-                soft.assertThat(plan.getApiId()).isEqualTo(apiId);
+                soft.assertThat(plan.getReferenceId()).isEqualTo(apiId);
                 soft.assertThat(plan.getDefinitionVersion()).isEqualTo(DefinitionVersion.V2);
                 soft.assertThat(plan.getCharacteristics()).containsExactly("characteristic-1");
                 soft.assertThat(plan.getClosedAt()).isEqualTo(Instant.parse("2020-02-04T20:22:02.00Z").atZone(ZoneOffset.UTC));
@@ -190,7 +191,7 @@ public class PlanCrudServiceImplTest {
             // Then
             assertThat(throwable)
                 .isInstanceOf(TechnicalDomainException.class)
-                .hasMessage("An error occurs while trying to get a plan by id: " + planId);
+                .hasMessage("An error occurred while trying to get a plan by id: " + planId);
         }
     }
 
@@ -202,8 +203,9 @@ public class PlanCrudServiceImplTest {
             var planId = "plan-id";
             var apiId = "api-id";
 
-            when(planRepository.findById(planId))
-                .thenAnswer(invocation -> Optional.of(planV4().id(invocation.getArgument(0)).api(apiId).build()));
+            when(planRepository.findById(planId)).thenAnswer(invocation ->
+                Optional.of(planV4().id(invocation.getArgument(0)).referenceId(apiId).build())
+            );
             var foundPlan = service.findById(planId);
 
             // Then
@@ -212,7 +214,7 @@ public class PlanCrudServiceImplTest {
                 soft.assertThat(foundPlan).isPresent();
                 var plan = foundPlan.get();
 
-                soft.assertThat(plan.getApiId()).isEqualTo(apiId);
+                soft.assertThat(plan.getReferenceId()).isEqualTo(apiId);
                 soft.assertThat(plan.getDefinitionVersion()).isEqualTo(DefinitionVersion.V4);
                 soft.assertThat(plan.getCharacteristics()).containsExactly("characteristic-1");
                 soft.assertThat(plan.getClosedAt()).isEqualTo(Instant.parse("2020-02-04T20:22:02.00Z").atZone(ZoneOffset.UTC));
@@ -264,7 +266,139 @@ public class PlanCrudServiceImplTest {
             // Then
             assertThat(throwable)
                 .isInstanceOf(TechnicalDomainException.class)
-                .hasMessage("An error occurs while trying to find a plan by id: " + planId);
+                .hasMessage("An error occurred while trying to find a plan by id: " + planId);
+        }
+    }
+
+    @Nested
+    class FindByPlanIdAndReferenceId {
+
+        @Test
+        void should_return_plan_when_found() throws TechnicalException {
+            var planId = "plan-id";
+            var referenceId = "api-product-id";
+            when(planRepository.findByIdAndReferenceIdAndReferenceType(planId, referenceId, Plan.PlanReferenceType.API_PRODUCT)).thenReturn(
+                Optional.of(
+                    planV4()
+                        .id(planId)
+                        .referenceId("api-id")
+                        .referenceId(referenceId)
+                        .referenceType(Plan.PlanReferenceType.API_PRODUCT)
+                        .build()
+                )
+            );
+
+            var foundPlan = service.findByPlanIdAndReferenceIdAndReferenceType(
+                planId,
+                referenceId,
+                GenericPlanEntity.ReferenceType.API_PRODUCT.name()
+            );
+
+            Assertions.assertThat(foundPlan).isPresent();
+            Assertions.assertThat(foundPlan.get().getId()).isEqualTo(planId);
+            Assertions.assertThat(foundPlan.get().getReferenceId()).isEqualTo(referenceId);
+            Assertions.assertThat(foundPlan.get().getReferenceType()).isEqualTo(GenericPlanEntity.ReferenceType.API_PRODUCT);
+        }
+
+        @Test
+        void should_return_empty_when_plan_not_found() throws TechnicalException {
+            var planId = "plan-id";
+            var referenceId = "api-product-id";
+            when(planRepository.findByIdAndReferenceIdAndReferenceType(planId, referenceId, Plan.PlanReferenceType.API_PRODUCT)).thenReturn(
+                Optional.empty()
+            );
+
+            var foundPlan = service.findByPlanIdAndReferenceIdAndReferenceType(
+                planId,
+                referenceId,
+                GenericPlanEntity.ReferenceType.API_PRODUCT.name()
+            );
+
+            Assertions.assertThat(foundPlan).isEmpty();
+        }
+
+        @Test
+        void should_throw_when_technical_exception_occurs() throws TechnicalException {
+            var planId = "plan-id";
+            var referenceId = "api-product-id";
+            when(planRepository.findByIdAndReferenceIdAndReferenceType(planId, referenceId, Plan.PlanReferenceType.API_PRODUCT)).thenThrow(
+                TechnicalException.class
+            );
+
+            Throwable throwable = catchThrowable(() ->
+                service.findByPlanIdAndReferenceIdAndReferenceType(planId, referenceId, GenericPlanEntity.ReferenceType.API_PRODUCT.name())
+            );
+
+            assertThat(throwable)
+                .isInstanceOf(TechnicalDomainException.class)
+                .hasMessage("An error occurred while trying to get a plan by id: " + planId);
+        }
+    }
+
+    @Nested
+    class FindByApiId {
+
+        @Test
+        void should_return_plans_for_api_id() throws TechnicalException {
+            var apiId = "api-id";
+            when(planRepository.findByReferenceIdAndReferenceType(apiId, Plan.PlanReferenceType.API)).thenReturn(
+                Set.of(planV4().id("plan-1").referenceId(apiId).build(), planV4().id("plan-2").referenceId(apiId).build())
+            );
+
+            var plans = service.findByApiId(apiId);
+
+            Assertions.assertThat(plans)
+                .extracting(io.gravitee.apim.core.plan.model.Plan::getId)
+                .containsExactlyInAnyOrder("plan-1", "plan-2");
+        }
+
+        @Test
+        void should_return_empty_list_when_repository_returns_null() throws TechnicalException {
+            var apiId = "api-id";
+            when(planRepository.findByApi(apiId)).thenReturn(null);
+
+            var plans = service.findByApiId(apiId);
+
+            Assertions.assertThat(plans).isEmpty();
+        }
+
+        @Test
+        void should_throw_when_technical_exception_occurs() throws TechnicalException {
+            var apiId = "api-id";
+            when(planRepository.findByReferenceIdAndReferenceType(apiId, Plan.PlanReferenceType.API)).thenThrow(TechnicalException.class);
+
+            Throwable throwable = catchThrowable(() -> service.findByApiId(apiId));
+
+            assertThat(throwable)
+                .isInstanceOf(TechnicalDomainException.class)
+                .hasMessage("An error occurred while trying to find a plan by reference id: " + apiId);
+        }
+    }
+
+    @Nested
+    class FindByIds {
+
+        @Test
+        void should_return_plans_for_ids() throws TechnicalException {
+            var apiId = "api-id";
+            when(planRepository.findByIdIn(List.of("plan-1", "plan-2"))).thenReturn(
+                Set.of(planV4().id("plan-1").referenceId(apiId).build(), planV4().id("plan-2").api(apiId).build())
+            );
+
+            var plans = service.findByIds(List.of("plan-1", "plan-2"));
+
+            Assertions.assertThat(plans)
+                .extracting(io.gravitee.apim.core.plan.model.Plan::getId)
+                .containsExactlyInAnyOrder("plan-1", "plan-2");
+        }
+
+        @Test
+        void should_throw_when_technical_exception_occurs() throws TechnicalException {
+            when(planRepository.findByIdIn(any())).thenThrow(TechnicalException.class);
+
+            Throwable throwable = catchThrowable(() -> service.findByIds(List.of("plan-1")));
+
+            assertThat(throwable).isInstanceOf(TechnicalDomainException.class);
         }
     }
 
@@ -274,14 +408,15 @@ public class PlanCrudServiceImplTest {
         @Test
         @SneakyThrows
         void should_create_a_v4_plan() {
-            var plan = PlanFixtures.HttpV4
-                .aKeyless()
+            var plan = PlanFixtures.HttpV4.aKeyless()
                 .toBuilder()
                 .createdAt(Instant.parse("2020-02-01T20:22:02.00Z").atZone(ZoneId.systemDefault()))
                 .updatedAt(Instant.parse("2020-02-02T20:22:02.00Z").atZone(ZoneId.systemDefault()))
                 .publishedAt(Instant.parse("2020-02-03T20:22:02.00Z").atZone(ZoneId.systemDefault()))
                 .closedAt(Instant.parse("2020-02-04T20:22:02.00Z").atZone(ZoneId.systemDefault()))
                 .needRedeployAt(Date.from(Instant.parse("2020-02-05T20:22:02.00Z")))
+                .referenceId("my-api")
+                .referenceType(GenericPlanEntity.ReferenceType.API)
                 .commentRequired(true)
                 .build();
             when(planRepository.create(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -302,7 +437,7 @@ public class PlanCrudServiceImplTest {
             // Then
             assertThat(throwable)
                 .isInstanceOf(TechnicalDomainException.class)
-                .hasMessage("An error occurs while trying to create the plan: my-plan");
+                .hasMessage("An error occurred while trying to create the plan: my-plan");
         }
     }
 
@@ -312,8 +447,7 @@ public class PlanCrudServiceImplTest {
         @Test
         @SneakyThrows
         void should_update_an_existing_v4_plan() {
-            var plan = PlanFixtures
-                .aPlanHttpV4()
+            var plan = PlanFixtures.aPlanHttpV4()
                 .toBuilder()
                 .createdAt(Instant.parse("2020-02-01T20:22:02.00Z").atZone(ZoneOffset.UTC))
                 .updatedAt(Instant.parse("2020-02-02T20:22:02.00Z").atZone(ZoneOffset.UTC))
@@ -326,8 +460,7 @@ public class PlanCrudServiceImplTest {
                 .excludedGroups(List.of("excludedGroup1", "excludedGroup2"))
                 .generalConditions("General conditions")
                 .planDefinitionHttpV4(
-                    fixtures.definition.PlanFixtures.HttpV4Definition
-                        .aKeylessV4()
+                    fixtures.definition.PlanFixtures.HttpV4Definition.aKeylessV4()
                         .toBuilder()
                         .security(PlanSecurity.builder().type("key-less").configuration("{\"nice\": \"config\"}").build())
                         .selectionRule("{#request.attribute['selectionRule'] != null}")
@@ -343,10 +476,10 @@ public class PlanCrudServiceImplTest {
             assertThat(captor.getValue())
                 .usingRecursiveComparison()
                 .isEqualTo(
-                    Plan
-                        .builder()
+                    Plan.builder()
                         .id("my-plan")
                         .api("my-api")
+                        .referenceId("my-api")
                         .crossId("my-plan-crossId")
                         .name("My plan")
                         .definitionVersion(DefinitionVersion.V4)
@@ -359,6 +492,7 @@ public class PlanCrudServiceImplTest {
                         .mode(Plan.PlanMode.STANDARD)
                         .order(1)
                         .type(Plan.PlanType.API)
+                        .referenceType(Plan.PlanReferenceType.API)
                         .status(Plan.Status.PUBLISHED)
                         .createdAt(Date.from(Instant.parse("2020-02-01T20:22:02.00Z")))
                         .updatedAt(Date.from(Instant.parse("2020-02-02T20:22:02.00Z")))
@@ -378,8 +512,7 @@ public class PlanCrudServiceImplTest {
         @Test
         @SneakyThrows
         void should_update_an_existing_v2_plan() {
-            var plan = PlanFixtures
-                .aPlanV2()
+            var plan = PlanFixtures.aPlanV2()
                 .toBuilder()
                 .createdAt(Instant.parse("2020-02-01T20:22:02.00Z").atZone(ZoneOffset.UTC))
                 .updatedAt(Instant.parse("2020-02-02T20:22:02.00Z").atZone(ZoneOffset.UTC))
@@ -392,8 +525,7 @@ public class PlanCrudServiceImplTest {
                 .excludedGroups(List.of("excludedGroup1", "excludedGroup2"))
                 .generalConditions("General conditions")
                 .planDefinitionV2(
-                    fixtures.definition.PlanFixtures
-                        .aKeylessV2()
+                    fixtures.definition.PlanFixtures.aKeylessV2()
                         .toBuilder()
                         .selectionRule("{#request.attribute['selectionRule'] != null}")
                         .tags(Set.of("tag1", "tag2"))
@@ -408,10 +540,10 @@ public class PlanCrudServiceImplTest {
             assertThat(captor.getValue())
                 .usingRecursiveComparison()
                 .isEqualTo(
-                    Plan
-                        .builder()
+                    Plan.builder()
                         .id("my-plan")
                         .api("my-api")
+                        .referenceId("my-api")
                         .crossId("my-plan-crossId")
                         .name("My plan")
                         .definitionVersion(DefinitionVersion.V2)
@@ -423,6 +555,7 @@ public class PlanCrudServiceImplTest {
                         .mode(Plan.PlanMode.STANDARD)
                         .order(1)
                         .type(Plan.PlanType.API)
+                        .referenceType(Plan.PlanReferenceType.API)
                         .status(Plan.Status.PUBLISHED)
                         .createdAt(Date.from(Instant.parse("2020-02-01T20:22:02.00Z")))
                         .updatedAt(Date.from(Instant.parse("2020-02-02T20:22:02.00Z")))
@@ -445,6 +578,8 @@ public class PlanCrudServiceImplTest {
             when(planRepository.update(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
             var toUpdate = PlanFixtures.HttpV4.aKeyless();
+            toUpdate.setReferenceId("my-api");
+            toUpdate.setReferenceType(GenericPlanEntity.ReferenceType.API);
             var result = service.update(toUpdate);
 
             assertThat(result).isEqualTo(toUpdate);
@@ -461,7 +596,7 @@ public class PlanCrudServiceImplTest {
             // Then
             assertThat(throwable)
                 .isInstanceOf(TechnicalDomainException.class)
-                .hasMessage("An error occurs while trying to update the plan: my-plan");
+                .hasMessage("An error occurred while trying to update the plan: my-plan");
         }
     }
 
@@ -488,13 +623,36 @@ public class PlanCrudServiceImplTest {
             // Then
             assertThat(throwable)
                 .isInstanceOf(TechnicalDomainException.class)
-                .hasMessage("An error occurs while trying to delete the plan: to-delete");
+                .hasMessage("An error occurred while trying to delete the plan: to-delete");
+        }
+    }
+
+    @Nested
+    class updateCrossIds {
+
+        @Test
+        @SneakyThrows
+        void should_call_cross_ids_update() {
+            service.updateCrossIds(List.of(PlanFixtures.aPlanHttpV4()));
+
+            verify(planRepository).updateCrossIds(any());
+        }
+
+        @Test
+        void should_throw_when_technical_exception_occurs() throws TechnicalException {
+            // Given
+            doThrow(TechnicalException.class).when(planRepository).updateCrossIds(any());
+
+            // When
+            Throwable throwable = catchThrowable(() -> service.updateCrossIds(List.of(PlanFixtures.aPlanHttpV4())));
+
+            // Then
+            assertThat(throwable).isInstanceOf(TechnicalDomainException.class);
         }
     }
 
     private Plan.PlanBuilder planV4() {
-        return Plan
-            .builder()
+        return Plan.builder()
             .definitionVersion(DefinitionVersion.V4)
             .crossId("cross-id")
             .name("plan-name")
@@ -517,12 +675,13 @@ public class PlanCrudServiceImplTest {
             .commentRequired(true)
             .commentMessage("comment-message")
             .generalConditions("general-conditions")
-            .tags(Set.of("tag-1"));
+            .tags(Set.of("tag-1"))
+            .referenceId("api-id")
+            .referenceType(Plan.PlanReferenceType.API);
     }
 
     private Plan.PlanBuilder planV2() {
-        return Plan
-            .builder()
+        return Plan.builder()
             .crossId("cross-id")
             .name("plan-name")
             .description("plan-description")
@@ -545,6 +704,8 @@ public class PlanCrudServiceImplTest {
             .commentRequired(true)
             .commentMessage("comment-message")
             .generalConditions("general-conditions")
-            .tags(Set.of("tag-1"));
+            .tags(Set.of("tag-1"))
+            .referenceId("api-id")
+            .referenceType(Plan.PlanReferenceType.API);
     }
 }

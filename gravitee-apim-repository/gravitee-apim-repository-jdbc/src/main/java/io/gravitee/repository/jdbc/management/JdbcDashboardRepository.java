@@ -26,8 +26,7 @@ import java.sql.Types;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
@@ -35,10 +34,9 @@ import org.springframework.stereotype.Repository;
  * @author Azize ELAMRANI (azize.elamrani at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Repository
 public class JdbcDashboardRepository extends JdbcAbstractCrudRepository<Dashboard, String> implements DashboardRepository {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcDashboardRepository.class);
 
     JdbcDashboardRepository(@Value("${management.jdbc.prefix:}") String tablePrefix) {
         super(tablePrefix, "dashboards");
@@ -46,8 +44,7 @@ public class JdbcDashboardRepository extends JdbcAbstractCrudRepository<Dashboar
 
     @Override
     protected JdbcObjectMapper<Dashboard> buildOrm() {
-        return JdbcObjectMapper
-            .builder(Dashboard.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(Dashboard.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("reference_id", Types.NVARCHAR, String.class)
             .addColumn("reference_type", Types.NVARCHAR, String.class)
@@ -69,7 +66,7 @@ public class JdbcDashboardRepository extends JdbcAbstractCrudRepository<Dashboar
 
     @Override
     public List<Dashboard> findByReference(String referenceType, String referenceId) throws TechnicalException {
-        LOGGER.debug("JdbcDashboardRepository.findByReference({},{})", referenceType, referenceId);
+        log.debug("JdbcDashboardRepository.findByReference({},{})", referenceType, referenceId);
         try {
             return jdbcTemplate.query(
                 getOrm().getSelectAllSql() + " where reference_type = ? and reference_id = ? ",
@@ -79,21 +76,21 @@ public class JdbcDashboardRepository extends JdbcAbstractCrudRepository<Dashboar
             );
         } catch (final Exception ex) {
             final String error = "Failed to find dashboards by reference";
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalException(error, ex);
         }
     }
 
     @Override
     public List<Dashboard> findByReferenceAndType(String referenceType, String referenceId, String type) throws TechnicalException {
-        LOGGER.debug("JdbcDashboardRepository.findByReferenceAndType({},{},{})", referenceType, referenceId, type);
+        log.debug("JdbcDashboardRepository.findByReferenceAndType({},{},{})", referenceType, referenceId, type);
         try {
             return jdbcTemplate.query(
                 getOrm().getSelectAllSql() +
-                " where reference_type = ? and reference_id = ? and " +
-                escapeReservedWord("type") +
-                "= ? order by " +
-                escapeReservedWord("order"),
+                    " where reference_type = ? and reference_id = ? and " +
+                    escapeReservedWord("type") +
+                    "= ? order by " +
+                    escapeReservedWord("order"),
                 getOrm().getRowMapper(),
                 referenceType,
                 referenceId,
@@ -101,14 +98,14 @@ public class JdbcDashboardRepository extends JdbcAbstractCrudRepository<Dashboar
             );
         } catch (final Exception ex) {
             final String error = "Failed to find dashboards by type";
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalException(error, ex);
         }
     }
 
     @Override
     public Optional<Dashboard> findByReferenceAndId(String referenceType, String referenceId, String id) throws TechnicalException {
-        LOGGER.debug("JdbcDashboardRepository.findByReferenceAndId({},{},{})", referenceType, referenceId, id);
+        log.debug("JdbcDashboardRepository.findByReferenceAndId({},{},{})", referenceType, referenceId, id);
         try {
             return jdbcTemplate
                 .query(
@@ -122,7 +119,7 @@ public class JdbcDashboardRepository extends JdbcAbstractCrudRepository<Dashboar
                 .findFirst();
         } catch (final Exception ex) {
             final String error = "Failed to find dashboards by id";
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalException(error, ex);
         }
     }
@@ -130,7 +127,7 @@ public class JdbcDashboardRepository extends JdbcAbstractCrudRepository<Dashboar
     @Override
     public List<String> deleteByReferenceIdAndReferenceType(String referenceId, DashboardReferenceType referenceType)
         throws TechnicalException {
-        LOGGER.debug("JdbcDashboardRepository.deleteByReferenceIdAndReferenceType({},{})", referenceId, referenceType);
+        log.debug("JdbcDashboardRepository.deleteByReferenceIdAndReferenceType({},{})", referenceId, referenceType);
         try {
             final var rows = jdbcTemplate.queryForList(
                 "select id from " + tableName + " where reference_type = ? and reference_id = ?",
@@ -147,10 +144,10 @@ public class JdbcDashboardRepository extends JdbcAbstractCrudRepository<Dashboar
                 );
             }
 
-            LOGGER.debug("JdbcDashboardRepository.deleteByReferenceIdAndReferenceType({}, {}) - Done", referenceId, referenceType);
+            log.debug("JdbcDashboardRepository.deleteByReferenceIdAndReferenceType({}, {}) - Done", referenceId, referenceType);
             return rows;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to delete dashboards for refId: {}/{}", referenceId, referenceType, ex);
+            log.error("Failed to delete dashboards for refId: {}/{}", referenceId, referenceType, ex);
             throw new TechnicalException("Failed to delete dashboards by reference", ex);
         }
     }

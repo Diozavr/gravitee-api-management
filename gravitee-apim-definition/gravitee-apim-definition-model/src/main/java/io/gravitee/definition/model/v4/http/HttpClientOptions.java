@@ -28,7 +28,10 @@ import lombok.Setter;
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
+ *
+ * @deprecated since 4.10.0, use {@link io.gravitee.plugin.configurations.http.HttpClientOptions} instead
  */
+@Deprecated(since = "4.10.0", forRemoval = true)
 @Getter
 @Setter
 @Builder
@@ -43,6 +46,15 @@ public class HttpClientOptions implements Serializable {
 
     @Builder.Default
     private int http2MultiplexingLimit = -1;
+
+    @Builder.Default
+    private int http2ConnectionWindowSize = -1;
+
+    @Builder.Default
+    private int http2StreamWindowSize = -1;
+
+    @Builder.Default
+    private int http2MaxFrameSize = DEFAULT_MAX_FRAME_SIZE;
 
     @Builder.Default
     private long idleTimeout = DEFAULT_IDLE_TIMEOUT;

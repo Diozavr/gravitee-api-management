@@ -24,16 +24,14 @@ import io.gravitee.gateway.core.logging.LoggableClientRequest;
 import io.gravitee.gateway.core.logging.LoggableClientResponse;
 import io.gravitee.gateway.core.logging.utils.LoggingUtils;
 import io.gravitee.gateway.core.processor.AbstractProcessor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class LoggableRequestProcessor extends AbstractProcessor<ExecutionContext> {
-
-    private final Logger logger = LoggerFactory.getLogger(LoggableRequestProcessor.class);
 
     private final ConditionEvaluator evaluator;
 
@@ -50,18 +48,18 @@ public class LoggableRequestProcessor extends AbstractProcessor<ExecutionContext
                 int maxSizeLogMessage = LoggingUtils.getMaxSizeLogMessage(context);
 
                 ((MutableExecutionContext) context).request(
-                        maxSizeLogMessage == -1
-                            ? new LoggableClientRequest(context.request(), context)
-                            : new LimitedLoggableClientRequest(context.request(), context, maxSizeLogMessage)
-                    );
+                    maxSizeLogMessage == -1
+                        ? new LoggableClientRequest(context.request(), context)
+                        : new LimitedLoggableClientRequest(context.request(), context, maxSizeLogMessage)
+                );
                 ((MutableExecutionContext) context).response(
-                        maxSizeLogMessage == -1
-                            ? new LoggableClientResponse(context.request(), context.response(), context)
-                            : new LimitedLoggableClientResponse(context.request(), context.response(), context, maxSizeLogMessage)
-                    );
+                    maxSizeLogMessage == -1
+                        ? new LoggableClientResponse(context.request(), context.response(), context)
+                        : new LimitedLoggableClientResponse(context.request(), context.response(), context, maxSizeLogMessage)
+                );
             }
         } catch (Exception ex) {
-            logger.warn(
+            log.warn(
                 "Unexpected error while evaluating logging condition for the API {} and context path {} : {}",
                 context.getAttribute(ExecutionContext.ATTR_API),
                 context.getAttribute(ExecutionContext.ATTR_CONTEXT_PATH),

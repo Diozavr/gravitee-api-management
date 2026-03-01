@@ -21,19 +21,20 @@ import io.gravitee.common.http.HttpStatusCode;
 import io.gravitee.definition.model.v4.flow.Flow;
 import io.gravitee.gateway.reactive.api.ExecutionFailure;
 import io.gravitee.gateway.reactive.api.ExecutionPhase;
-import io.gravitee.gateway.reactive.api.context.ExecutionContext;
-import io.gravitee.gateway.reactive.api.context.GenericExecutionContext;
+import io.gravitee.gateway.reactive.api.context.http.HttpExecutionContext;
+import io.gravitee.gateway.reactive.api.context.http.HttpPlainExecutionContext;
 import io.gravitee.gateway.reactive.api.hook.ChainHook;
 import io.gravitee.gateway.reactive.api.hook.Hookable;
 import io.gravitee.gateway.reactive.core.hook.HookHelper;
 import io.gravitee.gateway.reactive.policy.HttpPolicyChain;
 import io.gravitee.gateway.reactive.v4.flow.FlowResolver;
 import io.gravitee.gateway.reactive.v4.policy.PolicyChainFactory;
+import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * A flow chain basically allows to execute all the policies configured on a list of flows.
@@ -44,7 +45,7 @@ import lombok.extern.slf4j.Slf4j;
  * @author GraviteeSource Team
  */
 @SuppressWarnings("common-java:DuplicatedBlocks") // Needed for v4 definition. Will replace the other one at the end.
-@Slf4j
+@CustomLog
 public class FlowChain implements Hookable<ChainHook> {
 
     protected static final String INTERNAL_CONTEXT_ATTRIBUTES_FLOWS_MATCHED = "flowExecution.flowsMatched";
@@ -95,12 +96,12 @@ public class FlowChain implements Hookable<ChainHook> {
      * @return a {@link Completable} that completes when all the policies of the resolved flows have been executed for the specified phase or the chain has been interrupted.
      * The {@link Completable} may complete in error in case of any error occurred during the execution.
      */
-    public Completable execute(ExecutionContext ctx, ExecutionPhase phase) {
+    public Completable execute(HttpExecutionContext ctx, ExecutionPhase phase) {
         Flowable<Flow> flowable = callResolveFlows(ctx, phase);
 
         return flowable
             .doOnNext(flow -> {
-                log.debug("Executing flow {} ({} level, {} phase)", flow.getName(), id, phase.name());
+                ctx.withLogger(log).debug("Executing flow {} ({} level, {} phase)", flow.getName(), id, phase.name());
                 ctx.putInternalAttribute(ATTR_INTERNAL_FLOW_STAGE, id);
 
                 // Only deal with flow matching if required
@@ -112,28 +113,27 @@ public class FlowChain implements Hookable<ChainHook> {
             .doOnComplete(() -> ctx.removeInternalAttribute(ATTR_INTERNAL_FLOW_STAGE));
     }
 
-    private Flowable<Flow> callResolveFlows(ExecutionContext ctx, ExecutionPhase phase) {
+    private Flowable<Flow> callResolveFlows(HttpExecutionContext ctx, ExecutionPhase phase) {
         if (validateFlowMatching && ExecutionPhase.REQUEST == phase) {
             // Only deal with execution flow matching if required
-            return resolveFlows(ctx)
-                .switchIfEmpty(
-                    Flowable.defer(() -> {
-                        boolean flowsMatch = false;
-                        // Retrieve previous flow chain resolution value
-                        Boolean previousChainFlowsMatch = ctx.getInternalAttribute(INTERNAL_CONTEXT_ATTRIBUTES_FLOWS_MATCHED);
-                        if (previousChainFlowsMatch == null) {
-                            ctx.setInternalAttribute(INTERNAL_CONTEXT_ATTRIBUTES_FLOWS_MATCHED, false);
-                        } else {
-                            flowsMatch = previousChainFlowsMatch;
-                        }
-                        if (interruptIfNoMatch && !flowsMatch) {
-                            return ctx
-                                .interruptWith(new ExecutionFailure(HttpStatusCode.NOT_FOUND_404).key(EXECUTION_FAILURE_KEY_FAILURE))
-                                .toFlowable();
-                        }
-                        return Flowable.empty();
-                    })
-                );
+            return resolveFlows(ctx).switchIfEmpty(
+                Flowable.defer(() -> {
+                    boolean flowsMatch = false;
+                    // Retrieve previous flow chain resolution value
+                    Boolean previousChainFlowsMatch = ctx.getInternalAttribute(INTERNAL_CONTEXT_ATTRIBUTES_FLOWS_MATCHED);
+                    if (previousChainFlowsMatch == null) {
+                        ctx.setInternalAttribute(INTERNAL_CONTEXT_ATTRIBUTES_FLOWS_MATCHED, false);
+                    } else {
+                        flowsMatch = previousChainFlowsMatch;
+                    }
+                    if (interruptIfNoMatch && !flowsMatch) {
+                        return ctx
+                            .interruptWith(new ExecutionFailure(HttpStatusCode.NOT_FOUND_404).key(EXECUTION_FAILURE_KEY_FAILURE))
+                            .toFlowable();
+                    }
+                    return Flowable.empty();
+                })
+            );
         } else {
             return resolveFlows(ctx);
         }
@@ -147,7 +147,7 @@ public class FlowChain implements Hookable<ChainHook> {
      * @param ctx the context used to temporary store the resolved flows.
      * @return the resolved flows.
      */
-    private Flowable<Flow> resolveFlows(GenericExecutionContext ctx) {
+    private Flowable<Flow> resolveFlows(HttpPlainExecutionContext ctx) {
         return Flowable.defer(() -> {
             Flowable<Flow> flows = ctx.getInternalAttribute(resolvedFlowAttribute);
 
@@ -162,9 +162,8 @@ public class FlowChain implements Hookable<ChainHook> {
     }
 
     /**
-     * Execute the given flow by first checking the current execution context has not been interrupted.
-     * If the current execution context is marked as interrupted, the execution will be discarded and the chain will be completed immediately.
-     * If the current execution context is not interrupted, a {@link HttpPolicyChain} is created and executed.
+     * Executes the policies of the given flow for the specified phase.
+     * If the phase is {@link ExecutionPhase#RESPONSE}, any action registered during the request phase will be executed before executing the response policies.
      *
      * @param ctx the execution context that will be passed to each policy of each resolved flow.
      * @param flow the flow to execute.
@@ -172,10 +171,21 @@ public class FlowChain implements Hookable<ChainHook> {
      *
      * @return a {@link Completable} that completes when the flow policy chain completes.
      */
-    private Completable executeFlow(final ExecutionContext ctx, final Flow flow, final ExecutionPhase phase) {
-        HttpPolicyChain policyChain = policyChainFactory.create(id, flow, phase);
-        return HookHelper
-            .hook(() -> policyChain.execute(ctx), policyChain.getId(), hooks, ctx, phase)
-            .doOnSubscribe(subscription -> log.debug("\t-> Executing flow {} ({} level, {} phase)", flow.getName(), id, phase.name()));
+    private Completable executeFlow(final HttpExecutionContext ctx, final Flow flow, final ExecutionPhase phase) {
+        if (phase == ExecutionPhase.RESPONSE) {
+            // Before executing response phase, execute eventual response actions registered during request phase.
+            final HttpPolicyChain policyChain = policyChainFactory.create(id, flow, ExecutionPhase.REQUEST);
+            return policyChain.executeActionsOnResponse(ctx).andThen(executeFlow0(ctx, flow, phase));
+        }
+
+        return executeFlow0(ctx, flow, phase);
+    }
+
+    private @NonNull Completable executeFlow0(HttpExecutionContext ctx, Flow flow, ExecutionPhase phase) {
+        final HttpPolicyChain policyChain = policyChainFactory.create(id, flow, phase);
+
+        return HookHelper.hook(() -> policyChain.execute(ctx), policyChain.getId(), hooks, ctx, phase).doOnSubscribe(subscription ->
+            ctx.withLogger(log).debug("\t-> Executing flow {} ({} level, {} phase)", flow.getName(), id, phase.name())
+        );
     }
 }

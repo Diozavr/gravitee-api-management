@@ -1,0 +1,185 @@
+<!--
+
+    Copyright (C) 2015 The Gravitee team (http://gravitee.io)
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+@let metricValue = metric();
+<div class="mat-h3">Overview</div>
+
+<mat-card class="card">
+  <mat-card-content>
+    <div class="card__container">
+      <div class="card__section">
+        <span class="mat-body-strong">Request</span>
+        <dl class="card__section__kv">
+          <dt class="mat-caption">Date</dt>
+          <dd class="gio-caption-2">{{ metricValue?.timestamp | date: 'medium' }}</dd>
+
+          <dt class="mat-caption">Host</dt>
+          <dd class="gio-caption-2">{{ metricValue?.host }}</dd>
+
+          <dt class="mat-caption">Method</dt>
+          <dd class="gio-caption-2">
+            <div [class]="'gio-method-badge-' + metricValue?.method.toLocaleLowerCase()">{{ metricValue?.method }}</div>
+          </dd>
+
+          @if (apiType() === 'MCP_PROXY') {
+            <dt class="mat-caption">MCP method</dt>
+            <dd class="gio-caption-2">{{ metricValue?.additionalMetrics['keyword_mcp-proxy_method'] }}</dd>
+          }
+
+          <dt class="mat-caption">URI</dt>
+          <dd class="gio-caption-2">{{ metricValue?.uri }}</dd>
+
+          <dt class="mat-caption">Request ID</dt>
+          <dd class="gio-caption-2">{{ metricValue?.requestId }}</dd>
+
+          <dt class="mat-caption">Transaction ID</dt>
+          <dd class="gio-caption-2">{{ metricValue?.transactionId }}</dd>
+
+          <dt class="mat-caption">Remote IP</dt>
+          <dd class="gio-caption-2">{{ metricValue?.remoteAddress }}</dd>
+        </dl>
+      </div>
+      <div class="card__section">
+        <span class="mat-body-strong">Response</span>
+        <dl class="card__section__kv">
+          <dt class="mat-caption">Status</dt>
+          <dd class="gio-caption-2">
+            <div
+              [class.gio-badge-success]="metricValue?.status < 400"
+              [class.gio-badge-warning]="metricValue?.status >= 400 && metricValue?.status <= 499"
+              [class.gio-badge-error]="metricValue?.status >= 500"
+            >
+              {{ metricValue?.status }}
+            </div>
+          </dd>
+
+          @if (apiType() === 'MCP_PROXY') {
+            <dt class="mat-caption">MCP error</dt>
+            <dd class="gio-caption-2">
+              @if (metricValue?.additionalMetrics['long_mcp-proxy_response-error-code']) {
+                <span class="gio-badge-error">{{
+                  getMcpErrorLabel(metricValue?.additionalMetrics['long_mcp-proxy_response-error-code'])
+                }}</span>
+              }
+            </dd>
+          }
+
+          <dt class="mat-caption">Global response time</dt>
+          <dd class="gio-caption-2">{{ metricValue?.gatewayResponseTime }}</dd>
+
+          <dt class="mat-caption">API response time</dt>
+          <dd class="gio-caption-2">{{ metricValue?.endpointResponseTime }}</dd>
+
+          <dt class="mat-caption">Latency</dt>
+          <dd class="gio-caption-2">{{ metricValue?.gatewayLatency }}</dd>
+
+          <dt class="mat-caption">Content-length</dt>
+          <dd class="gio-caption-2">{{ metricValue?.responseContentLength }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <mat-expansion-panel class="mat-elevation-z0 more-details">
+      <mat-expansion-panel-header>
+        <mat-panel-title> More details </mat-panel-title>
+      </mat-expansion-panel-header>
+      <dl class="card__section__kv">
+        <dt class="mat-caption">Application</dt>
+        <dd class="gio-caption-2">{{ metricValue?.application.name }}</dd>
+
+        <dt class="mat-caption">Plan</dt>
+        <dd class="gio-caption-2">{{ metricValue?.plan.name }}</dd>
+
+        <dt class="mat-caption">Endpoint</dt>
+        <dd class="gio-caption-2">{{ metricValue?.endpoint }}</dd>
+
+        <dt class="mat-caption">Gateway Host</dt>
+        <dd class="gio-caption-2">{{ metricValue?.gatewayHostname }}</dd>
+
+        <dt class="mat-caption">Gateway IP</dt>
+        <dd class="gio-caption-2">{{ metricValue?.gatewayIp }}</dd>
+      </dl>
+    </mat-expansion-panel>
+
+    @if (
+      metricValue?.errorKey ||
+      metricValue?.errorComponentName ||
+      metricValue?.errorComponentType ||
+      metricValue?.message ||
+      (metricValue?.warnings && metricValue?.warnings.length > 0)
+    ) {
+      <mat-expansion-panel class="mat-elevation-z0 more-details issues-panel">
+        <mat-expansion-panel-header>
+          <mat-panel-title> Issues </mat-panel-title>
+        </mat-expansion-panel-header>
+        <div class="card__container">
+          @if (metricValue?.errorKey || metricValue?.errorComponentName || metricValue?.errorComponentType || metricValue?.message) {
+            <div class="card__section">
+              <span class="mat-body-strong">Error</span>
+              <dl class="card__section__kv">
+                @if (metricValue?.errorKey) {
+                  <dt class="mat-caption">Key</dt>
+                  <dd class="gio-caption-2">{{ metricValue.errorKey }}</dd>
+                }
+                @if (metricValue?.errorComponentType) {
+                  <dt class="mat-caption">Component Type</dt>
+                  <dd class="gio-caption-2">{{ metricValue.errorComponentType }}</dd>
+                }
+                @if (metricValue?.errorComponentName) {
+                  <dt class="mat-caption">Component Name</dt>
+                  <dd class="gio-caption-2">{{ metricValue.errorComponentName }}</dd>
+                }
+                @if (metricValue?.message) {
+                  <dt class="mat-caption">Message</dt>
+                  <dd class="gio-caption-2">{{ metricValue.message }}</dd>
+                }
+              </dl>
+            </div>
+          }
+
+          @if (metricValue?.warnings && metricValue?.warnings.length > 0) {
+            <div style="width: 100%">
+              @for (warning of metricValue.warnings; track $index) {
+                <div class="card__section" style="width: 100%">
+                  <span class="mat-body-strong">Warning {{ $index + 1 }}</span>
+                  <dl class="card__section__kv">
+                    @if (warning.key) {
+                      <dt class="mat-caption">Key</dt>
+                      <dd class="gio-caption-2">{{ warning.key }}</dd>
+                    }
+                    @if (warning.componentType) {
+                      <dt class="mat-caption">Component Type</dt>
+                      <dd class="gio-caption-2">{{ warning.componentType }}</dd>
+                    }
+                    @if (warning.componentName) {
+                      <dt class="mat-caption">Component Name</dt>
+                      <dd class="gio-caption-2">{{ warning.componentName }}</dd>
+                    }
+                    @if (warning.message) {
+                      <dt class="mat-caption">Message</dt>
+                      <dd class="gio-caption-2">{{ warning.message }}</dd>
+                    }
+                  </dl>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </mat-expansion-panel>
+    }
+  </mat-card-content>
+</mat-card>

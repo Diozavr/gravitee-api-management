@@ -26,7 +26,7 @@ import io.gravitee.resource.api.ResourceConfiguration;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.util.ClassUtils;
@@ -35,7 +35,7 @@ import org.springframework.util.ClassUtils;
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class ResourceLoader {
 
     private final DefaultClassLoader classLoader;
@@ -69,9 +69,8 @@ public class ResourceLoader {
             throw new IllegalStateException("Resource [" + resourceType + "] cannot be found in plugin registry");
         }
 
-        classLoader.addClassLoader(
-            resourcePlugin.resource().getCanonicalName(),
-            () -> resourceClassLoaderFactory.getOrCreateClassLoader(resourcePlugin, classLoader)
+        classLoader.addClassLoader(resourcePlugin.resource().getCanonicalName(), () ->
+            resourceClassLoaderFactory.getOrCreateClassLoader(resourcePlugin, classLoader)
         );
 
         try {
@@ -83,8 +82,9 @@ public class ResourceLoader {
             injectables.put(DeploymentContext.class, deploymentContext);
 
             if (resourcePlugin.configuration() != null) {
-                Class<? extends ResourceConfiguration> resourceConfigurationClass =
-                    (Class<? extends ResourceConfiguration>) ClassUtils.forName(resourcePlugin.configuration().getName(), classLoader);
+                Class<? extends ResourceConfiguration> resourceConfigurationClass = (Class<
+                    ? extends ResourceConfiguration
+                >) ClassUtils.forName(resourcePlugin.configuration().getName(), classLoader);
                 injectables.put(
                     resourceConfigurationClass,
                     resourceConfigurationFactory.create(resourceConfigurationClass, resourceConfiguration)

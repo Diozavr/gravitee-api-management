@@ -60,11 +60,11 @@ public class FlowNativeRepositoryTest extends AbstractManagementRepositoryTest {
 
         assertEquals(0, flow.getRequest().size());
         assertEquals(0, flow.getResponse().size());
-        assertEquals(1, flow.getConnect().size());
+        assertEquals(1, flow.getEntrypointConnect().size());
         assertEquals(1, flow.getInteract().size());
 
-        assertEquals("{#request.headers != null}", flow.getConnect().get(0).getCondition());
-        assertEquals("{#message.content != null}", flow.getConnect().get(0).getMessageCondition());
+        assertEquals("{#request.headers != null}", flow.getEntrypointConnect().get(0).getCondition());
+        assertEquals("{#message.content != null}", flow.getEntrypointConnect().get(0).getMessageCondition());
         assertEquals("{#response.headers != null}", flow.getInteract().get(0).getCondition());
         assertEquals("{#message.headers != null}", flow.getInteract().get(0).getMessageCondition());
 
@@ -80,6 +80,13 @@ public class FlowNativeRepositoryTest extends AbstractManagementRepositoryTest {
         flow.setCreatedAt(new Date(1470157767000L));
         flow.setEnabled(false);
 
+        FlowStep entrypointConnectStep = new FlowStep();
+        entrypointConnectStep.setName("entrypoint-connect-step");
+        entrypointConnectStep.setPolicy("ip-filtering");
+        entrypointConnectStep.setCondition("entrypoint-connect-condition");
+        entrypointConnectStep.setOrder(1);
+        flow.setEntrypointConnect(List.of(entrypointConnectStep));
+
         FlowStep publishStep = new FlowStep();
         publishStep.setName("publish-step");
         publishStep.setPolicy("policy");
@@ -93,13 +100,6 @@ public class FlowNativeRepositoryTest extends AbstractManagementRepositoryTest {
         subscribeStep.setCondition("subscribe-condition");
         subscribeStep.setOrder(1);
         flow.setSubscribe(List.of(subscribeStep));
-
-        FlowStep connectStep = new FlowStep();
-        connectStep.setName("connect-step");
-        connectStep.setPolicy("policy");
-        connectStep.setCondition("connect-condition");
-        connectStep.setOrder(1);
-        flow.setConnect(List.of(connectStep));
 
         FlowStep interactStep = new FlowStep();
         interactStep.setName("interact-step");
@@ -127,10 +127,10 @@ public class FlowNativeRepositoryTest extends AbstractManagementRepositoryTest {
         assertEquals(flow.getTags().size(), flowCreated.getTags().size());
         assertEquals(flow.getTags(), flowCreated.getTags());
         assertEquals(flow.getOrder(), flowCreated.getOrder());
+        assertEquals(flow.getEntrypointConnect().get(0).getCondition(), flowCreated.getEntrypointConnect().get(0).getCondition());
         assertEquals(flow.getPublish().get(0).getCondition(), flowCreated.getPublish().get(0).getCondition());
         assertEquals(flow.getSubscribe().get(0).getCondition(), flowCreated.getSubscribe().get(0).getCondition());
         assertEquals(flow.getInteract().get(0).getCondition(), flowCreated.getInteract().get(0).getCondition());
-        assertEquals(flow.getConnect().get(0).getCondition(), flowCreated.getConnect().get(0).getCondition());
     }
 
     @Test

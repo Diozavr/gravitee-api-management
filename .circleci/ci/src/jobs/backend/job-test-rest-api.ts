@@ -15,7 +15,7 @@
  */
 import { commands, Config } from '@circleci/circleci-config-sdk';
 import { config } from '../../config';
-import { OpenJdkExecutor } from '../../executors';
+import { UbuntuExecutor } from '../../executors';
 import { AbstractTestJob } from './abstract-job-test';
 import { CircleCIEnvironment } from '../../pipelines';
 
@@ -27,9 +27,9 @@ export class TestRestApiJob extends AbstractTestJob {
       'job-test-rest-api',
       new commands.Run({
         name: `Run Rest API tests`,
-        command: `mvn --fail-fast -s ${config.maven.settingsFile} test --no-transfer-progress -Drest-api-modules -Dskip.validation=true -T 2C`,
+        command: `mvn --fail-fast -s ${config.maven.settingsFile} test --no-transfer-progress -Drest-api-modules -Dskip.validation=true -Dgravitee.archrules.skip=true -T 2C`,
       }),
-      OpenJdkExecutor.create('medium'),
+      UbuntuExecutor.create('medium'),
       ['gravitee-apim-rest-api/gravitee-apim-rest-api-coverage/target/site/jacoco-aggregate/'],
     );
   }

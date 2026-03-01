@@ -50,7 +50,6 @@ public class Application {
     public static final String METADATA_CLIENT_ID = "client_id";
     public static final String METADATA_TYPE = "type";
     public static final String METADATA_REGISTRATION_PAYLOAD = "registration_payload";
-    public static final String METADATA_CLIENT_CERTIFICATE = "client_certificate";
     public static final String METADATA_ADDITIONAL_CLIENT_METADATA = "additional_client_metadata";
 
     public enum AuditEvent implements Audit.AuditEvent {
@@ -65,6 +64,11 @@ public class Application {
      */
     @EqualsAndHashCode.Include
     private String id;
+
+    /**
+     * The application hrid.
+     */
+    private String hrid;
 
     /**
      * The ID of the environment the application is attached to
@@ -122,6 +126,7 @@ public class Application {
 
     public Application(Application cloned) {
         this.id = cloned.id;
+        this.hrid = cloned.hrid;
         this.environmentId = cloned.environmentId;
         this.name = cloned.name;
         this.description = cloned.description;

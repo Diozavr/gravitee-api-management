@@ -26,10 +26,29 @@ import io.gravitee.apim.core.api.model.Path;
 import io.gravitee.common.component.Lifecycle;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.VirtualHost;
-import io.gravitee.rest.api.model.*;
-import io.gravitee.rest.api.model.api.*;
+import io.gravitee.rest.api.model.EventType;
+import io.gravitee.rest.api.model.ImportSwaggerDescriptorEntity;
+import io.gravitee.rest.api.model.NewPlanEntity;
+import io.gravitee.rest.api.model.PageEntity;
+import io.gravitee.rest.api.model.PageType;
+import io.gravitee.rest.api.model.PlanEntity;
+import io.gravitee.rest.api.model.PlanSecurityType;
+import io.gravitee.rest.api.model.PlanStatus;
+import io.gravitee.rest.api.model.UpdatePageEntity;
+import io.gravitee.rest.api.model.Visibility;
+import io.gravitee.rest.api.model.api.ApiDeploymentEntity;
+import io.gravitee.rest.api.model.api.ApiEntity;
+import io.gravitee.rest.api.model.api.ApiEntityResult;
+import io.gravitee.rest.api.model.api.ApiLifecycleState;
+import io.gravitee.rest.api.model.api.SwaggerApiEntity;
+import io.gravitee.rest.api.model.api.UpdateApiEntity;
 import io.gravitee.rest.api.model.documentation.PageQuery;
-import io.gravitee.rest.api.service.*;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
+import io.gravitee.rest.api.service.ApiMetadataService;
+import io.gravitee.rest.api.service.ApiService;
+import io.gravitee.rest.api.service.PageService;
+import io.gravitee.rest.api.service.PlanService;
+import io.gravitee.rest.api.service.SwaggerService;
 import io.gravitee.rest.api.service.cockpit.model.ContextPathValidationResult;
 import io.gravitee.rest.api.service.cockpit.model.DeploymentMode;
 import io.gravitee.rest.api.service.common.ExecutionContext;
@@ -38,8 +57,7 @@ import io.gravitee.rest.api.service.converter.ApiConverter;
 import io.gravitee.rest.api.service.converter.PageConverter;
 import java.util.List;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 
 /**
@@ -47,9 +65,8 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
+@CustomLog
 public class ApiServiceCockpitImpl implements ApiServiceCockpit {
-
-    private final Logger logger = LoggerFactory.getLogger(ApiServiceCockpitImpl.class);
 
     private final ObjectMapper objectMapper;
     private final ApiService apiService;
@@ -94,16 +111,16 @@ public class ApiServiceCockpitImpl implements ApiServiceCockpit {
         List<String> labels
     ) {
         if (mode == DeploymentMode.API_MOCKED) {
-            logger.debug("Create Mocked Api [{}].", apiId);
+            log.debug("Create Mocked Api [{}].", apiId);
             return createMockedApi(executionContext, apiId, userId, swaggerDefinition, environmentId, labels);
         }
 
         if (mode == DeploymentMode.API_PUBLISHED) {
-            logger.debug("Create Published Api [{}].", apiId);
+            log.debug("Create Published Api [{}].", apiId);
             return createPublishedApi(executionContext, apiId, userId, swaggerDefinition, environmentId, labels);
         }
 
-        logger.debug("Create Documented Api [{}].", apiId);
+        log.debug("Create Documented Api [{}].", apiId);
         return createDocumentedApi(executionContext, apiId, userId, swaggerDefinition, labels);
     }
 
@@ -118,16 +135,16 @@ public class ApiServiceCockpitImpl implements ApiServiceCockpit {
         List<String> labels
     ) {
         if (mode == DeploymentMode.API_DOCUMENTED) {
-            logger.debug("Update Documented Api [{}].", apiId);
+            log.debug("Update Documented Api [{}].", apiId);
             return updateDocumentedApi(executionContext, apiId, swaggerDefinition, labels);
         }
 
         if (mode == DeploymentMode.API_MOCKED) {
-            logger.debug("Update Mocked Api [{}].", apiId);
+            log.debug("Update Mocked Api [{}].", apiId);
             return updateMockedApi(executionContext, apiId, userId, swaggerDefinition, environmentId, labels);
         }
 
-        logger.debug("Update Published Api [{}].", apiId);
+        log.debug("Update Published Api [{}].", apiId);
         return updatePublishedApi(executionContext, apiId, userId, swaggerDefinition, environmentId, labels);
     }
 
@@ -333,8 +350,7 @@ public class ApiServiceCockpitImpl implements ApiServiceCockpit {
             return ContextPathValidationResult.builder().sanitizedPaths(sanitizedPaths).build();
         } catch (InvalidPathsException e) {
             String ctxPath = api.getProxy().getVirtualHosts().stream().findFirst().map(VirtualHost::getPath).orElse("");
-            return ContextPathValidationResult
-                .builder()
+            return ContextPathValidationResult.builder()
                 .error("The path [" + ctxPath + "] automatically generated from the name is already covered by another API.")
                 .build();
         } catch (Exception e) {
@@ -347,7 +363,8 @@ public class ApiServiceCockpitImpl implements ApiServiceCockpit {
         plan.setId(UuidString.generateForEnvironment(environmentId, apiId));
         plan.setName("Keyless plan");
         plan.setSecurity(PlanSecurityType.KEY_LESS);
-        plan.setApi(apiId);
+        plan.setReferenceId(apiId);
+        plan.setReferenceType(GenericPlanEntity.ReferenceType.API);
         plan.setStatus(PlanStatus.PUBLISHED);
 
         return plan;
@@ -361,13 +378,13 @@ public class ApiServiceCockpitImpl implements ApiServiceCockpit {
 
         if (apiDocs.isEmpty()) {
             // This should not happen since we have created the documentation in previous step
-            logger.error("No swagger documentation to publish");
+            log.error("No swagger documentation to publish");
             return;
         }
 
         if (apiDocs.size() > 1) {
             // This should not happen since we have created the documentation in previous step
-            logger.error("More than one swagger documentation, this should not happen");
+            log.error("More than one swagger documentation, this should not happen");
         }
 
         PageEntity page = apiDocs.get(0);

@@ -27,17 +27,19 @@ import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.v4.ApiType;
 import io.gravitee.definition.model.v4.listener.ListenerType;
 import io.gravitee.definition.model.v4.listener.tcp.TcpListener;
+import io.gravitee.definition.model.v4.nativeapi.NativeApi;
 import io.gravitee.definition.model.v4.nativeapi.kafka.KafkaListener;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 @DomainService
 public class VerifyApiHostsDomainService {
@@ -110,7 +112,10 @@ public class VerifyApiHostsDomainService {
 
     private void checkNoDuplicate(List<String> hosts) throws DuplicatedHostException {
         var set = new HashSet<>();
-        var duplicates = hosts.stream().filter(n -> !set.add(n)).toList();
+        var duplicates = hosts
+            .stream()
+            .filter(n -> !set.add(n))
+            .toList();
 
         if (!duplicates.isEmpty()) {
             throw new DuplicatedHostException(String.join(", ", duplicates));
@@ -132,13 +137,11 @@ public class VerifyApiHostsDomainService {
                 null,
                 ApiFieldFilter.builder().pictureExcluded(true).build()
             )
-            .filter(api ->
-                !api.getId().equals(apiId) &&
-                DefinitionVersion.V4.equals(api.getDefinitionVersion()) &&
-                (
-                    (ApiType.PROXY.equals(api.getType()) && null != api.getApiDefinitionHttpV4()) ||
-                    (ApiType.NATIVE.equals(api.getType()) && null != api.getApiDefinitionNativeV4())
-                )
+            .filter(
+                api ->
+                    !api.getId().equals(apiId) &&
+                    DefinitionVersion.V4.equals(api.getDefinitionVersion()) &&
+                    EnumSet.of(ApiType.PROXY, ApiType.NATIVE).contains(api.getType())
             )
             .flatMap(this::extractHostsFromListeners)
             .map(String::toLowerCase)
@@ -146,9 +149,8 @@ public class VerifyApiHostsDomainService {
     }
 
     private Stream<String> extractHostsFromListeners(Api api) {
-        if (api.getType() == ApiType.PROXY && api.getApiDefinitionHttpV4() != null) {
-            return api
-                .getApiDefinitionHttpV4()
+        return switch (api.getApiDefinitionValue()) {
+            case io.gravitee.definition.model.v4.Api v4Api -> v4Api
                 .getListeners()
                 .stream()
                 .filter(TcpListener.class::isInstance)
@@ -156,15 +158,13 @@ public class VerifyApiHostsDomainService {
                 .map(TcpListener::getHosts)
                 .filter(extractedHosts -> !extractedHosts.isEmpty())
                 .flatMap(List::stream);
-        } else if (api.getType() == ApiType.NATIVE && api.getApiDefinitionNativeV4() != null) {
-            return api
-                .getApiDefinitionNativeV4()
+            case NativeApi nativeApi -> nativeApi
                 .getListeners()
                 .stream()
                 .filter(KafkaListener.class::isInstance)
                 .map(KafkaListener.class::cast)
                 .map(KafkaListener::getHost);
-        }
-        return Stream.of();
+            case null, default -> Stream.of();
+        };
     }
 }

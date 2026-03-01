@@ -99,13 +99,12 @@ public class ApplicationMembersResource extends AbstractResource {
             } else {
                 final String username = getAuthenticatedUser();
                 final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
-                permissions =
-                    membershipService.getUserMemberPermissions(
-                        executionContext,
-                        MembershipReferenceType.APPLICATION,
-                        application,
-                        username
-                    );
+                permissions = membershipService.getUserMemberPermissions(
+                    executionContext,
+                    MembershipReferenceType.APPLICATION,
+                    application,
+                    username
+                );
             }
         }
         return Response.ok(permissions).build();
@@ -241,7 +240,7 @@ public class ApplicationMembersResource extends AbstractResource {
     }
 
     private void assertNoPrimaryOwnerReassignment(String poRole) {
-        if ("PRIMARY_OWNER".equals(poRole)) {
+        if (PRIMARY_OWNER.name().equals(poRole)) {
             throw new TransferOwnershipNotAllowedException(poRole);
         }
     }

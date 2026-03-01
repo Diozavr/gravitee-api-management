@@ -37,13 +37,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Yann TAVERNIER (yann.tavernier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @UseCase
 public class UpdateDynamicPropertiesUseCase {
 
@@ -74,23 +74,24 @@ public class UpdateDynamicPropertiesUseCase {
 
     public void execute(Input input) {
         final Api api = apiCrudService.get(input.apiId());
+        final AuditInfo auditInfo = buildAuditInfo(input, api);
+
+        // determine the sync state before modifying the api with the new properties
+        final boolean isApiSynchronized = apiStateDomainService.isSynchronized(api, auditInfo);
+
         final List<Property> previousProperties = getCurrentProperties(api);
-        final Api apiForUpdate = api.toBuilder().build();
-        final boolean needToBeUpdated = apiForUpdate.updateDynamicProperties(input.dynamicProperties());
+        final boolean needToBeUpdated = api.updateDynamicProperties(input.dynamicProperties());
 
         if (!needToBeUpdated) {
             return;
         }
 
-        apiForUpdate.setCategories(categoryDomainService.toCategoryId(apiForUpdate, apiForUpdate.getEnvironmentId()));
+        api.setCategories(categoryDomainService.toCategoryId(api, api.getEnvironmentId()));
 
-        final Api updated = apiCrudService.update(apiForUpdate);
-
-        final AuditInfo auditInfo = buildAuditInfo(input, apiForUpdate);
+        final Api updated = apiCrudService.update(api);
 
         auditDomainService.createApiAuditLog(
-            ApiAuditLogEntity
-                .builder()
+            ApiAuditLogEntity.builder()
                 .apiId(updated.getId())
                 .environmentId(auditInfo.environmentId())
                 .organizationId(auditInfo.organizationId())
@@ -98,16 +99,14 @@ public class UpdateDynamicPropertiesUseCase {
                 .actor(auditInfo.actor())
                 .oldValue(api)
                 .newValue(updated)
-                .createdAt(ZonedDateTime.ofInstant(apiForUpdate.getUpdatedAt().toInstant(), ZoneId.systemDefault()))
-                .properties(Map.of(AuditProperties.API, apiForUpdate.getId()))
+                .createdAt(ZonedDateTime.ofInstant(api.getUpdatedAt().toInstant(), ZoneId.systemDefault()))
+                .properties(Map.of(AuditProperties.API, api.getId()))
                 .build()
         );
 
-        final boolean isApiSynchronized = apiStateDomainService.isSynchronized(updated, auditInfo);
-
-        // Deploy only if
-        // - API is not synchronized: no manual changes
-        // - properties have changed
+        // We can force a redeployment only if:
+        // - the API was synchronized before the properties are updated (i.e. no manual changes have been done by a user)
+        // - and the properties have changed
         if (isApiSynchronized && needRedployment(api.getApiDefinitionHttpV4().getProperties(), previousProperties)) {
             // Get the api from latest deployment event of the api to deploy the api with the same dynamic properties configuration
             // It avoids to deploy changes on the configuration that has not been explicitly deployed by the user
@@ -155,8 +154,7 @@ public class UpdateDynamicPropertiesUseCase {
     }
 
     private AuditInfo buildAuditInfo(Input input, Api apiForUpdate) {
-        return AuditInfo
-            .builder()
+        return AuditInfo.builder()
             .environmentId(apiForUpdate.getEnvironmentId())
             .organizationId(environmentCrudService.get(apiForUpdate.getEnvironmentId()).getOrganizationId())
             .actor(AuditActor.builder().userId(String.format("%s-management-api-service", input.pluginId())).build())

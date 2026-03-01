@@ -16,6 +16,7 @@
 package io.gravitee.gateway.reactive.handlers.api.adapter.invoker;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.lenient;
@@ -41,6 +42,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.helpers.NOPLogger;
 
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
@@ -79,6 +81,7 @@ class FlowableProxyResponseTest {
     public void init() {
         lenient().when(ctx.request()).thenReturn(request);
         lenient().when(ctx.response()).thenReturn(response);
+        lenient().when(ctx.withLogger(any())).thenReturn(NOPLogger.NOP_LOGGER);
         lenient().when(response.ended()).thenReturn(false);
         lenient().when(proxyResponse.bodyHandler(bodyHandlerCaptor.capture())).thenReturn(proxyResponse);
         lenient().when(proxyResponse.endHandler(endHandlerCaptor.capture())).thenReturn(proxyResponse);
@@ -101,6 +104,7 @@ class FlowableProxyResponseTest {
     @Test
     public void shouldErrorImmediatelyWhenNoProxyResponse() {
         cut = new FlowableProxyResponse();
+        cut.initialize(ctx);
 
         final TestSubscriber<Buffer> obs = cut.test();
 
@@ -213,13 +217,72 @@ class FlowableProxyResponseTest {
         verify(proxyConnection).end();
     }
 
+    @Test
+    public void shouldCancelBackendConnectionWhenClientDisconnects() {
+        // Client disconnects
+        lenient().when(response.ended()).thenReturn(true);
+
+        final TestSubscriber<Buffer> obs = cut.test();
+        verify(proxyResponse).bodyHandler(bodyHandlerCaptor.capture());
+        verify(proxyResponse).endHandler(endHandlerCaptor.capture());
+
+        // Chunk arrives, triggers cancellation
+        bodyHandlerCaptor.getValue().handle(Buffer.buffer("chunk"));
+
+        verify(proxyConnection).cancel();
+        verify(proxyConnection).end();
+        obs.assertComplete();
+    }
+
+    @Test
+    public void shouldHandleExceptionDuringConnectionCancel() {
+        // Client disconnects, cancel() throws exception
+        lenient().when(response.ended()).thenReturn(true);
+        doAnswer(invocation -> {
+            throw new RuntimeException("Cancel failed");
+        })
+            .when(proxyConnection)
+            .cancel();
+
+        final TestSubscriber<Buffer> obs = cut.test();
+        verify(proxyResponse).bodyHandler(bodyHandlerCaptor.capture());
+
+        bodyHandlerCaptor.getValue().handle(Buffer.buffer("chunk"));
+
+        // Try-finally ensures end() called despite exception
+        verify(proxyConnection).cancel();
+        verify(proxyConnection).end();
+        obs.assertComplete();
+    }
+
+    @Test
+    public void shouldNotProcessChunksAfterClientDisconnect() {
+        final TestSubscriber<Buffer> obs = cut.test();
+        verify(proxyResponse).bodyHandler(bodyHandlerCaptor.capture());
+
+        // First chunk processed
+        bodyHandlerCaptor.getValue().handle(Buffer.buffer("chunk1"));
+        obs.assertValueCount(1);
+
+        // Client disconnects mid-stream
+        lenient().when(response.ended()).thenReturn(true);
+
+        // Second chunk triggers cancellation, not processed
+        bodyHandlerCaptor.getValue().handle(Buffer.buffer("chunk2"));
+
+        verify(proxyConnection).cancel();
+        verify(proxyConnection).end();
+        obs.assertComplete();
+        obs.assertValueCount(1);
+    }
+
     private void setupChunkProducer(Runnable runnable) {
         // Generated one chunk, mark the context interrupted then generate another chunk (the second one should not be propagated).
         doAnswer(invocation -> {
-                runnable.run();
+            runnable.run();
 
-                return null;
-            })
+            return null;
+        })
             .when(proxyResponse)
             .resume();
     }

@@ -40,6 +40,12 @@ public class Subscription {
 
     private Api api;
 
+    private ApiProduct apiProduct;
+
+    private String referenceId;
+
+    private String referenceType;
+
     private Plan plan;
 
     private Application application;
@@ -209,6 +215,16 @@ public class Subscription {
         private final String name;
         private final String version;
         private final DefinitionVersion definitionVersion;
+        private final User owner;
+    }
+
+    @AllArgsConstructor
+    @Getter
+    public static class ApiProduct {
+
+        private final String id;
+        private final String name;
+        private final String version;
         private final User owner;
     }
 

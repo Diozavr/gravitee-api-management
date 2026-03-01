@@ -19,22 +19,26 @@ import { ApplicationConfig, inject, provideAppInitializer } from '@angular/core'
 import { MAT_RIPPLE_GLOBAL_OPTIONS } from '@angular/material/core';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, Router, withComponentInputBinding, withRouterConfig } from '@angular/router';
+import { provideOAuthClient } from 'angular-oauth2-oidc';
+import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 import { catchError, combineLatest, Observable, switchMap } from 'rxjs';
 import { of } from 'rxjs/internal/observable/of';
 
 import { routes } from './app.routes';
 import { csrfInterceptor } from '../interceptors/csrf.interceptor';
 import { httpRequestInterceptor } from '../interceptors/http-request.interceptor';
+import { AuthService } from '../services/auth.service';
 import { ConfigService } from '../services/config.service';
 import { CurrentUserService } from '../services/current-user.service';
-import { PortalMenuLinksService } from '../services/portal-menu-links.service';
+import { PortalNavigationItemsService } from '../services/portal-navigation-items.service';
 import { ThemeService } from '../services/theme.service';
 
 function initApp(
+  authService: AuthService,
   configService: ConfigService,
   themeService: ThemeService,
   currentUserService: CurrentUserService,
-  portalMenuLinksService: PortalMenuLinksService,
+  portalNavigationItemsService: PortalNavigationItemsService,
   router: Router,
 ): () => Observable<unknown> {
   return () =>
@@ -42,9 +46,9 @@ function initApp(
       switchMap(_ =>
         combineLatest([
           themeService.loadTheme(),
-          currentUserService.loadUser(),
           configService.loadConfiguration(),
-          portalMenuLinksService.loadCustomLinks(),
+          portalNavigationItemsService.loadTopNavBarItems(),
+          authService.load().pipe(switchMap(_ => currentUserService.loadUser())),
         ]),
       ),
       catchError(error => {
@@ -59,12 +63,14 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withComponentInputBinding(), withRouterConfig({ paramsInheritanceStrategy: 'always' })),
     provideHttpClient(withInterceptors([httpRequestInterceptor, csrfInterceptor])),
     provideAnimations(),
+    provideOAuthClient(),
     provideAppInitializer(() => {
       const initializerFn = initApp(
+        inject(AuthService),
         inject(ConfigService),
         inject(ThemeService),
         inject(CurrentUserService),
-        inject(PortalMenuLinksService),
+        inject(PortalNavigationItemsService),
         inject(Router),
       );
       return initializerFn();
@@ -78,7 +84,8 @@ export const appConfig: ApplicationConfig = {
     },
     {
       provide: DATE_PIPE_DEFAULT_OPTIONS,
-      useValue: { dateFormat: 'YYYY-MM-dd HH:mm:ss.SSS' },
+      useValue: { dateFormat: 'yyyy-MM-dd HH:mm:ss.SSS' },
     },
+    provideCharts(withDefaultRegisterables()),
   ],
 };

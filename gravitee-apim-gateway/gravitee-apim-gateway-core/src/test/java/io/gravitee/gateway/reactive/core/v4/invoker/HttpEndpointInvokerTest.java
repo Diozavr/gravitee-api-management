@@ -32,6 +32,7 @@ import io.gravitee.gateway.reactive.api.connector.endpoint.EndpointConnector;
 import io.gravitee.gateway.reactive.api.connector.entrypoint.async.HttpEntrypointAsyncConnector;
 import io.gravitee.gateway.reactive.api.context.ExecutionContext;
 import io.gravitee.gateway.reactive.api.context.Request;
+import io.gravitee.gateway.reactive.api.context.Response;
 import io.gravitee.gateway.reactive.core.context.interruption.InterruptionFailureException;
 import io.gravitee.gateway.reactive.core.v4.endpoint.EndpointCriteria;
 import io.gravitee.gateway.reactive.core.v4.endpoint.EndpointManager;
@@ -77,6 +78,9 @@ class HttpEndpointInvokerTest {
 
     @Mock
     private Request request;
+
+    @Mock
+    private Response response;
 
     private HttpEndpointInvoker cut;
 
@@ -184,8 +188,9 @@ class HttpEndpointInvokerTest {
         final HttpEntrypointAsyncConnector httpEntrypointAsyncConnector = mock(HttpEntrypointAsyncConnector.class);
         when(ctx.getInternalAttribute(ATTR_INTERNAL_ENTRYPOINT_CONNECTOR)).thenReturn(httpEntrypointAsyncConnector);
         when(endpointManager.next(any(EndpointCriteria.class))).thenReturn(null);
-        when(ctx.interruptWith(any(ExecutionFailure.class)))
-            .thenAnswer(i -> Completable.error(new InterruptionFailureException(i.getArgument(0))));
+        when(ctx.interruptWith(any(ExecutionFailure.class))).thenAnswer(i ->
+            Completable.error(new InterruptionFailureException(i.getArgument(0)))
+        );
 
         final TestObserver<Void> obs = cut.invoke(ctx).test();
 
@@ -194,7 +199,8 @@ class HttpEndpointInvokerTest {
                 .isInstanceOf(InterruptionFailureException.class)
                 .asInstanceOf(new InstanceOfAssertFactory<>(InterruptionFailureException.class, Assertions::assertThat))
                 .extracting(InterruptionFailureException::getExecutionFailure)
-                .isEqualTo(new ExecutionFailure(HttpStatusCode.SERVICE_UNAVAILABLE_503).key(NO_ENDPOINT_FOUND_KEY));
+                .extracting(ExecutionFailure::key)
+                .isEqualTo(NO_ENDPOINT_FOUND_KEY);
 
             return true;
         });
@@ -209,7 +215,6 @@ class HttpEndpointInvokerTest {
         when(managedEndpoint.getConnector()).thenReturn(endpointConnector);
         when(endpointConnector.connect(ctx)).thenReturn(Completable.complete());
         when(ctx.getAttribute(ATTR_REQUEST_ENDPOINT)).thenReturn(null);
-        when(endpointConnector.connect(ctx)).thenReturn(Completable.complete());
 
         when(ctx.getAttribute(ATTR_REQUEST_METHOD)).thenReturn(attribute);
         when(ctx.request()).thenReturn(request);
@@ -231,8 +236,9 @@ class HttpEndpointInvokerTest {
         // Here, return a random object from attribute and verify we end in error
         when(ctx.getAttribute(eq(ATTR_REQUEST_METHOD))).thenReturn(List.of("PUT"));
 
-        when(ctx.interruptWith(any(ExecutionFailure.class)))
-            .thenAnswer(i -> Completable.error(new InterruptionFailureException(i.getArgument(0))));
+        when(ctx.interruptWith(any(ExecutionFailure.class))).thenAnswer(i ->
+            Completable.error(new InterruptionFailureException(i.getArgument(0)))
+        );
 
         cut
             .invoke(ctx)

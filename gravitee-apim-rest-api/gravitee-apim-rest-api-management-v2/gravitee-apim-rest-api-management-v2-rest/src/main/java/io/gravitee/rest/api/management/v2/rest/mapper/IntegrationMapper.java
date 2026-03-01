@@ -23,6 +23,7 @@ import io.gravitee.apim.core.integration.model.Integration;
 import io.gravitee.apim.core.integration.model.IntegrationView;
 import io.gravitee.apim.core.integration.use_case.DiscoveryUseCase;
 import io.gravitee.apim.core.integration.use_case.UpdateIntegrationUseCase;
+import io.gravitee.node.logging.NodeLoggerFactory;
 import io.gravitee.rest.api.management.v2.rest.model.AsyncJobStatus;
 import io.gravitee.rest.api.management.v2.rest.model.CreateIntegration;
 import io.gravitee.rest.api.management.v2.rest.model.IngestionJob;
@@ -34,7 +35,6 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.factory.Mappers;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * @author Remi Baptiste (remi.baptiste at graviteesource.com)
@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
  */
 @Mapper(uses = { ConfigurationSerializationMapper.class, DateMapper.class })
 public interface IntegrationMapper {
-    Logger logger = LoggerFactory.getLogger(IntegrationMapper.class);
+    Logger log = NodeLoggerFactory.getLogger(IntegrationMapper.class);
     IntegrationMapper INSTANCE = Mappers.getMapper(IntegrationMapper.class);
 
     default Integration map(CreateIntegration source, String environmentId) {
@@ -94,8 +94,20 @@ public interface IntegrationMapper {
     static IngestionPreviewResponse mapper(DiscoveryUseCase.Output preview) {
         return new IngestionPreviewResponse()
             .totalCount(preview.apis().size())
-            .newCount(preview.apis().stream().filter(api -> api.state() == NEW).count())
-            .updateCount(preview.apis().stream().filter(api -> api.state() == UPDATE).count())
+            .newCount(
+                preview
+                    .apis()
+                    .stream()
+                    .filter(api -> api.state() == NEW)
+                    .count()
+            )
+            .updateCount(
+                preview
+                    .apis()
+                    .stream()
+                    .filter(api -> api.state() == UPDATE)
+                    .count()
+            )
             .apis(
                 preview
                     .apis()
@@ -113,6 +125,7 @@ public interface IntegrationMapper {
                             )
                     )
                     .toList()
-            );
+            )
+            .isPartiallyDiscovered(preview.isPartialDiscovery());
     }
 }

@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import * as angular from 'angular';
-
+import angular from 'angular';
 import moment, { duration, Moment, unix } from 'moment';
 import { ActivatedRoute, Router } from '@angular/router';
 import { find, findLast, forEach, last } from 'lodash';
@@ -365,7 +364,7 @@ class DashboardTimeframeController {
   }
 
   updateDisplayMode() {
-    forEach(this.displayModes, (displayMode) => {
+    forEach(this.displayModes, displayMode => {
       this.$scope.$emit('filterItemChange', {
         field: displayMode.field,
         key: displayMode.key,

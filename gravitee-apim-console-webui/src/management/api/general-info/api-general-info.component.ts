@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Component, Inject, OnDestroy, OnInit } from '@angular/core';
+import { Component, computed, DestroyRef, Inject, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { UntypedFormControl, UntypedFormGroup, Validators } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router } from '@angular/router';
-import { combineLatest, EMPTY, of, Subject } from 'rxjs';
+import { combineLatest, EMPTY, of, Subject, throwError, merge } from 'rxjs';
 import { catchError, filter, map, switchMap, takeUntil, tap } from 'rxjs/operators';
-import { NewFile } from '@gravitee/ui-particles-angular';
+import { GIO_DIALOG_WIDTH, NewFile } from '@gravitee/ui-particles-angular';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import {
   ApiGeneralInfoDuplicateDialogComponent,
@@ -34,10 +35,15 @@ import {
   ApiPortalDetailsPromoteDialogData,
 } from './api-general-info-promote-dialog/api-general-info-promote-dialog.component';
 import {
-  ApiGeneralInfoExportV4DialogComponent,
   ApiGeneralDetailsExportV4DialogData,
   ApiGeneralDetailsExportV4DialogResult,
+  ApiGeneralInfoExportV4DialogComponent,
 } from './api-general-info-export-v4-dialog/api-general-info-export-v4-dialog.component';
+import { ApiGeneralInfoMigrateToV4DialogComponent } from './api-general-info-migrate-to-v4-dialog/api-general-info-migrate-to-v4-dialog.component';
+import {
+  ApiGeneralInfoIncludedInDialogComponent,
+  ApiGeneralInfoIncludedInDialogData,
+} from './api-general-info-included-in-dialog/api-general-info-included-in-dialog.component';
 
 import { Category } from '../../../entities/category/Category';
 import { Constants } from '../../../entities/Constants';
@@ -48,8 +54,15 @@ import { GioApiImportDialogComponent, GioApiImportDialogData } from '../componen
 import { GioPermissionService } from '../../../shared/components/gio-permission/gio-permission.service';
 import { ApiV2Service } from '../../../services-ngx/api-v2.service';
 import { Api, ApiType, ApiV2, ApiV4, UpdateApi, UpdateApiV2, UpdateApiV4 } from '../../../entities/management-api-v2';
+import { ApiProduct } from '../../../entities/management-api-v2/api-product/apiProduct';
+import { MigrateToV4State } from '../../../entities/management-api-v2/api/v2/migrateToV4Response';
 import { Integration } from '../../integrations/integrations.model';
 import { IntegrationsService } from '../../../services-ngx/integrations.service';
+
+export interface MigrateDialogResult {
+  confirmed: boolean;
+  state: MigrateToV4State;
+}
 
 @Component({
   selector: 'api-general-info',
@@ -87,6 +100,9 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
   };
   public cannotPromote = true;
   public canDisplayV4EmulationEngineToggle = false;
+  public canDisplayAllowInApiProduct = false;
+  public readonly apiProducts = signal<ApiProduct[]>([]);
+  public readonly isApiUsedInProducts = computed(() => this.apiProducts().length > 0);
 
   public isQualityEnabled = false;
   public isQualitySupported = false;
@@ -96,6 +112,10 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
 
   public integrationName = '';
   public integrationId = '';
+
+  public readonly displayedApiProductsCount = 5;
+
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor(
     private readonly router: Router,
@@ -110,14 +130,16 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
     @Inject(Constants) private readonly constants: Constants,
   ) {}
 
+  private refresh$ = new Subject<void>();
+
   ngOnInit(): void {
     this.labelsAutocompleteOptions = this.constants.env?.settings?.api?.labelsDictionary ?? [];
 
     this.isQualityEnabled = this.constants.env?.settings?.apiQualityMetrics?.enabled;
 
-    this.activatedRoute.params
+    merge(this.activatedRoute.params, this.refresh$.pipe(map(() => this.activatedRoute.snapshot.params)))
       .pipe(
-        switchMap((params) => {
+        switchMap(params => {
           this.apiId = params.apiId;
           return combineLatest([this.apiService.get(this.apiId), this.categoryService.list()]);
         }),
@@ -145,6 +167,7 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
 
           if (api.definitionVersion === 'V4') {
             this.apiType = (api as ApiV4).type;
+            this.canDisplayAllowInApiProduct = this.apiType === 'PROXY';
           }
 
           this.isReadOnly =
@@ -183,8 +206,7 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
           this.cannotPromote =
             !(this.dangerActions.canChangeApiLifecycle && api.lifecycleState !== 'DEPRECATED') ||
             this.isKubernetesOrigin ||
-            api.definitionVersion === 'V4' ||
-            api.definitionVersion === 'V1';
+            this.api.definitionVersion === 'V1';
 
           this.apiDetailsForm = new UntypedFormGroup({
             name: new UntypedFormControl(
@@ -217,6 +239,10 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
               value: api.definitionVersion === 'V2' && (api as ApiV2).executionMode === 'V4_EMULATION_ENGINE',
               disabled: this.isReadOnly,
             }),
+            allowedInApiProducts: new UntypedFormControl({
+              value: this.canDisplayAllowInApiProduct && (api.allowedInApiProducts ?? false),
+              disabled: this.isReadOnly || !this.canDisplayAllowInApiProduct || this.isApiUsedInProducts(),
+            }),
           });
           this.apiImagesForm = new UntypedFormGroup({
             picture: new UntypedFormControl({
@@ -235,6 +261,8 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
 
           this.initialApiDetailsFormValue = this.parentForm.getRawValue();
           this.isQualitySupported = this.api.definitionVersion === 'V2' || this.api.definitionVersion === 'V1';
+
+          this.loadApiProductsUsageAndUpdateControl();
         }),
         switchMap(([api]) => {
           if ('integrationId' in api.originContext) {
@@ -256,6 +284,38 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.unsubscribe$.next(true);
     this.unsubscribe$.unsubscribe();
+  }
+
+  private loadApiProductsUsageAndUpdateControl(): void {
+    this.apiService
+      .getApiProductsForApi(this.apiId)
+      .pipe(
+        catchError(() => of({ data: [] })),
+        tap(response => {
+          const data = response.data ?? [];
+          this.apiProducts.set(data);
+          if (this.canDisplayAllowInApiProduct) {
+            const control = this.apiDetailsForm.get('allowedInApiProducts');
+            if (control) {
+              const shouldDisable = data.length > 0 || this.isReadOnly;
+              shouldDisable ? control.disable({ emitEvent: false }) : control.enable({ emitEvent: false });
+            }
+          }
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe();
+  }
+
+  openIncludedInDialog(): void {
+    this.matDialog.open<ApiGeneralInfoIncludedInDialogComponent, ApiGeneralInfoIncludedInDialogData>(
+      ApiGeneralInfoIncludedInDialogComponent,
+      {
+        data: { apiProducts: this.apiProducts() },
+        role: 'alertdialog',
+        id: 'includedInApiProductsDialog',
+      },
+    );
   }
 
   onSubmit() {
@@ -287,6 +347,7 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
             description: apiDetailsFormValue.description,
             labels: apiDetailsFormValue.labels,
             categories: apiDetailsFormValue.categories,
+            ...(this.canDisplayAllowInApiProduct ? { allowedInApiProducts: apiDetailsFormValue.allowedInApiProducts } : {}),
           };
           return apiToUpdate;
         }),
@@ -319,7 +380,7 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
         tap(() => {
           this.snackBarService.success('Configuration successfully saved!');
         }),
-        catchError((err) => {
+        catchError(err => {
           this.snackBarService.error(err.error?.message ?? err.message);
           return EMPTY;
         }),
@@ -336,7 +397,7 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
     this.policyService
       .listSwaggerPolicies()
       .pipe(
-        switchMap((policies) =>
+        switchMap(policies =>
           this.matDialog
             .open<GioApiImportDialogComponent, GioApiImportDialogData>(GioApiImportDialogComponent, {
               data: {
@@ -348,9 +409,11 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
             })
             .afterClosed(),
         ),
-        filter((confirm) => confirm === true),
-        tap(() => this.ngOnInit()),
-        catchError((err) => {
+        filter(apiId => !!apiId),
+        tap(() => {
+          this.refresh$.next();
+        }),
+        catchError(err => {
           this.snackBarService.error(err.error?.message ?? 'An error occurred while importing the API.');
           return EMPTY;
         }),
@@ -370,8 +433,8 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
       })
       .afterClosed()
       .pipe(
-        filter((apiDuplicated) => !!apiDuplicated),
-        switchMap((apiDuplicated) => this.router.navigate(['../', apiDuplicated.id], { relativeTo: this.activatedRoute })),
+        filter(apiDuplicated => !!apiDuplicated),
+        switchMap(apiDuplicated => this.router.navigate(['../', apiDuplicated.id], { relativeTo: this.activatedRoute })),
         takeUntil(this.unsubscribe$),
       )
       .subscribe();
@@ -406,11 +469,11 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
   }
 
   promoteApi() {
-    if (this.api.definitionVersion === 'V2')
+    if (!this.cannotPromote)
       this.matDialog
         .open<ApiGeneralInfoPromoteDialogComponent, ApiPortalDetailsPromoteDialogData>(ApiGeneralInfoPromoteDialogComponent, {
           data: {
-            api: this.api as ApiV2,
+            api: this.api,
           },
           role: 'alertdialog',
           id: 'promoteApiDialog',
@@ -418,6 +481,35 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
         .afterClosed()
         .pipe(takeUntil(this.unsubscribe$))
         .subscribe();
+  }
+
+  migrateToV4() {
+    this.matDialog
+      .open(ApiGeneralInfoMigrateToV4DialogComponent, { data: { apiId: this.apiId }, width: GIO_DIALOG_WIDTH.SMALL })
+      .afterClosed()
+      .pipe(
+        filter((result): result is MigrateDialogResult => !!result?.confirmed),
+        switchMap(result => {
+          if (result.state !== 'MIGRATABLE' && result.state !== 'CAN_BE_FORCED') {
+            return throwError(() => new Error(`Unexpected migration state received: ${result.state}`));
+          }
+          if (result.state === 'CAN_BE_FORCED') {
+            return this.apiService.migrateToV4(this.apiId, 'FORCE');
+          }
+          return this.apiService.migrateToV4(this.apiId);
+        }),
+        takeUntil(this.unsubscribe$),
+      )
+      .subscribe({
+        next: () => {
+          const successMessage = 'API Migrated to v4 successfully!\nYou can now deploy the migrated API when ready.';
+          this.snackBarService.success(successMessage);
+          this.ngOnInit();
+        },
+        error: err => {
+          this.snackBarService.error(err.error?.message ?? err.message);
+        },
+      });
   }
 
   private canChangeApiLifecycle(api: Api): boolean {
@@ -432,7 +524,7 @@ export class ApiGeneralInfoComponent implements OnInit, OnDestroy {
 const isImgUrl = (url: string): Promise<boolean> => {
   const img = new Image();
   img.src = url;
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     img.onerror = () => resolve(false);
     img.onload = () => resolve(true);
   });

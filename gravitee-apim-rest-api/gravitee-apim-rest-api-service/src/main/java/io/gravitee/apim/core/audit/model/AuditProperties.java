@@ -43,4 +43,7 @@ public enum AuditProperties {
     USER_FIELD,
     NOTIFICATION_TEMPLATE,
     SHARED_POLICY_GROUP,
+    CLUSTER,
+    API_PRODUCT,
+    CLIENT_CERTIFICATE,
 }

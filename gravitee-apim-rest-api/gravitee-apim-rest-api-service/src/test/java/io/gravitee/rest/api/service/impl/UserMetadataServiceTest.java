@@ -133,21 +133,20 @@ public class UserMetadataServiceTest {
         newUserMetadata.setValue(METADATA_VALUE);
 
         verify(metadataRepository).create(newUserMetadata);
-        final Map<Audit.AuditProperties, String> properties = Maps
-            .<Audit.AuditProperties, String>builder()
+        final Map<Audit.AuditProperties, String> properties = Maps.<Audit.AuditProperties, String>builder()
             .put(Audit.AuditProperties.USER, USER_ID)
             .put(METADATA, newUserMetadata.getKey())
             .build();
-        verify(auditService)
-            .createOrganizationAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(GraviteeContext.getCurrentOrganization()),
-                eq(properties),
-                eq(METADATA_CREATED),
-                any(),
-                eq(null),
-                eq(newUserMetadata)
-            );
+        verify(auditService).createOrganizationAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getProperties().equals(properties) &&
+                    auditLogData.getEvent().equals(METADATA_CREATED) &&
+                    auditLogData.getOldValue() == null &&
+                    auditLogData.getNewValue().equals(newUserMetadata)
+            )
+        );
     }
 
     @Test
@@ -180,21 +179,14 @@ public class UserMetadataServiceTest {
 
         verify(metadataRepository).update(updatableMetadata);
 
-        final Map<Audit.AuditProperties, String> properties = Maps
-            .<Audit.AuditProperties, String>builder()
+        final Map<Audit.AuditProperties, String> properties = Maps.<Audit.AuditProperties, String>builder()
             .put(Audit.AuditProperties.USER, USER_ID)
             .put(METADATA, toUserMetadata.getKey())
             .build();
-        verify(auditService)
-            .createOrganizationAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(GraviteeContext.getCurrentOrganization()),
-                eq(properties),
-                eq(METADATA_UPDATED),
-                any(),
-                any(),
-                any()
-            );
+        verify(auditService).createOrganizationAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getProperties().equals(properties) && auditLogData.getEvent().equals(METADATA_UPDATED))
+        );
     }
 
     @Test

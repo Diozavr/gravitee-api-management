@@ -31,8 +31,7 @@ import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import java.util.ArrayList;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * A flow chain basically allows to execute all the policies configured on a list of flows.
@@ -42,9 +41,8 @@ import org.slf4j.LoggerFactory;
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class FlowChain implements Hookable<ChainHook> {
-
-    private static final Logger log = LoggerFactory.getLogger(FlowChain.class);
 
     private final String id;
     private final FlowResolver flowResolver;
@@ -81,7 +79,7 @@ public class FlowChain implements Hookable<ChainHook> {
     public Completable execute(ExecutionContext ctx, ExecutionPhase phase) {
         return resolveFlows(ctx)
             .doOnNext(flow -> {
-                log.debug("Executing flow {} ({} level, {} phase)", flow.getName(), id, phase.name());
+                ctx.withLogger(log).debug("Executing flow {} ({} level, {} phase)", flow.getName(), id, phase.name());
                 ctx.putInternalAttribute(ATTR_INTERNAL_FLOW_STAGE, id);
             })
             .concatMapCompletable(flow -> executeFlow(ctx, flow, phase))
@@ -124,8 +122,8 @@ public class FlowChain implements Hookable<ChainHook> {
      */
     private Completable executeFlow(final ExecutionContext ctx, final Flow flow, final ExecutionPhase phase) {
         HttpPolicyChain policyChain = policyChainFactory.create(id, flow, phase);
-        return HookHelper
-            .hook(() -> policyChain.execute(ctx), policyChain.getId(), hooks, ctx, phase)
-            .doOnSubscribe(subscription -> log.debug("\t-> Executing flow {} ({} level, {} phase)", flow.getName(), id, phase.name()));
+        return HookHelper.hook(() -> policyChain.execute(ctx), policyChain.getId(), hooks, ctx, phase).doOnSubscribe(subscription ->
+            ctx.withLogger(log).debug("\t-> Executing flow {} ({} level, {} phase)", flow.getName(), id, phase.name())
+        );
     }
 }

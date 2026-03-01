@@ -16,6 +16,7 @@
 package io.gravitee.rest.api.service.impl;
 
 import static io.gravitee.repository.management.model.Audit.AuditProperties.API;
+import static io.gravitee.repository.management.model.Audit.AuditProperties.API_PRODUCT;
 import static io.gravitee.repository.management.model.Audit.AuditProperties.APPLICATION;
 import static io.gravitee.repository.management.model.Subscription.AuditEvent.SUBSCRIPTION_CREATED;
 import static io.gravitee.repository.management.model.Subscription.AuditEvent.SUBSCRIPTION_DELETED;
@@ -49,19 +50,23 @@ import io.gravitee.definition.model.v4.plan.PlanSecurity;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.ApiKeyRepository;
+import io.gravitee.repository.management.api.ApiProductsRepository;
 import io.gravitee.repository.management.api.SubscriptionRepository;
 import io.gravitee.repository.management.api.search.Order;
 import io.gravitee.repository.management.api.search.SubscriptionCriteria;
 import io.gravitee.repository.management.api.search.builder.PageableBuilder;
 import io.gravitee.repository.management.model.ApiKey;
+import io.gravitee.repository.management.model.ApiProduct;
 import io.gravitee.repository.management.model.ApplicationStatus;
 import io.gravitee.repository.management.model.ApplicationType;
 import io.gravitee.repository.management.model.Audit;
 import io.gravitee.repository.management.model.Subscription;
+import io.gravitee.repository.management.model.SubscriptionReferenceType;
 import io.gravitee.rest.api.model.ApiKeyEntity;
 import io.gravitee.rest.api.model.ApiKeyMode;
 import io.gravitee.rest.api.model.ApplicationEntity;
 import io.gravitee.rest.api.model.EnvironmentEntity;
+import io.gravitee.rest.api.model.MembershipReferenceType;
 import io.gravitee.rest.api.model.NewSubscriptionEntity;
 import io.gravitee.rest.api.model.PageEntity;
 import io.gravitee.rest.api.model.PrimaryOwnerEntity;
@@ -79,6 +84,8 @@ import io.gravitee.rest.api.model.application.ApplicationListItem;
 import io.gravitee.rest.api.model.application.ApplicationSettings;
 import io.gravitee.rest.api.model.common.Pageable;
 import io.gravitee.rest.api.model.pagedresult.Metadata;
+import io.gravitee.rest.api.model.subscription.ReferenceDisplayInfo;
+import io.gravitee.rest.api.model.subscription.SubscribedReference;
 import io.gravitee.rest.api.model.subscription.SubscriptionMetadataQuery;
 import io.gravitee.rest.api.model.subscription.SubscriptionQuery;
 import io.gravitee.rest.api.model.v4.api.ApiModel;
@@ -92,6 +99,7 @@ import io.gravitee.rest.api.service.ApplicationService;
 import io.gravitee.rest.api.service.AuditService;
 import io.gravitee.rest.api.service.EnvironmentService;
 import io.gravitee.rest.api.service.GroupService;
+import io.gravitee.rest.api.service.MembershipService;
 import io.gravitee.rest.api.service.NotifierService;
 import io.gravitee.rest.api.service.PageService;
 import io.gravitee.rest.api.service.SubscriptionService;
@@ -136,8 +144,10 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -146,10 +156,11 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
+import lombok.CustomLog;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.FastDateFormat;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -158,6 +169,7 @@ import org.springframework.stereotype.Component;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class SubscriptionServiceImpl extends AbstractService implements SubscriptionService {
 
@@ -165,10 +177,6 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     private static final String RFC_3339_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSZ";
     private static final FastDateFormat dateFormatter = FastDateFormat.getInstance(RFC_3339_DATE_FORMAT);
     private static final String separator = ";";
-    /**
-     * Logger.
-     */
-    private final Logger logger = LoggerFactory.getLogger(SubscriptionServiceImpl.class);
 
     @Lazy
     @Autowired
@@ -201,6 +209,9 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     private GroupService groupService;
 
     @Autowired
+    private MembershipService membershipService;
+
+    @Autowired
     private InstallationAccessQueryService installationAccessQueryService;
 
     @Autowired
@@ -227,6 +238,10 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Autowired
     private SubscriptionAdapter subscriptionAdapter;
 
+    @Lazy
+    @Autowired
+    private ApiProductsRepository apiProductsRepository;
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -236,14 +251,14 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public SubscriptionEntity findById(String subscriptionId) {
         try {
-            logger.debug("Find subscription by id : {}", subscriptionId);
+            log.debug("Find subscription by id : {}", subscriptionId);
 
             return subscriptionRepository
                 .findById(subscriptionId)
                 .map(this::convert)
                 .orElseThrow(() -> new SubscriptionNotFoundException(subscriptionId));
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to find a subscription using its ID: {}", subscriptionId, ex);
+            log.error("An error occurs while trying to find a subscription using its ID: {}", subscriptionId, ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to find a subscription using its ID: %s", subscriptionId),
                 ex
@@ -256,7 +271,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         try {
             return subscriptionRepository.findByIdIn(subscriptionIds).stream().map(this::convert).collect(toSet());
         } catch (TechnicalException e) {
-            logger.error("An error occurs while trying to find subscriptions using IDs [{}]", subscriptionIds, e);
+            log.error("An error occurs while trying to find subscriptions using IDs [{}]", subscriptionIds, e);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to find subscriptions using IDs [%s]", subscriptionIds),
                 e
@@ -265,12 +280,154 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     }
 
     @Override
+    public List<SubscribedReference> getSubscribedReferences(ExecutionContext executionContext, String applicationId) {
+        log.debug("Get subscribed references for application {}", applicationId);
+
+        SubscriptionQuery query = new SubscriptionQuery();
+        query.setApplication(applicationId);
+        Collection<SubscriptionEntity> subscriptions = search(executionContext, query);
+
+        Set<SubscriptionReferenceKey> subscribedRefKeys = subscriptions
+            .stream()
+            .filter(sub -> sub.getReferenceId() != null && sub.getReferenceType() != null)
+            .map(sub -> new SubscriptionReferenceKey(sub.getReferenceId(), sub.getReferenceType()))
+            .collect(toSet());
+
+        Set<String> apiIds = subscribedRefKeys
+            .stream()
+            .filter(refKey -> !SubscriptionReferenceType.API_PRODUCT.name().equals(refKey.refType()))
+            .map(SubscriptionReferenceKey::refId)
+            .collect(toSet());
+        Set<String> apiProductIds = subscribedRefKeys
+            .stream()
+            .filter(refKey -> SubscriptionReferenceType.API_PRODUCT.name().equals(refKey.refType()))
+            .map(SubscriptionReferenceKey::refId)
+            .collect(toSet());
+
+        final Map<String, GenericApiEntity> apisById = apiIds.isEmpty()
+            ? Collections.emptyMap()
+            : apiSearchService
+                .findGenericByEnvironmentAndIdIn(executionContext, apiIds)
+                .stream()
+                .collect(toMap(GenericApiEntity::getId, Function.identity()));
+        final Map<String, ApiProduct> apiProductsById = apiProductIds.isEmpty()
+            ? Collections.emptyMap()
+            : apiProductIds
+                .stream()
+                .flatMap(id -> {
+                    try {
+                        return apiProductsRepository.findById(id).stream();
+                    } catch (TechnicalException e) {
+                        throw new TechnicalManagementException(
+                            String.format("An error occurs while trying to find API Products using IDs [%s]", apiProductIds),
+                            e
+                        );
+                    }
+                })
+                .collect(toMap(ApiProduct::getId, Function.identity()));
+
+        return subscribedRefKeys
+            .stream()
+            .map(refKey ->
+                SubscriptionReferenceType.API_PRODUCT.name().equals(refKey.refType())
+                    ? toSubscribedRef(apiProductsById.get(refKey.refId()), ApiProduct::getId, ApiProduct::getName)
+                    : toSubscribedRef(apisById.get(refKey.refId()), GenericApiEntity::getId, GenericApiEntity::getName)
+            )
+            .filter(Objects::nonNull)
+            .sorted((a, b) -> String.CASE_INSENSITIVE_ORDER.compare(a.getName(), b.getName()))
+            .collect(toList());
+    }
+
+    private static <T> SubscribedReference toSubscribedRef(T entity, Function<T, String> getId, Function<T, String> getName) {
+        return entity == null ? null : toSubscribedRef(getId.apply(entity), getName.apply(entity));
+    }
+
+    private static SubscribedReference toSubscribedRef(String id, String name) {
+        return id == null ? null : SubscribedReference.builder().id(id).name(name).build();
+    }
+
+    private record SubscriptionReferenceKey(String refId, String refType) {}
+
+    @Override
+    public Optional<ReferenceDisplayInfo> getReferenceDisplayInfo(
+        ExecutionContext executionContext,
+        String referenceType,
+        String referenceId
+    ) {
+        if (referenceId == null || referenceType == null) {
+            return Optional.empty();
+        }
+        final SubscriptionReferenceType type;
+        try {
+            type = SubscriptionReferenceType.valueOf(referenceType);
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
+        try {
+            return switch (type) {
+                case API_PRODUCT -> getApiProductReferenceDisplayInfo(executionContext, referenceId);
+                case API -> getApiReferenceDisplayInfo(executionContext, referenceId);
+            };
+        } catch (Exception e) {
+            log.debug("Could not load reference display info for {} {}: {}", referenceType, referenceId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private Optional<ReferenceDisplayInfo> getApiProductReferenceDisplayInfo(ExecutionContext executionContext, String referenceId)
+        throws TechnicalException {
+        return apiProductsRepository
+            .findById(referenceId)
+            .map(apiProduct -> {
+                String ownerUserId = getPrimaryOwnerUserIdOrNull(executionContext, apiProduct.getId());
+                return ReferenceDisplayInfo.builder()
+                    .id(apiProduct.getId())
+                    .name(apiProduct.getName())
+                    .version(Objects.requireNonNullElse(apiProduct.getVersion(), ""))
+                    .ownerId(Objects.requireNonNullElse(ownerUserId, ""))
+                    .ownerDisplayName(getDisplayNameForUserId(executionContext, ownerUserId))
+                    .build();
+            });
+    }
+
+    private String getPrimaryOwnerDisplayName(ExecutionContext executionContext, String productId) {
+        return getDisplayNameForUserId(executionContext, getPrimaryOwnerUserIdOrNull(executionContext, productId));
+    }
+
+    private String getDisplayNameForUserId(ExecutionContext executionContext, String userId) {
+        if (userId == null) {
+            return "";
+        }
+        try {
+            return Objects.requireNonNullElse(userService.findById(executionContext, userId).getDisplayName(), "");
+        } catch (Exception ex) {
+            log.debug("Could not load display name for user {}", userId, ex);
+            return "";
+        }
+    }
+
+    private Optional<ReferenceDisplayInfo> getApiReferenceDisplayInfo(ExecutionContext executionContext, String referenceId) {
+        GenericApiEntity api = apiSearchService.findGenericById(executionContext, referenceId, false, false, false);
+        var primaryOwner = api.getPrimaryOwner();
+        return Optional.of(
+            ReferenceDisplayInfo.builder()
+                .id(api.getId())
+                .name(api.getName())
+                .version(Objects.requireNonNullElse(api.getApiVersion(), ""))
+                .definitionVersion(api.getDefinitionVersion())
+                .ownerId(primaryOwner != null ? primaryOwner.getId() : "")
+                .ownerDisplayName(primaryOwner != null ? primaryOwner.getDisplayName() : "")
+                .build()
+        );
+    }
+
+    @Override
     public Collection<SubscriptionEntity> findByApplicationAndPlan(
         final ExecutionContext executionContext,
         String application,
         String plan
     ) {
-        logger.debug("Find subscriptions by application {} and plan {}", application, plan);
+        log.debug("Find subscriptions by application {} and plan {}", application, plan);
 
         SubscriptionQuery query = new SubscriptionQuery();
         if (plan != null) {
@@ -289,7 +446,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
     @Override
     public Collection<SubscriptionEntity> findByApi(final ExecutionContext executionContext, String api) {
-        logger.debug("Find subscriptions by api {}", api);
+        log.debug("Find subscriptions by api {}", api);
 
         SubscriptionQuery query = new SubscriptionQuery();
         query.setApi(api);
@@ -299,7 +456,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
     @Override
     public Collection<SubscriptionEntity> findByPlan(final ExecutionContext executionContext, String plan) {
-        logger.debug("Find subscriptions by plan {}", plan);
+        log.debug("Find subscriptions by plan {}", plan);
 
         SubscriptionQuery query = new SubscriptionQuery();
         query.setPlan(plan);
@@ -332,7 +489,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         String application = newSubscriptionEntity.getApplication();
 
         try {
-            logger.debug("Create a new subscription for plan {} and application {}", plan, application);
+            log.debug("Create a new subscription for plan {} and application {}", plan, application);
 
             GenericPlanEntity genericPlanEntity = planSearchService.findById(executionContext, plan);
 
@@ -361,22 +518,26 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
             }
 
             if (genericPlanEntity.getExcludedGroups() != null && !genericPlanEntity.getExcludedGroups().isEmpty()) {
-                final boolean userAuthorizedToAccessApiData = groupService.isUserAuthorizedToAccessApiData(
-                    apiSearchService.findGenericById(executionContext, genericPlanEntity.getApiId()),
-                    genericPlanEntity.getExcludedGroups(),
-                    getAuthenticatedUsername()
-                );
-                if (!userAuthorizedToAccessApiData && !isEnvironmentAdmin()) {
-                    throw new PlanRestrictedException(plan);
+                // For API Product plans, excluded groups check is not applicable
+                if (genericPlanEntity.getReferenceType() != GenericPlanEntity.ReferenceType.API_PRODUCT) {
+                    String referenceId = genericPlanEntity.getReferenceId();
+                    if (referenceId != null) {
+                        final boolean userAuthorizedToAccessApiData = groupService.isUserAuthorizedToAccessApiData(
+                            apiSearchService.findGenericById(executionContext, referenceId, false, false, false),
+                            genericPlanEntity.getExcludedGroups(),
+                            getAuthenticatedUsername()
+                        );
+                        if (!userAuthorizedToAccessApiData && !isEnvironmentAdmin()) {
+                            throw new PlanRestrictedException(plan);
+                        }
+                    }
                 }
             }
 
             if (genericPlanEntity.getGeneralConditions() != null && !genericPlanEntity.getGeneralConditions().isEmpty()) {
                 if (
-                    (
-                        Boolean.FALSE.equals(newSubscriptionEntity.getGeneralConditionsAccepted()) ||
-                        (newSubscriptionEntity.getGeneralConditionsContentRevision() == null)
-                    )
+                    (Boolean.FALSE.equals(newSubscriptionEntity.getGeneralConditionsAccepted()) ||
+                        (newSubscriptionEntity.getGeneralConditionsContentRevision() == null))
                 ) {
                     throw new PlanGeneralConditionAcceptedException(genericPlanEntity.getName());
                 }
@@ -399,13 +560,21 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 throw new SubscriptionMismatchEnvironmentException(applicationEntity.getId(), genericPlanEntity.getId());
             }
             // Check existing subscriptions
-            List<Subscription> subscriptions = subscriptionRepository.search(
-                SubscriptionCriteria
-                    .builder()
-                    .applications(Collections.singleton(application))
-                    .apis(Collections.singleton(genericPlanEntity.getApiId()))
-                    .build()
+
+            SubscriptionCriteria.SubscriptionCriteriaBuilder criteriaBuilder = SubscriptionCriteria.builder().applications(
+                Collections.singleton(application)
             );
+
+            String refId = genericPlanEntity.getReferenceId();
+            if (refId != null) {
+                SubscriptionReferenceType referenceType = genericPlanEntity.getReferenceType() ==
+                    GenericPlanEntity.ReferenceType.API_PRODUCT
+                    ? SubscriptionReferenceType.API_PRODUCT
+                    : SubscriptionReferenceType.API;
+                criteriaBuilder.referenceIds(Collections.singleton(refId)).referenceType(referenceType);
+            }
+
+            List<Subscription> subscriptions = subscriptionRepository.search(criteriaBuilder.build());
 
             if (!subscriptions.isEmpty()) {
                 Predicate<Subscription> onlyValidSubs = subscription ->
@@ -431,8 +600,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                                     String newSubscriptionChannel = newSubscriptionEntity.getConfiguration().getChannel();
                                     return (
                                         (subscriptionChannel == null && newSubscriptionChannel == null) ||
-                                        subscriptionChannel != null &&
-                                        subscriptionChannel.equals(newSubscriptionChannel)
+                                        (subscriptionChannel != null && subscriptionChannel.equals(newSubscriptionChannel))
                                     );
                                 } catch (IOException ioe) {
                                     // Ignore in case of error
@@ -494,15 +662,13 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
             String clientId = null;
             if (planSecurityType == PlanSecurityType.OAUTH2 || planSecurityType == PlanSecurityType.JWT) {
                 if (ApplicationType.SIMPLE.name().equals(applicationEntity.getType())) {
-                    clientId =
-                        (applicationEntity.getSettings() != null && applicationEntity.getSettings().getApp() != null)
-                            ? applicationEntity.getSettings().getApp().getClientId()
-                            : null;
+                    clientId = (applicationEntity.getSettings() != null && applicationEntity.getSettings().getApp() != null)
+                        ? applicationEntity.getSettings().getApp().getClientId()
+                        : null;
                 } else {
-                    clientId =
-                        (applicationEntity.getSettings() != null && applicationEntity.getSettings().getOauth() != null)
-                            ? applicationEntity.getSettings().getOauth().getClientId()
-                            : null;
+                    clientId = (applicationEntity.getSettings() != null && applicationEntity.getSettings().getOauth() != null)
+                        ? applicationEntity.getSettings().getOauth().getClientId()
+                        : null;
                 }
 
                 // Check that the application contains a client_id
@@ -513,9 +679,9 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             String clientCertificate = null;
             if (planSecurityType == PlanSecurityType.MTLS) {
-                clientCertificate =
-                    extractAndEncodeClientCertificate(applicationEntity)
-                        .orElseThrow(PlanNotSubscribableWithoutClientCertificateException::new);
+                clientCertificate = extractAndEncodeClientCertificate(applicationEntity).orElseThrow(
+                    PlanNotSubscribableWithoutClientCertificateException::new
+                );
             }
 
             updateApplicationApiKeyMode(executionContext, planSecurityType, applicationEntity, newSubscriptionEntity.getApiKeyMode());
@@ -538,8 +704,14 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             setSubscriptionConfig(newSubscriptionEntity.getConfiguration(), subscription);
 
-            String apiId = genericPlanEntity.getApiId();
+            String referenceId = genericPlanEntity.getReferenceId();
+            boolean isApiProduct = genericPlanEntity.getReferenceType() == GenericPlanEntity.ReferenceType.API_PRODUCT;
+            String apiId = isApiProduct ? null : referenceId;
+
             subscription.setApi(apiId);
+            subscription.setReferenceId(referenceId);
+            subscription.setReferenceType(isApiProduct ? SubscriptionReferenceType.API_PRODUCT : SubscriptionReferenceType.API);
+
             subscription.setGeneralConditionsAccepted(newSubscriptionEntity.getGeneralConditionsAccepted());
             if (newSubscriptionEntity.getGeneralConditionsContentRevision() != null) {
                 subscription.setGeneralConditionsContentRevision(newSubscriptionEntity.getGeneralConditionsContentRevision().getRevision());
@@ -554,37 +726,51 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             subscription = subscriptionRepository.create(subscription);
 
-            createAudit(executionContext, apiId, application, SUBSCRIPTION_CREATED, subscription.getCreatedAt(), null, subscription);
+            createAudit(
+                executionContext,
+                referenceId,
+                subscription.getReferenceType(),
+                application,
+                SUBSCRIPTION_CREATED,
+                subscription.getCreatedAt(),
+                null,
+                subscription
+            );
 
-            final GenericApiModel api = apiTemplateService.findByIdForTemplates(executionContext, apiId);
-            final PrimaryOwnerEntity apiOwner = api.getPrimaryOwner();
-
-            String managementURL = installationAccessQueryService.getConsoleUrl(executionContext.getOrganizationId());
-
+            GenericApiModel api = null;
+            PrimaryOwnerEntity apiOwner = null;
             String subscriptionsUrl = "";
 
-            if (!StringUtils.isEmpty(managementURL)) {
+            // Get API details for API subscriptions
+            if (!isApiProduct && apiId != null) {
+                api = apiTemplateService.findByIdForTemplates(executionContext, apiId);
+                if (api != null) {
+                    apiOwner = api.getPrimaryOwner();
+                }
+            }
+
+            // Build subscriptions URL
+            String managementURL = installationAccessQueryService.getConsoleUrl(executionContext.getOrganizationId());
+            if (StringUtils.isNotEmpty(managementURL)) {
+                // Remove trailing slash if present
                 if (managementURL.endsWith("/")) {
                     managementURL = managementURL.substring(0, managementURL.length() - 1);
                 }
-                subscriptionsUrl =
-                    managementURL +
-                    "/#!/" +
-                    executionContext.getEnvironmentId() +
-                    "/apis/" +
-                    api.getId() +
-                    "/subscriptions/" +
-                    subscription.getId();
-            }
 
-            final Map<String, Object> params = new NotificationParamsBuilder()
-                .api(api)
-                .plan(genericPlanEntity)
-                .application(applicationEntity)
-                .owner(apiOwner)
-                .subscription(convert(subscription))
-                .subscriptionsUrl(subscriptionsUrl)
-                .build();
+                String resourceType = isApiProduct ? "api-products" : "apis";
+                String resourceId = isApiProduct ? referenceId : (api != null ? api.getId() : null);
+
+                if (resourceId != null) {
+                    subscriptionsUrl = String.format(
+                        "%s/#!/%s/%s/%s/subscriptions/%s",
+                        managementURL,
+                        executionContext.getEnvironmentId(),
+                        resourceType,
+                        resourceId,
+                        subscription.getId()
+                    );
+                }
+            }
 
             if (PlanValidationType.AUTO == genericPlanEntity.getPlanValidation()) {
                 ProcessSubscriptionEntity process = new ProcessSubscriptionEntity();
@@ -595,12 +781,30 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 // Do process
                 return process(executionContext, process, SUBSCRIPTION_SYSTEM_VALIDATOR);
             } else {
-                notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_NEW, apiId, params);
-                notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_NEW, application, params);
+                SubscriptionEntity paramSubscription = convert(subscription);
+                // If the request contains html elements, we remove them
+                if (subscription.getRequest() != null) {
+                    paramSubscription.setRequest(Jsoup.clean(subscription.getRequest(), Safelist.none()));
+                }
+
+                // Notifications are not applicable for API Product subscriptions (TODO: implement notifications for API Product subscriptions)
+                if (!isApiProduct && api != null) {
+                    final Map<String, Object> params = new NotificationParamsBuilder()
+                        .api(api)
+                        .plan(genericPlanEntity)
+                        .application(applicationEntity)
+                        .owner(apiOwner)
+                        .subscription(paramSubscription)
+                        .subscriptionsUrl(subscriptionsUrl)
+                        .build();
+
+                    notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_NEW, apiId, params);
+                    notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_NEW, application, params);
+                }
                 return convert(subscription);
             }
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to subscribe to the plan {}", plan, ex);
+            log.error("An error occurs while trying to subscribe to the plan {}", plan, ex);
             throw new TechnicalManagementException(String.format("An error occurs while trying to subscribe to the plan %s", plan), ex);
         }
     }
@@ -654,12 +858,12 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
         // If apiKeyModeSelected is SHARED, do nothing if there is no subscription
         if (apiKeyModeSelected == SHARED && apiKeySubscriptions == 0) {
-            logger.debug("Do not set application {} Api Key mode to SHARED, as there is no subscription", application.getId());
+            log.debug("Do not set application {} Api Key mode to SHARED, as there is no subscription", application.getId());
             return;
         }
         // If apiKeyModeSelected is SHARED and if there is more than one subscription. Force to EXCLUSIVE
         if (apiKeyModeSelected == SHARED && apiKeySubscriptions > 1) {
-            logger.debug("Force application {} API Key mode to EXCLUSIVE, as there is more than one subscription", application.getId());
+            log.debug("Force application {} API Key mode to EXCLUSIVE, as there is more than one subscription", application.getId());
             apiKeyModeSelected = EXCLUSIVE;
         }
 
@@ -712,9 +916,11 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             subscription = subscriptionRepository.update(subscription);
 
+            String referenceId = planEntity.getReferenceId();
             createAudit(
                 executionContext,
-                planEntity.getApiId(),
+                referenceId,
+                subscription.getReferenceType(),
                 subscription.getApplication(),
                 SUBSCRIPTION_UPDATED,
                 subscription.getUpdatedAt(),
@@ -724,7 +930,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             return convert(subscription);
         } catch (TechnicalException ex) {
-            logger.error(
+            log.error(
                 "An error occurs while trying to update subscription {} configuration",
                 subscriptionConfigEntity.getSubscriptionId(),
                 ex
@@ -744,7 +950,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
             try {
                 subscription.setConfiguration(objectMapper.writeValueAsString(subscriptionConfigEntity));
             } catch (IOException ioe) {
-                logger.error("Unexpected error while generating subscription configuration", ioe);
+                log.error("Unexpected error while generating subscription configuration", ioe);
             }
         }
     }
@@ -759,7 +965,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                     try {
                         return subscriptionRepository.update(subscription);
                     } catch (TechnicalException ex) {
-                        logger.error("An error occurs while trying to update subscription {}", subscriptionId, ex);
+                        log.error("An error occurs while trying to update subscription {}", subscriptionId, ex);
                         throw new TechnicalManagementException(
                             String.format("An error occurs while trying to update subscription %s", subscriptionId),
                             ex
@@ -769,7 +975,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 .map(this::convert)
                 .orElseThrow(() -> new SubscriptionNotFoundException(subscriptionId));
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to update subscription {}", subscriptionId, ex);
+            log.error("An error occurs while trying to update subscription {}", subscriptionId, ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to update subscription %s", subscriptionId),
                 ex
@@ -784,7 +990,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         Consumer<Subscription> subscriptionTransformer
     ) {
         try {
-            logger.debug("Update subscription {}", updateSubscription.getId());
+            log.debug("Update subscription {}", updateSubscription.getId());
 
             Subscription subscription = subscriptionRepository
                 .findById(updateSubscription.getId())
@@ -810,9 +1016,11 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 subscriptionTransformer.accept(subscription);
 
                 subscription = subscriptionRepository.update(subscription);
+                String referenceId = genericPlanEntity.getReferenceId();
                 createAudit(
                     executionContext,
-                    genericPlanEntity.getApiId(),
+                    referenceId,
+                    subscription.getReferenceType(),
                     subscription.getApplication(),
                     SUBSCRIPTION_UPDATED,
                     subscription.getUpdatedAt(),
@@ -840,7 +1048,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             throw new SubscriptionNotUpdatableException(updateSubscription.getId());
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to update subscription {}", updateSubscription.getId(), ex);
+            log.error("An error occurs while trying to update subscription {}", updateSubscription.getId(), ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to update subscription %s", updateSubscription.getId()),
                 ex
@@ -849,10 +1057,9 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     }
 
     SubscriptionEntity process(final ExecutionContext executionContext, ProcessSubscriptionEntity processSubscription, String userId) {
-        logger.debug("Subscription {} processed by {}", processSubscription.getId(), userId);
+        log.debug("Subscription {} processed by {}", processSubscription.getId(), userId);
 
-        var auditInfo = AuditInfo
-            .builder()
+        var auditInfo = AuditInfo.builder()
             .organizationId(executionContext.getOrganizationId())
             .environmentId(executionContext.getEnvironmentId())
             .actor(getAuthenticatedUserAsAuditActor())
@@ -860,19 +1067,18 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         io.gravitee.apim.core.subscription.model.SubscriptionEntity result;
 
         if (processSubscription.isAccepted()) {
-            result =
-                acceptSubscriptionDomainService.autoAccept(
-                    processSubscription.getId(),
-                    processSubscription.getStartingAt() != null
-                        ? processSubscription.getStartingAt().toInstant().atZone(ZoneId.systemDefault())
-                        : null,
-                    processSubscription.getEndingAt() != null
-                        ? processSubscription.getEndingAt().toInstant().atZone(ZoneId.systemDefault())
-                        : null,
-                    processSubscription.getReason(),
-                    processSubscription.getCustomApiKey(),
-                    auditInfo
-                );
+            result = acceptSubscriptionDomainService.autoAccept(
+                processSubscription.getId(),
+                processSubscription.getStartingAt() != null
+                    ? processSubscription.getStartingAt().toInstant().atZone(ZoneId.systemDefault())
+                    : null,
+                processSubscription.getEndingAt() != null
+                    ? processSubscription.getEndingAt().toInstant().atZone(ZoneId.systemDefault())
+                    : null,
+                processSubscription.getReason(),
+                processSubscription.getCustomApiKey(),
+                auditInfo
+            );
         } else {
             result = rejectSubscriptionDomainService.reject(processSubscription.getId(), processSubscription.getReason(), auditInfo);
         }
@@ -883,7 +1089,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public SubscriptionEntity fail(String subscriptionId, String failureCause) {
         try {
-            logger.debug("Fail subscription {}", subscriptionId);
+            log.debug("Fail subscription {}", subscriptionId);
 
             Subscription subscription = subscriptionRepository
                 .findById(subscriptionId)
@@ -901,18 +1107,25 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
             ExecutionContext executionContext = new ExecutionContext(environmentEntity.getOrganizationId(), environmentEntity.getId());
             final ApplicationEntity application = applicationService.findById(executionContext, subscription.getApplication());
             final GenericPlanEntity genericPlanEntity = planSearchService.findById(executionContext, subscription.getPlan());
-            String apiId = genericPlanEntity.getApiId();
-            final GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, apiId);
+            String referenceId = genericPlanEntity.getReferenceId();
+            boolean isApiProduct = genericPlanEntity.getReferenceType() == GenericPlanEntity.ReferenceType.API_PRODUCT;
+            GenericApiModel genericApiModel = null;
+            if (!isApiProduct && referenceId != null) {
+                genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, referenceId);
+            }
             final PrimaryOwnerEntity owner = application.getPrimaryOwner();
-            final Map<String, Object> params = new NotificationParamsBuilder()
-                .owner(owner)
-                .api(genericApiModel)
-                .plan(genericPlanEntity)
-                .application(application)
-                .subscription(result)
-                .build();
-            notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_FAILED, apiId, params);
-            notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_FAILED, application.getId(), params);
+            // Notifications are not applicable for API Product subscriptions (TODO: implement notifications for API Product subscriptions)
+            if (!isApiProduct) {
+                final Map<String, Object> params = new NotificationParamsBuilder()
+                    .owner(owner)
+                    .api(genericApiModel)
+                    .plan(genericPlanEntity)
+                    .application(application)
+                    .subscription(result)
+                    .build();
+                notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_FAILED, referenceId, params);
+                notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_FAILED, application.getId(), params);
+            }
 
             return result;
         } catch (TechnicalException ex) {
@@ -926,7 +1139,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public SubscriptionEntity notifyError(String subscriptionId, String failureCause) {
         try {
-            logger.debug("Failed subscription Notification{}", subscriptionId);
+            log.debug("Failed subscription Notification{}", subscriptionId);
             Subscription subscription = subscriptionRepository
                 .findById(subscriptionId)
                 .orElseThrow(() -> new SubscriptionNotFoundException(subscriptionId));
@@ -941,18 +1154,25 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
             ExecutionContext executionContext = new ExecutionContext(environmentEntity.getOrganizationId(), environmentEntity.getId());
             final ApplicationEntity application = applicationService.findById(executionContext, subscription.getApplication());
             final GenericPlanEntity genericPlanEntity = planSearchService.findById(executionContext, subscription.getPlan());
-            String apiId = genericPlanEntity.getApiId();
-            final GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, apiId);
+            String referenceId = genericPlanEntity.getReferenceId();
+            boolean isApiProduct = genericPlanEntity.getReferenceType() == GenericPlanEntity.ReferenceType.API_PRODUCT;
+            GenericApiModel genericApiModel = null;
+            if (!isApiProduct && referenceId != null) {
+                genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, referenceId);
+            }
             final PrimaryOwnerEntity owner = application.getPrimaryOwner();
-            final Map<String, Object> params = new NotificationParamsBuilder()
-                .owner(owner)
-                .api(genericApiModel)
-                .plan(genericPlanEntity)
-                .application(application)
-                .subscription(result)
-                .build();
-            notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_FAILED, apiId, params);
-            notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_FAILED, application.getId(), params);
+            // Notifications are not applicable for API Product subscriptions (TODO: implement notifications for API Product subscriptions)
+            if (!isApiProduct) {
+                final Map<String, Object> params = new NotificationParamsBuilder()
+                    .owner(owner)
+                    .api(genericApiModel)
+                    .plan(genericPlanEntity)
+                    .application(application)
+                    .subscription(result)
+                    .build();
+                notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_FAILED, referenceId, params);
+                notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_FAILED, application.getId(), params);
+            }
 
             return result;
         } catch (TechnicalException ex) {
@@ -966,7 +1186,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public SubscriptionEntity pauseConsumer(ExecutionContext executionContext, String subscriptionId) {
         try {
-            logger.debug("Pause subscription {} by consumer", subscriptionId);
+            log.debug("Pause subscription {} by consumer", subscriptionId);
 
             Subscription subscription = subscriptionRepository
                 .findById(subscriptionId)
@@ -974,9 +1194,15 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             final ApplicationEntity application = applicationService.findById(executionContext, subscription.getApplication());
             final GenericPlanEntity genericPlanEntity = planSearchService.findById(executionContext, subscription.getPlan());
-            String apiId = genericPlanEntity.getApiId();
-            final GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, apiId);
-            validateConsumerStatus(subscription, genericApiModel);
+            String referenceId = genericPlanEntity.getReferenceId();
+            boolean isApiProduct = genericPlanEntity.getReferenceType() == GenericPlanEntity.ReferenceType.API_PRODUCT;
+            GenericApiModel genericApiModel = null;
+            if (!isApiProduct && referenceId != null) {
+                genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, referenceId);
+            }
+            if (genericApiModel != null) {
+                validateConsumerStatus(subscription, genericApiModel);
+            }
 
             // Here, do not care about the status managed by the publisher. The subscription will be active on the gateway if consumerStatus == ACTIVE and status == ACCEPTED
             if (subscription.canBeStoppedByConsumer()) {
@@ -990,7 +1216,8 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
                 createAudit(
                     executionContext,
-                    apiId,
+                    referenceId,
+                    subscription.getReferenceType(),
                     subscription.getApplication(),
                     SUBSCRIPTION_PAUSED_BY_CONSUMER,
                     subscription.getUpdatedAt(),
@@ -1012,21 +1239,20 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     }
 
     private void pauseNonSharedApiKeys(ExecutionContext executionContext, Subscription subscription, ApplicationEntity application) {
-        streamActiveApiKeys(executionContext, subscription.getId())
-            .forEach(apiKey -> {
-                // Only paused key if the applicatio is not using shared API Key
-                if (!application.hasApiKeySharedMode()) {
-                    apiKey.setPaused(true);
-                }
-                // Anyway update the shared key updateAt timestamp to detect changes
-                apiKeyService.update(executionContext, apiKey);
-            });
+        streamActiveApiKeys(executionContext, subscription.getId()).forEach(apiKey -> {
+            // Only paused key if the applicatio is not using shared API Key
+            if (!application.hasApiKeySharedMode()) {
+                apiKey.setPaused(true);
+            }
+            // Anyway update the shared key updateAt timestamp to detect changes
+            apiKeyService.update(executionContext, apiKey);
+        });
     }
 
     @Override
     public SubscriptionEntity pause(final ExecutionContext executionContext, String subscriptionId) {
         try {
-            logger.debug("Pause subscription {}", subscriptionId);
+            log.debug("Pause subscription {}", subscriptionId);
 
             Subscription subscription = subscriptionRepository
                 .findById(subscriptionId)
@@ -1044,21 +1270,28 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 // Send an email to subscriber
                 final ApplicationEntity application = applicationService.findById(executionContext, subscription.getApplication());
                 final GenericPlanEntity genericPlanEntity = planSearchService.findById(executionContext, subscription.getPlan());
-                String apiId = genericPlanEntity.getApiId();
-                final GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, apiId);
+                String referenceId = genericPlanEntity.getReferenceId();
+                boolean isApiProduct = genericPlanEntity.getReferenceType() == GenericPlanEntity.ReferenceType.API_PRODUCT;
+                GenericApiModel genericApiModel = null;
+                if (!isApiProduct && referenceId != null) {
+                    genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, referenceId);
+                }
                 final PrimaryOwnerEntity owner = application.getPrimaryOwner();
-                final Map<String, Object> params = new NotificationParamsBuilder()
-                    .owner(owner)
-                    .api(genericApiModel)
-                    .plan(genericPlanEntity)
-                    .application(application)
-                    .build();
-
-                notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_PAUSED, apiId, params);
-                notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_PAUSED, application.getId(), params);
+                // Notifications are not applicable for API Product subscriptions (TODO: implement notifications for API Product subscriptions)
+                if (!isApiProduct) {
+                    final Map<String, Object> params = new NotificationParamsBuilder()
+                        .owner(owner)
+                        .api(genericApiModel)
+                        .plan(genericPlanEntity)
+                        .application(application)
+                        .build();
+                    notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_PAUSED, referenceId, params);
+                    notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_PAUSED, application.getId(), params);
+                }
                 createAudit(
                     executionContext,
-                    apiId,
+                    referenceId,
+                    subscription.getReferenceType(),
                     subscription.getApplication(),
                     SUBSCRIPTION_PAUSED,
                     subscription.getUpdatedAt(),
@@ -1084,19 +1317,25 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public SubscriptionEntity resumeConsumer(final ExecutionContext executionContext, String subscriptionId) {
         try {
-            logger.debug("Resume subscription by {} by consumer", subscriptionId);
+            log.debug("Resume subscription by {} by consumer", subscriptionId);
 
             Subscription subscription = subscriptionRepository
                 .findById(subscriptionId)
                 .orElseThrow(() -> new SubscriptionNotFoundException(subscriptionId));
 
             final GenericPlanEntity genericPlanEntity = planSearchService.findById(executionContext, subscription.getPlan());
-            String apiId = genericPlanEntity.getApiId();
-            final GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, apiId);
-            validateConsumerStatus(subscription, genericApiModel);
+            String referenceId = genericPlanEntity.getReferenceId();
+            boolean isApiProduct = genericPlanEntity.getReferenceType() == GenericPlanEntity.ReferenceType.API_PRODUCT;
+            GenericApiModel genericApiModel = null;
+            if (!isApiProduct && referenceId != null) {
+                genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, referenceId);
+            }
+            if (genericApiModel != null) {
+                validateConsumerStatus(subscription, genericApiModel);
+            }
 
             if (subscription.canBeStartedByConsumer()) {
-                return resumeSubscription(executionContext, subscription, apiId);
+                return resumeSubscription(executionContext, subscription, referenceId);
             }
 
             throw new SubscriptionNotPausedException(subscription);
@@ -1111,7 +1350,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public SubscriptionEntity resumeFailed(final ExecutionContext executionContext, String subscriptionId) {
         try {
-            logger.debug("Resume failed subscription by {} by consumer", subscriptionId);
+            log.debug("Resume failed subscription by {} by consumer", subscriptionId);
 
             Subscription subscription = subscriptionRepository
                 .findById(subscriptionId)
@@ -1123,11 +1362,17 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 throw new SubscriptionFailureCustomerStatusRequiredException();
             }
 
-            String apiId = subscription.getApi();
-            final GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, apiId);
-            checkApiDefinitionVersion(subscription, genericApiModel);
+            String referenceId = subscription.getIdentifier();
+            boolean isApiProduct = subscription.getReferenceType() == SubscriptionReferenceType.API_PRODUCT;
+            GenericApiModel genericApiModel = null;
+            if (!isApiProduct && referenceId != null) {
+                genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, referenceId);
+            }
+            if (genericApiModel != null) {
+                checkApiDefinitionVersion(subscription, genericApiModel);
+            }
 
-            return resumeSubscription(executionContext, subscription, apiId);
+            return resumeSubscription(executionContext, subscription, referenceId);
         } catch (TechnicalException ex) {
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to resume subscription %s", subscriptionId),
@@ -1136,7 +1381,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         }
     }
 
-    private SubscriptionEntity resumeSubscription(ExecutionContext executionContext, Subscription subscription, String apiId)
+    private SubscriptionEntity resumeSubscription(ExecutionContext executionContext, Subscription subscription, String referenceId)
         throws TechnicalException {
         Subscription previousSubscription = new Subscription(subscription);
         final Date now = new Date();
@@ -1149,7 +1394,8 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
         createAudit(
             executionContext,
-            apiId,
+            referenceId,
+            subscription.getReferenceType(),
             subscription.getApplication(),
             SUBSCRIPTION_RESUMED_BY_CONSUMER,
             subscription.getUpdatedAt(),
@@ -1164,11 +1410,10 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     }
 
     private void resumeApiKeys(ExecutionContext executionContext, Subscription subscription) {
-        streamActiveApiKeys(executionContext, subscription.getId())
-            .forEach(apiKey -> {
-                apiKey.setPaused(false);
-                apiKeyService.update(executionContext, apiKey);
-            });
+        streamActiveApiKeys(executionContext, subscription.getId()).forEach(apiKey -> {
+            apiKey.setPaused(false);
+            apiKeyService.update(executionContext, apiKey);
+        });
     }
 
     private static void validateConsumerStatus(Subscription subscription, GenericApiModel genericApiModel) {
@@ -1188,7 +1433,10 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
             final ApiModel v4ApiModel = (ApiModel) genericApiModel;
             if (
                 v4ApiModel.getListeners() == null ||
-                v4ApiModel.getListeners().stream().noneMatch(l -> l.getType().equals(ListenerType.SUBSCRIPTION))
+                v4ApiModel
+                    .getListeners()
+                    .stream()
+                    .noneMatch(l -> l.getType().equals(ListenerType.SUBSCRIPTION))
             ) {
                 throw new SubscriptionConsumerStatusNotUpdatableException(
                     subscription,
@@ -1201,7 +1449,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public SubscriptionEntity resume(final ExecutionContext executionContext, String subscriptionId) {
         try {
-            logger.debug("Resume subscription {}", subscriptionId);
+            log.debug("Resume subscription {}", subscriptionId);
 
             Subscription subscription = subscriptionRepository
                 .findById(subscriptionId)
@@ -1219,21 +1467,28 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 // Send an email to subscriber
                 final ApplicationEntity application = applicationService.findById(executionContext, subscription.getApplication());
                 final GenericPlanEntity genericPlanEntity = planSearchService.findById(executionContext, subscription.getPlan());
-                String apiId = genericPlanEntity.getApiId();
-                final GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, apiId);
+                String referenceId = genericPlanEntity.getReferenceId();
+                boolean isApiProduct = genericPlanEntity.getReferenceType() == GenericPlanEntity.ReferenceType.API_PRODUCT;
+                GenericApiModel genericApiModel = null;
+                if (!isApiProduct && referenceId != null) {
+                    genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, referenceId);
+                }
                 final PrimaryOwnerEntity owner = application.getPrimaryOwner();
-                final Map<String, Object> params = new NotificationParamsBuilder()
-                    .owner(owner)
-                    .api(genericApiModel)
-                    .plan(genericPlanEntity)
-                    .application(application)
-                    .build();
-
-                notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_RESUMED, apiId, params);
-                notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_RESUMED, application.getId(), params);
+                // Notifications are not applicable for API Product subscriptions (TODO: implement notifications for API Product subscriptions)
+                if (!isApiProduct) {
+                    final Map<String, Object> params = new NotificationParamsBuilder()
+                        .owner(owner)
+                        .api(genericApiModel)
+                        .plan(genericPlanEntity)
+                        .application(application)
+                        .build();
+                    notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_RESUMED, referenceId, params);
+                    notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_RESUMED, application.getId(), params);
+                }
                 createAudit(
                     executionContext,
-                    apiId,
+                    referenceId,
+                    subscription.getReferenceType(),
                     subscription.getApplication(),
                     SUBSCRIPTION_RESUMED,
                     subscription.getUpdatedAt(),
@@ -1249,7 +1504,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             throw new SubscriptionNotPausedException(subscription);
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to resume subscription {}", subscriptionId, ex);
+            log.error("An error occurs while trying to resume subscription {}", subscriptionId, ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to resume subscription %s", subscriptionId),
                 ex
@@ -1263,7 +1518,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public SubscriptionEntity restore(final ExecutionContext executionContext, String subscriptionId) {
         try {
-            logger.debug("Restore subscription {}", subscriptionId);
+            log.debug("Restore subscription {}", subscriptionId);
 
             Subscription subscription = subscriptionRepository
                 .findById(subscriptionId)
@@ -1280,7 +1535,8 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
                 createAudit(
                     executionContext,
-                    subscription.getApi(),
+                    subscription.getReferenceId(),
+                    subscription.getReferenceType(),
                     subscription.getApplication(),
                     SUBSCRIPTION_RESUMED,
                     subscription.getUpdatedAt(),
@@ -1289,18 +1545,17 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 );
 
                 // active API Keys are automatically unpause
-                streamActiveApiKeys(executionContext, subscription.getId())
-                    .forEach(apiKey -> {
-                        apiKey.setPaused(false);
-                        apiKeyService.update(executionContext, apiKey);
-                    });
+                streamActiveApiKeys(executionContext, subscription.getId()).forEach(apiKey -> {
+                    apiKey.setPaused(false);
+                    apiKeyService.update(executionContext, apiKey);
+                });
 
                 return convert(subscription);
             }
 
             throw new SubscriptionNotClosedException(subscriptionId);
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to restore subscription {}", subscriptionId, ex);
+            log.error("An error occurs while trying to restore subscription {}", subscriptionId, ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to restore subscription %s", subscriptionId),
                 ex
@@ -1311,7 +1566,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public void delete(final ExecutionContext executionContext, String subscriptionId) {
         try {
-            logger.debug("Delete subscription {}", subscriptionId);
+            log.debug("Delete subscription {}", subscriptionId);
 
             Subscription subscription = subscriptionRepository
                 .findById(subscriptionId)
@@ -1324,7 +1579,8 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
             subscriptionRepository.delete(subscriptionId);
             createAudit(
                 executionContext,
-                subscription.getApi(),
+                subscription.getReferenceId(),
+                subscription.getReferenceType(),
                 subscription.getApplication(),
                 SUBSCRIPTION_DELETED,
                 subscription.getUpdatedAt(),
@@ -1332,7 +1588,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 null
             );
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to delete subscription: {}", subscriptionId, ex);
+            log.error("An error occurs while trying to delete subscription: {}", subscriptionId, ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to delete subscription: %s", subscriptionId),
                 ex
@@ -1343,7 +1599,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     @Override
     public Collection<SubscriptionEntity> search(final ExecutionContext executionContext, SubscriptionQuery query) {
         try {
-            logger.debug("Search subscriptions {}", query);
+            log.debug("Search subscriptions {}", query);
 
             final SubscriptionCriteria.SubscriptionCriteriaBuilder builder = toSubscriptionCriteriaBuilder(query);
 
@@ -1363,12 +1619,11 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                     // Search by API Key
                     List<ApiKeyEntity> apiKeys = apiKeyService.findByKey(executionContext, query.getApiKey());
                     if (apiKeys != null) {
-                        subscriptionsIds =
-                            apiKeys
-                                .stream()
-                                .flatMap(apiKeyEntity -> apiKeyEntity.getSubscriptions().stream())
-                                .map(SubscriptionEntity::getId)
-                                .collect(Collectors.toSet());
+                        subscriptionsIds = apiKeys
+                            .stream()
+                            .flatMap(apiKeyEntity -> apiKeyEntity.getSubscriptions().stream())
+                            .map(SubscriptionEntity::getId)
+                            .collect(Collectors.toSet());
                     }
                 }
             }
@@ -1378,7 +1633,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             return subscriptionsStream.collect(toList());
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to search for subscriptions: {}", query, ex);
+            log.error("An error occurs while trying to search for subscriptions: {}", query, ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to search for subscriptions: %s", query),
                 ex
@@ -1400,18 +1655,19 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         boolean fillPlanSecurityType
     ) {
         try {
-            logger.debug("Search pageable subscriptions {}", query);
+            log.debug("Search pageable subscriptions {}", query);
 
             if (query.getApiKey() != null && !query.getApiKey().isEmpty()) {
                 List<SubscriptionEntity> filteredSubscriptions = apiKeyService
                     .findByKey(executionContext, query.getApiKey())
                     .stream()
                     .flatMap(apiKey -> findByIdIn(apiKey.getSubscriptionIds()).stream())
-                    .filter(subscription ->
-                        query.matchesApi(subscription.getApi()) &&
-                        query.matchesApplication(subscription.getApplication()) &&
-                        query.matchesPlan(subscription.getPlan()) &&
-                        query.matchesStatus(subscription.getStatus())
+                    .filter(
+                        subscription ->
+                            query.matchesApi(subscription.getReferenceId()) &&
+                            query.matchesApplication(subscription.getApplication()) &&
+                            query.matchesPlan(subscription.getPlan()) &&
+                            query.matchesStatus(subscription.getStatus())
                     )
                     .collect(toList());
 
@@ -1444,7 +1700,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 );
             }
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to search for pageable subscriptions: {}", query, ex);
+            log.error("An error occurs while trying to search for pageable subscriptions: {}", query, ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to search for pageable subscriptions: %s", query),
                 ex
@@ -1479,9 +1735,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
     }
 
     private SubscriptionCriteria.SubscriptionCriteriaBuilder toSubscriptionCriteriaBuilder(SubscriptionQuery query) {
-        SubscriptionCriteria.SubscriptionCriteriaBuilder builder = SubscriptionCriteria
-            .builder()
-            .apis(query.getApis())
+        SubscriptionCriteria.SubscriptionCriteriaBuilder builder = SubscriptionCriteria.builder()
             .applications(query.getApplications())
             .plans(query.getPlans())
             .from(query.getFrom())
@@ -1490,6 +1744,23 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
             .endingAtBefore(query.getEndingAtBefore())
             .includeWithoutEnd(query.isIncludeWithoutEnd())
             .excludedApis(query.getExcludedApis());
+
+        if (query.getReferenceId() != null && query.getReferenceType() != null) {
+            builder.referenceIds(Collections.singleton(query.getReferenceId()));
+            builder.referenceType(SubscriptionReferenceType.valueOf(query.getReferenceType().name()));
+            if (query.getReferenceType() == GenericPlanEntity.ReferenceType.API) {
+                builder.apis(Collections.singleton(query.getReferenceId()));
+            }
+        } else if (
+            query.getReferenceType() != null && query.getReferenceId() == null && (query.getApis() == null || query.getApis().isEmpty())
+        ) {
+            // Filter by reference type only (e.g. Portal: API subscriptions only)
+            builder.referenceType(SubscriptionReferenceType.valueOf(query.getReferenceType().name()));
+        } else if (query.getApis() != null && !query.getApis().isEmpty()) {
+            builder.referenceIds(query.getApis());
+            builder.referenceType(SubscriptionReferenceType.API);
+            builder.apis(query.getApis());
+        }
 
         if (query.getStatuses() != null) {
             builder.statuses(query.getStatuses().stream().map(Enum::name).collect(toSet()));
@@ -1509,7 +1780,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         String userId
     ) {
         try {
-            logger.debug("Subscription {} transferred by {}", transferSubscription.getId(), userId);
+            log.debug("Subscription {} transferred by {}", transferSubscription.getId(), userId);
 
             GenericPlanEntity transferGenericPlanEntity = planSearchService.findById(executionContext, transferSubscription.getPlan());
 
@@ -1517,15 +1788,18 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 .findById(transferSubscription.getId())
                 .orElseThrow(() -> new SubscriptionNotFoundException(transferSubscription.getId()));
             GenericPlanEntity subscriptionGenericPlanEntity = planSearchService.findById(executionContext, subscription.getPlan());
+            String transferReferenceId = transferGenericPlanEntity.getReferenceId();
+            String subscriptionReferenceId = subscription.getIdentifier();
             if (
-                !transferGenericPlanEntity.getApiId().equals(subscription.getApi()) || //Don't transfer to another API
+                !transferReferenceId.equals(subscriptionReferenceId) || //Don't transfer to another API/API Product
                 transferGenericPlanEntity.getPlanStatus() != PlanStatus.PUBLISHED || //Don't transfer to a non published plan
                 (transferGenericPlanEntity.getPlanSecurity() == null && subscriptionGenericPlanEntity.getPlanSecurity() != null) || //Don't transfer to a plan with security (Mode STANDARD) if the plan to transfer has no security (Mode PUSH)
                 (transferGenericPlanEntity.getPlanSecurity() != null && subscriptionGenericPlanEntity.getPlanSecurity() == null) || //Don't transfer to a plan with no security (Mode PUSH) if the plan to transfer has security (Mode STANDARD)
-                (
-                    transferGenericPlanEntity.getPlanSecurity() != null &&
-                    !transferGenericPlanEntity.getPlanSecurity().getType().equals(subscriptionGenericPlanEntity.getPlanSecurity().getType())
-                ) || //Don't transfer to a plan with a different security type (Both mode STANDARD)
+                (transferGenericPlanEntity.getPlanSecurity() != null &&
+                    !transferGenericPlanEntity
+                        .getPlanSecurity()
+                        .getType()
+                        .equals(subscriptionGenericPlanEntity.getPlanSecurity().getType())) || //Don't transfer to a plan with a different security type (Both mode STANDARD)
                 (transferGenericPlanEntity.getGeneralConditions() != null && !transferGenericPlanEntity.getGeneralConditions().isEmpty()) //Don't transfer to a plan with general conditions
             ) {
                 throw new TransferNotAllowedException(transferGenericPlanEntity.getId());
@@ -1554,12 +1828,17 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 }
             }
             final ApplicationEntity application = applicationService.findById(executionContext, subscription.getApplication());
-            final String apiId = subscriptionGenericPlanEntity.getApiId();
-            final GenericApiModel genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, apiId);
+            final String referenceId = subscriptionGenericPlanEntity.getReferenceId();
+            boolean isApiProduct = subscriptionGenericPlanEntity.getReferenceType() == GenericPlanEntity.ReferenceType.API_PRODUCT;
+            GenericApiModel genericApiModel = null;
+            if (!isApiProduct && referenceId != null) {
+                genericApiModel = apiTemplateService.findByIdForTemplates(executionContext, referenceId);
+            }
             final PrimaryOwnerEntity owner = application.getPrimaryOwner();
             createAudit(
                 executionContext,
-                apiId,
+                referenceId,
+                subscription.getReferenceType(),
                 subscription.getApplication(),
                 SUBSCRIPTION_UPDATED,
                 subscription.getUpdatedAt(),
@@ -1569,18 +1848,21 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
             SubscriptionEntity subscriptionEntity = convert(subscription);
 
-            final Map<String, Object> params = new NotificationParamsBuilder()
-                .owner(owner)
-                .application(application)
-                .api(genericApiModel)
-                .plan(subscriptionGenericPlanEntity)
-                .subscription(subscriptionEntity)
-                .build();
-            notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_TRANSFERRED, apiId, params);
-            notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_TRANSFERRED, application.getId(), params);
+            // Notifications are not applicable for API Product subscriptions (TODO: implement notifications for API Product subscriptions)
+            if (!isApiProduct) {
+                final Map<String, Object> params = new NotificationParamsBuilder()
+                    .owner(owner)
+                    .application(application)
+                    .api(genericApiModel)
+                    .plan(subscriptionGenericPlanEntity)
+                    .subscription(subscriptionEntity)
+                    .build();
+                notifierService.trigger(executionContext, ApiHook.SUBSCRIPTION_TRANSFERRED, referenceId, params);
+                notifierService.trigger(executionContext, ApplicationHook.SUBSCRIPTION_TRANSFERRED, application.getId(), params);
+            }
             return subscriptionEntity;
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to transfer subscription {} by {}", transferSubscription.getId(), userId, ex);
+            log.error("An error occurs while trying to transfer subscription {} by {}", transferSubscription.getId(), userId, ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to transfer subscription %s by %s", transferSubscription.getId(), userId),
                 ex
@@ -1651,7 +1933,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         try {
             return subscriptionRepository.findReferenceIdsOrderByNumberOfSubscriptions(toSubscriptionCriteriaBuilder(query).build(), order);
         } catch (TechnicalException ex) {
-            logger.error("An error occurs while trying to findReferenceIdsOrderByNumberOfSubscriptions for subscriptions: {}", query, ex);
+            log.error("An error occurs while trying to findReferenceIdsOrderByNumberOfSubscriptions for subscriptions: {}", query, ex);
             throw new TechnicalManagementException(
                 String.format("An error occurs while trying to findReferenceIdsOrderByNumberOfSubscriptions for subscriptions: %s", query),
                 ex
@@ -1685,12 +1967,42 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         final Optional<Map<String, GenericApiEntity>> apisById = query
             .ifApis()
             .map(withApis -> {
-                Set<String> apiIds = subscriptions.stream().map(SubscriptionEntity::getApi).collect(toSet());
+                Set<String> apiIds = subscriptions
+                    .stream()
+                    .filter(sub -> SubscriptionReferenceType.API.name().equals(sub.getReferenceType()) && sub.getReferenceId() != null)
+                    .map(SubscriptionEntity::getReferenceId)
+                    .collect(toSet());
                 return apiSearchService
                     .findGenericByEnvironmentAndIdIn(executionContext, apiIds)
                     .stream()
                     .collect(toMap(GenericApiEntity::getId, Function.identity()));
             });
+
+        final Optional<Map<String, ApiProduct>> apiProductsById = query
+            .ifApiProducts()
+            .map(withApiProducts -> {
+                Set<String> apiProductIds = subscriptions
+                    .stream()
+                    .filter(
+                        sub -> SubscriptionReferenceType.API_PRODUCT.name().equals(sub.getReferenceType()) && sub.getReferenceId() != null
+                    )
+                    .map(SubscriptionEntity::getReferenceId)
+                    .collect(toSet());
+                if (apiProductIds.isEmpty()) {
+                    return Collections.<String, ApiProduct>emptyMap();
+                }
+                try {
+                    return apiProductsRepository.findByIds(apiProductIds).stream().collect(toMap(ApiProduct::getId, Function.identity()));
+                } catch (TechnicalException ex) {
+                    throw new TechnicalManagementException(
+                        "An error occurs while trying to find API Products for subscription metadata",
+                        ex
+                    );
+                }
+            });
+        final Optional<Map<String, String>> productIdToPrimaryOwnerDisplayName = apiProductsById.map(products ->
+            getProductIdToPrimaryOwnerDisplayNameMap(executionContext, products.keySet())
+        );
 
         final Optional<Map<String, GenericPlanEntity>> plansById = query
             .ifPlans()
@@ -1715,6 +2027,9 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         subscriptions.forEach(subscription -> {
             applicationsById.ifPresent(byId -> fillApplicationMetadata(byId, metadata, subscription));
             apisById.ifPresent(byId -> fillApiMetadata(executionContext, byId, metadata, subscription, query));
+            apiProductsById.ifPresent(byId ->
+                fillApiProductMetadata(byId, metadata, subscription, productIdToPrimaryOwnerDisplayName.orElse(Collections.emptyMap()))
+            );
             plansById.ifPresent(byId -> fillPlanMetadata(byId, metadata, subscription));
             subscribersById.ifPresent(byId -> fillSubscribersMetadata(byId, metadata, subscription));
         });
@@ -1753,8 +2068,8 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         SubscriptionEntity subscription,
         SubscriptionMetadataQuery query
     ) {
-        if (apis.containsKey(subscription.getApi())) {
-            GenericApiEntity api = apis.get(subscription.getApi());
+        if (subscription.getReferenceId() != null && apis.containsKey(subscription.getReferenceId())) {
+            GenericApiEntity api = apis.get(subscription.getReferenceId());
             metadata.put(api.getId(), "name", api.getName());
             metadata.put(api.getId(), "definitionVersion", api.getDefinitionVersion());
             metadata.put(api.getId(), "apiVersion", api.getApiVersion());
@@ -1771,6 +2086,66 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         return metadata;
     }
 
+    private Map<String, String> getProductIdToPrimaryOwnerDisplayNameMap(
+        ExecutionContext executionContext,
+        Collection<String> apiProductIds
+    ) {
+        if (apiProductIds == null || apiProductIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, String> productIdToOwnerUserId = apiProductIds
+            .stream()
+            .map(productId -> {
+                String ownerUserId = getPrimaryOwnerUserIdOrNull(executionContext, productId);
+                return ownerUserId != null ? Map.entry(productId, ownerUserId) : null;
+            })
+            .filter(Objects::nonNull)
+            .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+        if (productIdToOwnerUserId.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, String> userIdToDisplayName = userService
+            .findByIds(executionContext, productIdToOwnerUserId.values())
+            .stream()
+            .collect(toMap(UserEntity::getId, user -> Objects.requireNonNullElse(user.getDisplayName(), "")));
+        return productIdToOwnerUserId
+            .entrySet()
+            .stream()
+            .collect(toMap(Map.Entry::getKey, entry -> userIdToDisplayName.getOrDefault(entry.getValue(), "")));
+    }
+
+    private String getPrimaryOwnerUserIdOrNull(ExecutionContext executionContext, String productId) {
+        try {
+            return membershipService.getPrimaryOwnerUserId(
+                executionContext.getOrganizationId(),
+                MembershipReferenceType.API_PRODUCT,
+                productId
+            );
+        } catch (Exception ex) {
+            log.debug("Could not resolve primary owner for API Product {}", productId, ex);
+            return null;
+        }
+    }
+
+    private Metadata fillApiProductMetadata(
+        Map<String, ApiProduct> apiProducts,
+        Metadata metadata,
+        SubscriptionEntity subscription,
+        Map<String, String> primaryOwnerDisplayNameByProductId
+    ) {
+        if (
+            SubscriptionReferenceType.API_PRODUCT.name().equals(subscription.getReferenceType()) &&
+            subscription.getReferenceId() != null &&
+            apiProducts.containsKey(subscription.getReferenceId())
+        ) {
+            ApiProduct apiProduct = apiProducts.get(subscription.getReferenceId());
+            metadata.put(apiProduct.getId(), "name", apiProduct.getName());
+            metadata.put(apiProduct.getId(), "apiVersion", apiProduct.getVersion() != null ? apiProduct.getVersion() : "");
+            metadata.put(apiProduct.getId(), "apiPrimaryOwner", primaryOwnerDisplayNameByProductId.getOrDefault(apiProduct.getId(), ""));
+        }
+        return metadata;
+    }
+
     private Metadata fillSubscribersMetadata(Map<String, UserEntity> users, Metadata metadata, SubscriptionEntity subscription) {
         if (users.containsKey(subscription.getSubscribedBy())) {
             UserEntity user = users.get(subscription.getSubscribedBy());
@@ -1783,7 +2158,13 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
         SubscriptionEntity entity = new SubscriptionEntity();
 
         entity.setId(subscription.getId());
-        entity.setApi(subscription.getApi());
+        entity.setReferenceId(subscription.getReferenceId());
+        entity.setReferenceType(subscription.getReferenceType() != null ? subscription.getReferenceType().name() : null);
+        entity.setApi(
+            subscription.getReferenceType() != SubscriptionReferenceType.API_PRODUCT
+                ? (subscription.getApi() != null ? subscription.getApi() : subscription.getReferenceId())
+                : null
+        );
         entity.setPlan(subscription.getPlan());
         entity.setProcessedAt(subscription.getProcessedAt());
         entity.setStatus(SubscriptionStatus.valueOf(subscription.getStatus().name()));
@@ -1813,7 +2194,7 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
                 var configuration = objectMapper.readValue(subscription.getConfiguration(), SubscriptionConfigurationEntity.class);
                 entity.setConfiguration(configuration);
             } catch (IOException ioe) {
-                logger.error("Unexpected error while generating API definition", ioe);
+                log.error("Unexpected error while generating API definition", ioe);
             }
         }
         entity.setMetadata(subscription.getMetadata());
@@ -1824,30 +2205,39 @@ public class SubscriptionServiceImpl extends AbstractService implements Subscrip
 
     private void createAudit(
         ExecutionContext executionContext,
-        String apiId,
+        String referenceId,
+        SubscriptionReferenceType referenceType,
         String applicationId,
         Audit.AuditEvent event,
         Date createdAt,
         Subscription oldValue,
         Subscription newValue
     ) {
-        auditService.createApiAuditLog(
-            executionContext,
-            apiId,
-            Collections.singletonMap(APPLICATION, applicationId),
-            event,
-            createdAt,
-            oldValue,
-            newValue
-        );
+        final boolean isApiProduct = SubscriptionReferenceType.API_PRODUCT == referenceType;
+
+        AuditService.AuditLogData auditData = AuditService.AuditLogData.builder()
+            .event(event)
+            .createdAt(createdAt)
+            .oldValue(oldValue)
+            .newValue(newValue)
+            .properties(Collections.singletonMap(APPLICATION, applicationId))
+            .build();
+
+        if (isApiProduct) {
+            auditService.createApiProductAuditLog(executionContext, auditData, referenceId);
+        } else {
+            auditService.createApiAuditLog(executionContext, auditData, referenceId);
+        }
         auditService.createApplicationAuditLog(
             executionContext,
-            applicationId,
-            Collections.singletonMap(API, apiId),
-            event,
-            createdAt,
-            oldValue,
-            newValue
+            AuditService.AuditLogData.builder()
+                .properties(Collections.singletonMap(isApiProduct ? API_PRODUCT : API, referenceId))
+                .event(event)
+                .createdAt(createdAt)
+                .oldValue(oldValue)
+                .newValue(newValue)
+                .build(),
+            applicationId
         );
     }
 

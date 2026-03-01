@@ -50,7 +50,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
@@ -63,16 +64,17 @@ public class ApiProcessorChainFactory {
     private final Node node;
     protected final Configuration configuration;
     protected final ReporterService reporterService;
-    private final TracingHook tracingHook;
 
     public ApiProcessorChainFactory(final Configuration configuration, final Node node, final ReporterService reporterService) {
         this.configuration = configuration;
         this.overrideXForwardedPrefix = configuration.getProperty("handlers.request.headers.x-forwarded-prefix", Boolean.class, false);
-        this.clientIdentifierHeader =
-            configuration.getProperty("handlers.request.client.header", String.class, DEFAULT_CLIENT_IDENTIFIER_HEADER);
+        this.clientIdentifierHeader = configuration.getProperty(
+            "handlers.request.client.header",
+            String.class,
+            DEFAULT_CLIENT_IDENTIFIER_HEADER
+        );
         this.node = node;
         this.reporterService = reporterService;
-        tracingHook = new TracingHook("processor");
     }
 
     /**
@@ -82,7 +84,7 @@ public class ApiProcessorChainFactory {
      *
      * @return the chain of processors.
      */
-    public ProcessorChain beforeHandle(final Api api, final TracingContext tracingContext) {
+    public ProcessorChain beforeHandle(final Api api) {
         final List<Processor> processors = new ArrayList<>();
 
         io.gravitee.definition.model.v4.Api apiDefinition = api.getDefinition();
@@ -92,7 +94,7 @@ public class ApiProcessorChainFactory {
             processors.add(LogRequestProcessor.instance());
         }
 
-        return new ProcessorChain("before-api-handle", processors, processorHooks(tracingContext));
+        return new ProcessorChain("before-api-handle", processors, List.of());
     }
 
     /**
@@ -102,19 +104,18 @@ public class ApiProcessorChainFactory {
      *
      * @return the chain of processors.
      */
-    public ProcessorChain beforeSecurityChain(final Api api, final TracingContext tracingContext) {
+    public ProcessorChain beforeSecurityChain(final Api api) {
         final List<Processor> processors = new ArrayList<>();
 
-        getHttpListener(api)
-            .ifPresent(httpListener -> {
-                final Cors cors = httpListener.getCors();
+        getHttpListener(api).ifPresent(httpListener -> {
+            final Cors cors = httpListener.getCors();
 
-                if (cors != null && cors.isEnabled()) {
-                    processors.add(CorsPreflightRequestProcessor.instance());
-                }
-            });
+            if (cors != null && cors.isEnabled()) {
+                processors.add(CorsPreflightRequestProcessor.instance());
+            }
+        });
 
-        return new ProcessorChain("before-security-chain", processors, processorHooks(tracingContext));
+        return new ProcessorChain("before-security-chain", processors, List.of());
     }
 
     /**
@@ -124,9 +125,9 @@ public class ApiProcessorChainFactory {
      *
      * @return the chain of processors.
      */
-    public ProcessorChain beforeApiExecution(final Api api, final TracingContext tracingContext) {
+    public ProcessorChain beforeApiExecution(final Api api) {
         final List<Processor> processors = new ArrayList<>();
-        if (api.getDefinition().getListeners() != null) {
+        if (isNotEmpty(api.getDefinition().getListeners())) {
             if (overrideXForwardedPrefix) {
                 processors.add(XForwardedPrefixProcessor.instance());
             }
@@ -138,16 +139,14 @@ public class ApiProcessorChainFactory {
 
             processors.add(SubscriptionProcessor.instance(clientIdentifierHeader));
 
-            getHttpListener(api)
-                .ifPresent(httpListener -> {
-                    final Map<String, Pattern> pathMappings = httpListener.getPathMappingsPattern();
-                    if (pathMappings != null && !pathMappings.isEmpty()) {
-                        processors.add(PathMappingProcessor.instance());
-                    }
-                });
+            getHttpListener(api).ifPresent(httpListener -> {
+                if (isNotEmpty(httpListener.getPathMappingsPattern())) {
+                    processors.add(PathMappingProcessor.instance());
+                }
+            });
         }
 
-        return new ProcessorChain("before-api-execution", processors, processorHooks(tracingContext));
+        return new ProcessorChain("before-api-execution", processors, List.of());
     }
 
     /**
@@ -157,9 +156,9 @@ public class ApiProcessorChainFactory {
      *
      * @return the chain of processors.
      */
-    public ProcessorChain afterApiExecution(final Api api, final TracingContext tracingContext) {
+    public ProcessorChain afterApiExecution(final Api api) {
         final List<Processor> processors = getAfterApiExecutionProcessors(api);
-        return new ProcessorChain("after-api-execution", processors, processorHooks(tracingContext));
+        return new ProcessorChain("after-api-execution", processors, List.of());
     }
 
     private List<Processor> getAfterApiExecutionProcessors(Api api) {
@@ -168,13 +167,12 @@ public class ApiProcessorChainFactory {
         processors.add(new ShutdownProcessor(node));
         processors.add(new TransactionPostProcessor(new TransactionPostProcessorConfiguration(configuration)));
 
-        getHttpListener(api)
-            .ifPresent(httpListener -> {
-                final Cors cors = httpListener.getCors();
-                if (cors != null && cors.isEnabled()) {
-                    processors.add(CorsSimpleRequestProcessor.instance());
-                }
-            });
+        getHttpListener(api).ifPresent(httpListener -> {
+            final Cors cors = httpListener.getCors();
+            if (cors != null && cors.isEnabled()) {
+                processors.add(CorsSimpleRequestProcessor.instance());
+            }
+        });
 
         return processors;
     }
@@ -186,17 +184,17 @@ public class ApiProcessorChainFactory {
      *
      * @return the chain of processors.
      */
-    public ProcessorChain onError(final Api api, final TracingContext tracingContext) {
+    public ProcessorChain onError(final Api api) {
         // On error processor chain contains the after api execution processors.
         List<Processor> processors = new ArrayList<>(getAfterApiExecutionProcessors(api));
 
-        if (api.getDefinition().getResponseTemplates() != null && !api.getDefinition().getResponseTemplates().isEmpty()) {
+        if (isNotEmpty(api.getDefinition().getResponseTemplates())) {
             processors.add(ResponseTemplateBasedFailureProcessor.instance());
         } else {
             processors.add(SimpleFailureProcessor.instance());
         }
 
-        return new ProcessorChain("api-error", processors, processorHooks(tracingContext));
+        return new ProcessorChain("api-error", processors, List.of());
     }
 
     /**
@@ -206,8 +204,8 @@ public class ApiProcessorChainFactory {
      *
      * @return the chain of processors.
      */
-    public ProcessorChain afterHandle(final Api api, final TracingContext tracingContext) {
-        return new ProcessorChain("after-api-handle", afterHandleProcessors(api), processorHooks(tracingContext));
+    public ProcessorChain afterHandle(final Api api) {
+        return new ProcessorChain("after-api-handle", afterHandleProcessors(api), List.of());
     }
 
     protected List<Processor> afterHandleProcessors(Api api) {
@@ -222,23 +220,24 @@ public class ApiProcessorChainFactory {
     }
 
     private Optional<HttpListener> getHttpListener(final Api api) {
-        if (api.getDefinition().getListeners() != null) {
-            return api
-                .getDefinition()
-                .getListeners()
-                .stream()
-                .filter(listener -> listener.getType() == ListenerType.HTTP)
-                .map(HttpListener.class::cast)
-                .findFirst();
-        } else {
-            return Optional.empty();
-        }
+        return stream(api.getDefinition().getListeners())
+            .flatMap(listener ->
+                listener.getType() == ListenerType.HTTP && listener instanceof HttpListener httpListener
+                    ? Stream.of(httpListener)
+                    : Stream.empty()
+            )
+            .findFirst();
     }
 
-    protected List<ProcessorHook> processorHooks(final TracingContext tracingContext) {
-        if (tracingContext.isVerbose()) {
-            return List.of(tracingHook);
-        }
-        return List.of();
+    private boolean isNotEmpty(Iterable<?> iterable) {
+        return iterable != null && iterable.iterator().hasNext();
+    }
+
+    private boolean isNotEmpty(Map<?, ?> map) {
+        return map != null && !map.isEmpty();
+    }
+
+    private <T> Stream<T> stream(Iterable<T> iterable) {
+        return iterable == null ? Stream.empty() : StreamSupport.stream(iterable.spliterator(), false);
     }
 }

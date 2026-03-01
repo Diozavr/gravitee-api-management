@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { Component, Signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { distinctUntilChanged, filter, map, shareReplay, switchMap, tap } from 'rxjs/operators';
 import { isEqual, isNil } from 'lodash';
@@ -63,18 +63,18 @@ export class ApiHistoryV4Component {
     switchMap(({ page, perPage }) =>
       this.eventsService.searchApiEvents(this.apiId, { page: page, perPage: perPage, types: 'PUBLISH_API' }),
     ),
-    tap((events) => {
+    tap(events => {
       this.definitionInUseId = this.filter$.value.page === 1 && !isNil(events.data[0]) ? events.data[0].id || null : null;
     }),
   );
   public definitionInUseId = null;
 
-  protected deploymentState$: Observable<string> = this.getLastApiFetch$.pipe(map((api) => api.deploymentState));
+  protected deploymentState$: Observable<string> = this.getLastApiFetch$.pipe(map(api => api.deploymentState));
 
   protected compareEvent?: [Event, Event];
 
   private isV4Native$: Signal<boolean> = toSignal(
-    this.getLastApiFetch$.pipe(map((api) => api.definitionVersion === 'V4' && api.type === 'NATIVE')),
+    this.getLastApiFetch$.pipe(map(api => api.definitionVersion === 'V4' && api.type === 'NATIVE')),
   );
 
   get compareEventLabel(): string {
@@ -87,6 +87,7 @@ export class ApiHistoryV4Component {
     private readonly activatedRoute: ActivatedRoute,
     private readonly matDialog: MatDialog,
     private readonly snackBarService: SnackBarService,
+    private readonly router: Router,
   ) {}
 
   protected paginationChange(searchParam: SearchApiEventParam) {
@@ -122,7 +123,7 @@ export class ApiHistoryV4Component {
     this.apiService
       .getCurrentDeployment(this.apiId)
       .pipe(
-        switchMap((currentDeploymentDefinition) => {
+        switchMap(currentDeploymentDefinition => {
           const jsonDefinitionToCompare = this.extractApiDefinition(eventToCompare);
           const jsonCurrentDefinition = JSON.stringify(currentDeploymentDefinition, null, 2);
           const isNativeV4 = this.isV4Native$();
@@ -150,7 +151,7 @@ export class ApiHistoryV4Component {
     this.apiService
       .getCurrentDeployment(this.apiId)
       .pipe(
-        switchMap((currentDeploymentDefinition) =>
+        switchMap(currentDeploymentDefinition =>
           this.matDialog
             .open<ApiHistoryV4DeploymentInfoDialogComponent, ApiHistoryV4DeploymentInfoDialogData, ApiHistoryV4DeploymentInfoDialogResult>(
               ApiHistoryV4DeploymentInfoDialogComponent,
@@ -190,7 +191,7 @@ export class ApiHistoryV4Component {
       )
       .afterClosed()
       .pipe(
-        filter((result) => !isNil(result?.rollbackTo)),
+        filter(result => !isNil(result?.rollbackTo)),
         tap(({ rollbackTo }) => this.openRollbackDialog(this.apiId, rollbackTo)),
       )
       .subscribe();
@@ -210,7 +211,7 @@ export class ApiHistoryV4Component {
       })
       .afterClosed()
       .pipe(
-        filter((result) => !isNil(result?.rollbackTo)),
+        filter(result => !isNil(result?.rollbackTo)),
         tap(({ rollbackTo }) => this.openRollbackDialog(this.apiId, rollbackTo)),
       );
   }
@@ -232,14 +233,15 @@ export class ApiHistoryV4Component {
       })
       .afterClosed()
       .pipe(
-        filter((result) => !!result),
+        filter(result => !!result),
         switchMap(() => this.apiService.rollback(apiId, eventId)),
       )
       .subscribe({
         next: () => {
           this.snackBarService.success('API deployment has been rolled back successfully');
+          this.router.navigate(['../..'], { relativeTo: this.activatedRoute });
         },
-        error: (error) => {
+        error: error => {
           this.snackBarService.error(error?.error?.message ?? 'An error occurred while rolling back the API deployment!');
         },
       });

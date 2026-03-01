@@ -63,8 +63,7 @@ public class ApiSubscriptionsResource_VerifyCreateApiSubscriptionTest extends Ab
                 eq(API),
                 eq(RolePermissionAction.CREATE)
             )
-        )
-            .thenReturn(false);
+        ).thenReturn(false);
 
         final Response response = rootTarget().request().post(Entity.json(SubscriptionFixtures.aVerifySubscription()));
         assertEquals(FORBIDDEN_403, response.getStatus());
@@ -106,10 +105,17 @@ public class ApiSubscriptionsResource_VerifyCreateApiSubscriptionTest extends Ab
 
     @Test
     public void should_verify_subscription() {
-        when(apiKeyService.canCreate(GraviteeContext.getExecutionContext(), "apiKey", API, APPLICATION)).thenReturn(true);
+        when(
+            apiKeyService.canCreate(
+                GraviteeContext.getExecutionContext(),
+                "apiKey",
+                API,
+                io.gravitee.apim.core.subscription.model.SubscriptionReferenceType.API.name(),
+                APPLICATION
+            )
+        ).thenReturn(true);
 
-        final VerifySubscription verifySubscription = SubscriptionFixtures
-            .aVerifySubscription()
+        final VerifySubscription verifySubscription = SubscriptionFixtures.aVerifySubscription()
             .applicationId(APPLICATION)
             .apiKey("apiKey");
         final Response response = rootTarget().request().post(Entity.json(verifySubscription));
@@ -121,10 +127,17 @@ public class ApiSubscriptionsResource_VerifyCreateApiSubscriptionTest extends Ab
 
     @Test
     public void should_verify_subscription_false_response() {
-        when(apiKeyService.canCreate(GraviteeContext.getExecutionContext(), "apiKey", API, APPLICATION)).thenReturn(false);
+        when(
+            apiKeyService.canCreate(
+                GraviteeContext.getExecutionContext(),
+                "apiKey",
+                API,
+                io.gravitee.apim.core.subscription.model.SubscriptionReferenceType.API.name(),
+                APPLICATION
+            )
+        ).thenReturn(false);
 
-        final VerifySubscription verifySubscription = SubscriptionFixtures
-            .aVerifySubscription()
+        final VerifySubscription verifySubscription = SubscriptionFixtures.aVerifySubscription()
             .applicationId(APPLICATION)
             .apiKey("apiKey");
         final Response response = rootTarget().request().post(Entity.json(verifySubscription));

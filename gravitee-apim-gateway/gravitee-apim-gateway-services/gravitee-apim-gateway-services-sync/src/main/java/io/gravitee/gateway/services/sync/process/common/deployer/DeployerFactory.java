@@ -23,6 +23,7 @@ import io.gravitee.gateway.dictionary.DictionaryManager;
 import io.gravitee.gateway.env.GatewayConfiguration;
 import io.gravitee.gateway.handlers.accesspoint.manager.AccessPointManager;
 import io.gravitee.gateway.handlers.api.manager.ApiManager;
+import io.gravitee.gateway.handlers.api.registry.ApiProductPlanDefinitionCache;
 import io.gravitee.gateway.handlers.sharedpolicygroup.manager.SharedPolicyGroupManager;
 import io.gravitee.gateway.platform.organization.manager.OrganizationManager;
 import io.gravitee.gateway.reactive.reactor.v4.subscription.SubscriptionDispatcher;
@@ -33,15 +34,15 @@ import io.gravitee.node.api.license.LicenseFactory;
 import io.gravitee.node.api.license.LicenseManager;
 import io.gravitee.repository.management.api.CommandRepository;
 import java.util.function.Supplier;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class DeployerFactory {
 
     private final ApiKeyService apiKeyService;
@@ -67,6 +68,12 @@ public class DeployerFactory {
     private final SharedPolicyGroupManager sharedPolicyGroupManager;
 
     private final DistributedSyncService distributedSyncService;
+
+    private final io.gravitee.gateway.handlers.api.manager.ApiProductManager apiProductManager;
+
+    private final ApiProductPlanDefinitionCache apiProductPlanDefinitionCache;
+
+    private final ApiProductSubscriptionRefresher apiProductSubscriptionRefresher;
 
     public SubscriptionDeployer createSubscriptionDeployer() {
         return new SubscriptionDeployer(
@@ -113,5 +120,20 @@ public class DeployerFactory {
 
     public SharedPolicyGroupDeployer createSharedPolicyGroupDeployer() {
         return new SharedPolicyGroupDeployer(sharedPolicyGroupManager, distributedSyncService);
+    }
+
+    public ApiProductDeployer createApiProductDeployer() {
+        if (apiProductSubscriptionRefresher == null) {
+            throw new IllegalStateException(
+                "ApiProductSubscriptionRefresher is not available. API Product deploy requires repository sync to be enabled."
+            );
+        }
+        return new ApiProductDeployer(
+            apiProductManager,
+            planCache,
+            distributedSyncService,
+            apiProductPlanDefinitionCache,
+            apiProductSubscriptionRefresher
+        );
     }
 }

@@ -52,9 +52,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import lombok.CustomLog;
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.stereotype.Component;
@@ -63,10 +62,10 @@ import org.springframework.stereotype.Component;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class ConfigServiceImpl extends AbstractService implements ConfigService {
 
-    private final Logger LOGGER = LoggerFactory.getLogger(ConfigServiceImpl.class);
     private static final ObjectMapper MAPPER = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     @Autowired
@@ -255,7 +254,7 @@ public class ConfigServiceImpl extends AbstractService implements ConfigService 
                             }
                         }
                     } catch (IllegalAccessException e) {
-                        LOGGER.error("Unable to set parameter {}. Use the default value", parameterKey.value().key(), e);
+                        log.error("Unable to set parameter {}. Use the default value", parameterKey.value().key(), e);
                     }
                     f.setAccessible(accessible);
                 }
@@ -423,7 +422,7 @@ public class ConfigServiceImpl extends AbstractService implements ConfigService 
                             }
                         }
                     } catch (IllegalAccessException e) {
-                        LOGGER.error("Unable to set parameter {}. Use the default value", parameterKey.value().key(), e);
+                        log.error("Unable to set parameter {}. Use the default value", parameterKey.value().key(), e);
                     }
                     f.setAccessible(accessible);
                 }
@@ -481,6 +480,7 @@ public class ConfigServiceImpl extends AbstractService implements ConfigService 
             portalConfigEntity.getLogging().getMessageSampling().getCount(),
             portalConfigEntity.getLogging().getMessageSampling().getProbabilistic(),
             portalConfigEntity.getLogging().getMessageSampling().getTemporal(),
+            portalConfigEntity.getLogging().getMessageSampling().getWindowedCount(),
         };
     }
 
@@ -508,6 +508,7 @@ public class ConfigServiceImpl extends AbstractService implements ConfigService 
             consoleConfigEntity.getLogging().getMessageSampling().getCount(),
             consoleConfigEntity.getLogging().getMessageSampling().getProbabilistic(),
             consoleConfigEntity.getLogging().getMessageSampling().getTemporal(),
+            consoleConfigEntity.getLogging().getMessageSampling().getWindowedCount(),
             consoleConfigEntity.getMaintenance(),
             consoleConfigEntity.getManagement(),
             consoleConfigEntity.getNewsletter(),
@@ -518,6 +519,8 @@ public class ConfigServiceImpl extends AbstractService implements ConfigService 
             consoleConfigEntity.getFederation(),
             consoleConfigEntity.getCloudHosted(),
             consoleConfigEntity.getUserGroup(),
+            consoleConfigEntity.getElGen(),
+            consoleConfigEntity.getKafkaConsole(),
         };
     }
 }

@@ -25,7 +25,7 @@ import io.gravitee.repository.management.api.search.EventCriteria;
 import io.gravitee.repository.management.model.Event;
 import java.util.Optional;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
@@ -34,7 +34,7 @@ import org.springframework.stereotype.Service;
  * @author GraviteeSource Team
  */
 @Service
-@Slf4j
+@CustomLog
 public class ApiEventQueryServiceImpl implements ApiEventQueryService {
 
     private final EventLatestRepository eventLatestRepository;
@@ -57,9 +57,10 @@ public class ApiEventQueryServiceImpl implements ApiEventQueryService {
 
         return latestEvent.flatMap(event -> {
             try {
-                final io.gravitee.repository.management.model.Api api = GraviteeJacksonMapper
-                    .getInstance()
-                    .readValue(event.getPayload(), io.gravitee.repository.management.model.Api.class);
+                final io.gravitee.repository.management.model.Api api = GraviteeJacksonMapper.getInstance().readValue(
+                    event.getPayload(),
+                    io.gravitee.repository.management.model.Api.class
+                );
                 return Optional.ofNullable(apiAdapter.toCoreModel(api));
             } catch (JsonProcessingException e) {
                 log.warn("Impossible to deserialize event payload for api: {}", apiId);
@@ -69,8 +70,7 @@ public class ApiEventQueryServiceImpl implements ApiEventQueryService {
     }
 
     private static EventCriteria buildCriteria(String environmentId, String apiId) {
-        return EventCriteria
-            .builder()
+        return EventCriteria.builder()
             .environment(environmentId)
             .types(Set.of(io.gravitee.repository.management.model.EventType.PUBLISH_API))
             .property(Event.EventProperties.API_ID.getValue(), apiId)

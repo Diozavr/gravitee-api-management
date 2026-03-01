@@ -22,8 +22,9 @@ export class InstallYarnCommand {
   public static get(): reusable.ReusableCommand {
     return new reusable.ReusableCommand(InstallYarnCommand.commandName, [
       new commands.Run({
-        name: 'Yarn Set Version Stable',
-        command: `yarn set version ${config.yarn.version}`,
+        name: 'Enable Corepack and Set Yarn Version',
+        command: ` corepack enable || sudo corepack enable
+        yarn set version ${config.yarn.version}`.trim(),
       }),
     ]);
   }

@@ -16,40 +16,17 @@
 package io.gravitee.rest.api.management.v2.rest.resource.api;
 
 import static assertions.MAPIAssertions.assertThat;
-import static io.gravitee.common.http.HttpStatusCode.BAD_REQUEST_400;
-import static io.gravitee.common.http.HttpStatusCode.FORBIDDEN_403;
-import static io.gravitee.common.http.HttpStatusCode.NOT_FOUND_404;
-import static io.gravitee.common.http.HttpStatusCode.OK_200;
-import static org.mockito.ArgumentMatchers.eq;
+import static io.gravitee.common.http.HttpStatusCode.*;
 import static org.mockito.Mockito.when;
 
 import fixtures.core.log.model.MessageLogFixtures;
 import fixtures.core.model.PlanFixtures;
 import fixtures.repository.ConnectionLogDetailFixtures;
 import fixtures.repository.ConnectionLogFixtures;
-import inmemory.ApplicationCrudServiceInMemory;
-import inmemory.ConnectionLogsCrudServiceInMemory;
-import inmemory.InMemoryAlternative;
-import inmemory.MessageLogCrudServiceInMemory;
-import inmemory.PlanCrudServiceInMemory;
+import inmemory.*;
 import io.gravitee.apim.core.log.model.MessageOperation;
 import io.gravitee.apim.core.plan.model.Plan;
-import io.gravitee.rest.api.management.v2.rest.model.ApiLog;
-import io.gravitee.rest.api.management.v2.rest.model.ApiLogRequestContent;
-import io.gravitee.rest.api.management.v2.rest.model.ApiLogResponse;
-import io.gravitee.rest.api.management.v2.rest.model.ApiLogResponseContent;
-import io.gravitee.rest.api.management.v2.rest.model.ApiLogsResponse;
-import io.gravitee.rest.api.management.v2.rest.model.ApiMessageLog;
-import io.gravitee.rest.api.management.v2.rest.model.ApiMessageLogContent;
-import io.gravitee.rest.api.management.v2.rest.model.ApiMessageLogsResponse;
-import io.gravitee.rest.api.management.v2.rest.model.BaseApplication;
-import io.gravitee.rest.api.management.v2.rest.model.BasePlan;
-import io.gravitee.rest.api.management.v2.rest.model.HttpMethod;
-import io.gravitee.rest.api.management.v2.rest.model.Links;
-import io.gravitee.rest.api.management.v2.rest.model.Pagination;
-import io.gravitee.rest.api.management.v2.rest.model.PlanMode;
-import io.gravitee.rest.api.management.v2.rest.model.PlanSecurity;
-import io.gravitee.rest.api.management.v2.rest.model.PlanSecurityType;
+import io.gravitee.rest.api.management.v2.rest.model.*;
 import io.gravitee.rest.api.management.v2.rest.resource.api.log.param.SearchLogsParam;
 import io.gravitee.rest.api.management.v2.rest.resource.param.PaginationParam;
 import io.gravitee.rest.api.model.BaseApplicationEntity;
@@ -67,12 +44,10 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
-public class ApiLogsResourceTest extends ApiResourceTest {
+@DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
+class ApiLogsResourceTest extends ApiResourceTest {
 
     private static final Plan PLAN_1 = PlanFixtures.aPlanHttpV4().toBuilder().id("plan1").name("1st plan").apiId(API).build();
     private static final Plan PLAN_2 = PlanFixtures.aPlanHttpV4().toBuilder().id("plan2").name("2nd plan").apiId(API).build();
@@ -85,7 +60,7 @@ public class ApiLogsResourceTest extends ApiResourceTest {
     ConnectionLogsCrudServiceInMemory connectionLogStorageService;
 
     @Inject
-    MessageLogCrudServiceInMemory messageLogStorageService;
+    AggregatedMessageLogCrudServiceInMemory messageLogStorageService;
 
     @Inject
     PlanCrudServiceInMemory planStorageService;
@@ -98,7 +73,7 @@ public class ApiLogsResourceTest extends ApiResourceTest {
     WebTarget connectionLogTarget;
 
     @BeforeEach
-    public void setup() {
+    void setup() {
         connectionLogsTarget = rootTarget();
         messageLogsTarget = rootTarget().path(REQUEST_ID).path("messages");
         connectionLogTarget = rootTarget().path(REQUEST_ID);
@@ -116,9 +91,9 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         super.tearDown();
         GraviteeContext.cleanContext();
 
-        Stream
-            .of(applicationStorageService, connectionLogStorageService, messageLogStorageService, planStorageService)
-            .forEach(InMemoryAlternative::reset);
+        Stream.of(applicationStorageService, connectionLogStorageService, messageLogStorageService, planStorageService).forEach(
+            InMemoryAlternative::reset
+        );
     }
 
     @Override
@@ -130,16 +105,15 @@ public class ApiLogsResourceTest extends ApiResourceTest {
     class ConnectionLogs {
 
         @Test
-        public void should_return_403_if_incorrect_permissions() {
+        void should_return_403_if_incorrect_permissions() {
             when(
                 permissionService.hasPermission(
-                    eq(GraviteeContext.getExecutionContext()),
-                    eq(RolePermission.API_LOG),
-                    eq(API),
-                    eq(RolePermissionAction.READ)
+                    GraviteeContext.getExecutionContext(),
+                    RolePermission.API_LOG,
+                    API,
+                    RolePermissionAction.READ
                 )
-            )
-                .thenReturn(false);
+            ).thenReturn(false);
 
             final Response response = connectionLogsTarget.request().get();
 
@@ -151,7 +125,7 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_return_connection_logs() {
+        void should_return_connection_logs() {
             connectionLogStorageService.initWith(List.of(connectionLogFixtures.aConnectionLog("req1")));
 
             final Response response = connectionLogsTarget.request().get();
@@ -181,6 +155,9 @@ public class ApiLogsResourceTest extends ApiResourceTest {
                                     .requestId("req1")
                                     .transactionId("transaction-id")
                                     .timestamp(Instant.parse("2020-02-01T20:00:00.00Z").atOffset(ZoneOffset.UTC))
+                                    .gatewayResponseTime(42)
+                                    .uri("/my-api")
+                                    .endpoint("https://my-api-example.com")
                             )
                         )
                         .pagination(new Pagination().page(1).perPage(10).pageCount(1).pageItemsCount(1).totalCount(1L))
@@ -189,17 +166,18 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_compute_pagination() {
+        void should_compute_pagination() {
             var total = 20L;
             var pageSize = 5;
             connectionLogStorageService.initWithConnectionLogs(
-                LongStream.range(0, total).mapToObj(i -> connectionLogFixtures.aConnectionLog()).toList()
+                LongStream.range(0, total)
+                    .mapToObj(i -> connectionLogFixtures.aConnectionLog())
+                    .toList()
             );
 
-            connectionLogsTarget =
-                connectionLogsTarget
-                    .queryParam(PaginationParam.PAGE_QUERY_PARAM_NAME, 2)
-                    .queryParam(PaginationParam.PER_PAGE_QUERY_PARAM_NAME, pageSize);
+            connectionLogsTarget = connectionLogsTarget
+                .queryParam(PaginationParam.PAGE_QUERY_PARAM_NAME, 2)
+                .queryParam(PaginationParam.PER_PAGE_QUERY_PARAM_NAME, pageSize);
             final Response response = connectionLogsTarget.request().get();
 
             assertThat(response)
@@ -210,12 +188,14 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_compute_links() {
+        void should_compute_links() {
             var total = 20L;
             var page = 2;
             var pageSize = 5;
             connectionLogStorageService.initWithConnectionLogs(
-                LongStream.range(0, total).mapToObj(i -> connectionLogFixtures.aConnectionLog()).toList()
+                LongStream.range(0, total)
+                    .mapToObj(i -> connectionLogFixtures.aConnectionLog())
+                    .toList()
             );
 
             final Response response = connectionLogsTarget
@@ -239,49 +219,45 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_return_400_if_negative_interval_params() {
+        void should_return_400_if_negative_interval_params() {
             when(
                 permissionService.hasPermission(
-                    eq(GraviteeContext.getExecutionContext()),
-                    eq(RolePermission.API_LOG),
-                    eq(API),
-                    eq(RolePermissionAction.READ)
+                    GraviteeContext.getExecutionContext(),
+                    RolePermission.API_LOG,
+                    API,
+                    RolePermissionAction.READ
                 )
-            )
-                .thenReturn(true);
+            ).thenReturn(true);
 
-            connectionLogsTarget =
-                connectionLogsTarget
-                    .queryParam(SearchLogsParam.FROM_QUERY_PARAM_NAME, -1)
-                    .queryParam(SearchLogsParam.TO_QUERY_PARAM_NAME, -1);
+            connectionLogsTarget = connectionLogsTarget
+                .queryParam(SearchLogsParam.FROM_QUERY_PARAM_NAME, -1)
+                .queryParam(SearchLogsParam.TO_QUERY_PARAM_NAME, -1);
             final Response response = connectionLogsTarget.request().get();
 
             assertThat(response).hasStatus(BAD_REQUEST_400).asError().hasHttpStatus(BAD_REQUEST_400).hasMessage("Validation error");
         }
 
         @Test
-        public void should_return_400_if_to_is_before_from_param() {
+        void should_return_400_if_to_is_before_from_param() {
             when(
                 permissionService.hasPermission(
-                    eq(GraviteeContext.getExecutionContext()),
-                    eq(RolePermission.API_LOG),
-                    eq(API),
-                    eq(RolePermissionAction.READ)
+                    GraviteeContext.getExecutionContext(),
+                    RolePermission.API_LOG,
+                    API,
+                    RolePermissionAction.READ
                 )
-            )
-                .thenReturn(true);
+            ).thenReturn(true);
 
-            connectionLogsTarget =
-                connectionLogsTarget
-                    .queryParam(SearchLogsParam.FROM_QUERY_PARAM_NAME, 2)
-                    .queryParam(SearchLogsParam.TO_QUERY_PARAM_NAME, 1);
+            connectionLogsTarget = connectionLogsTarget
+                .queryParam(SearchLogsParam.FROM_QUERY_PARAM_NAME, 2)
+                .queryParam(SearchLogsParam.TO_QUERY_PARAM_NAME, 1);
             final Response response = connectionLogsTarget.request().get();
 
             assertThat(response).hasStatus(BAD_REQUEST_400).asError().hasHttpStatus(BAD_REQUEST_400).hasMessage("Validation error");
         }
 
         @Test
-        public void should_return_connection_logs_filtered_by_interval() {
+        void should_return_connection_logs_filtered_by_interval() {
             connectionLogStorageService.initWith(
                 List.of(
                     connectionLogFixtures.aConnectionLog("req1").toBuilder().timestamp("2020-02-01T20:00:00.00Z").build(),
@@ -290,10 +266,9 @@ public class ApiLogsResourceTest extends ApiResourceTest {
                 )
             );
 
-            connectionLogsTarget =
-                connectionLogsTarget
-                    .queryParam(SearchLogsParam.FROM_QUERY_PARAM_NAME, Instant.parse("2020-02-01T00:01:00.00Z").toEpochMilli())
-                    .queryParam(SearchLogsParam.TO_QUERY_PARAM_NAME, Instant.parse("2020-02-03T23:59:59.00Z").toEpochMilli());
+            connectionLogsTarget = connectionLogsTarget
+                .queryParam(SearchLogsParam.FROM_QUERY_PARAM_NAME, Instant.parse("2020-02-01T00:01:00.00Z").toEpochMilli())
+                .queryParam(SearchLogsParam.TO_QUERY_PARAM_NAME, Instant.parse("2020-02-03T23:59:59.00Z").toEpochMilli());
             final Response response = connectionLogsTarget.request().get();
 
             Supplier<ApiLog> expectedApiLog = () ->
@@ -312,7 +287,10 @@ public class ApiLogsResourceTest extends ApiResourceTest {
                     .status(200)
                     .clientIdentifier("client-identifier")
                     .requestEnded(true)
-                    .transactionId("transaction-id");
+                    .gatewayResponseTime(42)
+                    .uri("/my-api")
+                    .transactionId("transaction-id")
+                    .endpoint("https://my-api-example.com");
 
             assertThat(response)
                 .hasStatus(OK_200)
@@ -337,7 +315,7 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_return_connection_logs_filtered_by_applications() {
+        void should_return_connection_logs_filtered_by_applications() {
             connectionLogStorageService.initWith(
                 List.of(
                     connectionLogFixtures.aConnectionLog("req1").toBuilder().applicationId("app1").build(),
@@ -366,7 +344,10 @@ public class ApiLogsResourceTest extends ApiResourceTest {
                     .clientIdentifier("client-identifier")
                     .requestEnded(true)
                     .transactionId("transaction-id")
-                    .timestamp(Instant.parse("2020-02-01T20:00:00.00Z").atOffset(ZoneOffset.UTC));
+                    .gatewayResponseTime(42)
+                    .uri("/my-api")
+                    .timestamp(Instant.parse("2020-02-01T20:00:00.00Z").atOffset(ZoneOffset.UTC))
+                    .endpoint("https://my-api-example.com");
 
             assertThat(response)
                 .hasStatus(OK_200)
@@ -380,7 +361,7 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_return_connection_logs_filtered_by_plans() {
+        void should_return_connection_logs_filtered_by_plans() {
             connectionLogStorageService.initWith(
                 List.of(
                     connectionLogFixtures.aConnectionLog("req1").toBuilder().planId(PLAN_1.getId()).build(),
@@ -409,7 +390,10 @@ public class ApiLogsResourceTest extends ApiResourceTest {
                     .clientIdentifier("client-identifier")
                     .requestEnded(true)
                     .transactionId("transaction-id")
-                    .timestamp(Instant.parse("2020-02-01T20:00:00.00Z").atOffset(ZoneOffset.UTC));
+                    .gatewayResponseTime(42)
+                    .uri("/my-api")
+                    .timestamp(Instant.parse("2020-02-01T20:00:00.00Z").atOffset(ZoneOffset.UTC))
+                    .endpoint("https://my-api-example.com");
 
             assertThat(response)
                 .hasStatus(OK_200)
@@ -423,7 +407,7 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_return_connection_logs_filtered_by_methods() {
+        void should_return_connection_logs_filtered_by_methods() {
             connectionLogStorageService.initWith(
                 List.of(
                     connectionLogFixtures.aConnectionLog("req1").toBuilder().method(io.gravitee.common.http.HttpMethod.POST).build(),
@@ -460,6 +444,9 @@ public class ApiLogsResourceTest extends ApiResourceTest {
                                     .transactionId("transaction-id")
                                     .timestamp(Instant.parse("2020-02-01T20:00:00.00Z").atOffset(ZoneOffset.UTC))
                                     .requestId("req2")
+                                    .gatewayResponseTime(42)
+                                    .uri("/my-api")
+                                    .endpoint("https://my-api-example.com")
                             )
                         )
                         .pagination(new Pagination().page(1).perPage(10).pageCount(1).pageItemsCount(1).totalCount(1L))
@@ -468,7 +455,7 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_return_connection_logs_filtered_by_statuses() {
+        void should_return_connection_logs_filtered_by_statuses() {
             connectionLogStorageService.initWith(
                 List.of(
                     connectionLogFixtures.aConnectionLog("req1").toBuilder().status(200).build(),
@@ -505,6 +492,9 @@ public class ApiLogsResourceTest extends ApiResourceTest {
                                     .transactionId("transaction-id")
                                     .timestamp(Instant.parse("2020-02-01T20:00:00.00Z").atOffset(ZoneOffset.UTC))
                                     .requestId("req2")
+                                    .gatewayResponseTime(42)
+                                    .uri("/my-api")
+                                    .endpoint("https://my-api-example.com")
                             )
                         )
                         .pagination(new Pagination().page(1).perPage(10).pageCount(1).pageItemsCount(1).totalCount(1L))
@@ -517,16 +507,15 @@ public class ApiLogsResourceTest extends ApiResourceTest {
     class MessageLogs {
 
         @Test
-        public void should_return_403_if_incorrect_permissions() {
+        void should_return_403_if_incorrect_permissions() {
             when(
                 permissionService.hasPermission(
-                    eq(GraviteeContext.getExecutionContext()),
-                    eq(RolePermission.API_LOG),
-                    eq(API),
-                    eq(RolePermissionAction.READ)
+                    GraviteeContext.getExecutionContext(),
+                    RolePermission.API_LOG,
+                    API,
+                    RolePermissionAction.READ
                 )
-            )
-                .thenReturn(false);
+            ).thenReturn(false);
 
             final Response response = messageLogsTarget.request().get();
 
@@ -538,19 +527,19 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_return_message_logs() {
+        void should_return_message_logs() {
             messageLogStorageService.initWith(List.of(MessageLogFixtures.aMessageLog(API, REQUEST_ID)));
 
             final Response response = messageLogsTarget.request().get();
 
             assertThat(response)
                 .hasStatus(OK_200)
-                .asEntity(ApiMessageLogsResponse.class)
+                .asEntity(ApiAggregatedMessageLogsResponse.class)
                 .isEqualTo(
-                    new ApiMessageLogsResponse()
+                    new ApiAggregatedMessageLogsResponse()
                         .data(
                             List.of(
-                                new ApiMessageLog()
+                                new ApiAggregatedMessageLog()
                                     .requestId(REQUEST_ID)
                                     .clientIdentifier("client-identifier")
                                     .timestamp(Instant.parse("2020-02-01T20:00:00.00Z").atOffset(ZoneOffset.UTC))
@@ -581,37 +570,34 @@ public class ApiLogsResourceTest extends ApiResourceTest {
         }
 
         @Test
-        public void should_compute_pagination() {
+        void should_compute_pagination() {
             var total = 20L;
             var pageSize = 5;
             messageLogStorageService.initWith(
-                LongStream
-                    .range(0, total)
+                LongStream.range(0, total)
                     .mapToObj(i -> MessageLogFixtures.aMessageLog(API, REQUEST_ID).toBuilder().correlationId(String.valueOf(i)).build())
                     .toList()
             );
 
-            messageLogsTarget =
-                messageLogsTarget
-                    .queryParam(PaginationParam.PAGE_QUERY_PARAM_NAME, 2)
-                    .queryParam(PaginationParam.PER_PAGE_QUERY_PARAM_NAME, pageSize);
+            messageLogsTarget = messageLogsTarget
+                .queryParam(PaginationParam.PAGE_QUERY_PARAM_NAME, 2)
+                .queryParam(PaginationParam.PER_PAGE_QUERY_PARAM_NAME, pageSize);
             final Response response = messageLogsTarget.request().get();
 
             assertThat(response)
                 .hasStatus(OK_200)
-                .asEntity(ApiLogsResponse.class)
-                .extracting(ApiLogsResponse::getPagination)
+                .asEntity(ApiAggregatedMessageLogsResponse.class)
+                .extracting(ApiAggregatedMessageLogsResponse::getPagination)
                 .isEqualTo(new Pagination().page(2).perPage(pageSize).pageCount(4).pageItemsCount(pageSize).totalCount(total));
         }
 
         @Test
-        public void should_compute_links() {
+        void should_compute_links() {
             var total = 20L;
             var page = 2;
             var pageSize = 5;
             messageLogStorageService.initWith(
-                LongStream
-                    .range(0, total)
+                LongStream.range(0, total)
                     .mapToObj(i -> MessageLogFixtures.aMessageLog(API, REQUEST_ID).toBuilder().correlationId(String.valueOf(i)).build())
                     .toList()
             );
@@ -624,8 +610,8 @@ public class ApiLogsResourceTest extends ApiResourceTest {
 
             assertThat(response)
                 .hasStatus(OK_200)
-                .asEntity(ApiLogsResponse.class)
-                .extracting(ApiLogsResponse::getLinks)
+                .asEntity(ApiAggregatedMessageLogsResponse.class)
+                .extracting(ApiAggregatedMessageLogsResponse::getLinks)
                 .isEqualTo(
                     new Links()
                         .self(messageLogsTarget.queryParam("page", page).queryParam("perPage", pageSize).getUri().toString())
@@ -649,8 +635,7 @@ public class ApiLogsResourceTest extends ApiResourceTest {
                     API,
                     RolePermissionAction.READ
                 )
-            )
-                .thenReturn(false);
+            ).thenReturn(false);
 
             final Response response = connectionLogTarget.request().get();
 

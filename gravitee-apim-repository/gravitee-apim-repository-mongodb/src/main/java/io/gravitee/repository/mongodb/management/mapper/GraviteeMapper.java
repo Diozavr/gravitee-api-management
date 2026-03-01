@@ -97,6 +97,11 @@ public interface GraviteeMapper {
 
     CategoryMongo map(Category toMap);
 
+    // ClientCertificate mapping
+    ClientCertificate map(ClientCertificateMongo toMap);
+
+    ClientCertificateMongo map(ClientCertificate toMap);
+
     // ClientRegistrationProvider mapping
     ClientRegistrationProvider map(ClientRegistrationProviderMongo toMap);
 
@@ -131,6 +136,17 @@ public interface GraviteeMapper {
     DashboardMongo map(Dashboard toMap);
 
     Set<Dashboard> mapDashboards(Collection<DashboardMongo> toMap);
+
+    // CustomDashboard mapping
+    CustomDashboard map(CustomDashboardMongo toMap);
+
+    CustomDashboardMongo map(CustomDashboard toMap);
+
+    Set<CustomDashboard> mapCustomDashboards(Collection<CustomDashboardMongo> toMap);
+
+    CustomDashboardWidget map(CustomDashboardWidgetMongo toMap);
+
+    CustomDashboardWidgetMongo map(CustomDashboardWidget toMap);
 
     // Dictionary mapping
     Dictionary map(DictionaryMongo toMap);
@@ -344,4 +360,23 @@ public interface GraviteeMapper {
 
     ScoringFunction map(ScoringFunctionMongo source);
     ScoringFunctionMongo map(ScoringFunction source);
+
+    Cluster map(ClusterMongo source);
+    ClusterMongo map(Cluster source);
+
+    // PortalNavigationItem mapping
+    PortalNavigationItem map(PortalNavigationItemMongo toMap);
+    PortalNavigationItemMongo map(PortalNavigationItem toMap);
+
+    // PortalPageContent mapping
+    PortalPageContent map(PortalPageContentMongo toMap);
+    PortalPageContentMongo map(PortalPageContent toMap);
+
+    // ApiProduct mapping
+    ApiProduct map(ApiProductMongo toMap);
+    ApiProductMongo map(ApiProduct toMap);
+
+    // SubscriptionForm mapping
+    SubscriptionForm map(SubscriptionFormMongo toMap);
+    SubscriptionFormMongo map(SubscriptionForm toMap);
 }

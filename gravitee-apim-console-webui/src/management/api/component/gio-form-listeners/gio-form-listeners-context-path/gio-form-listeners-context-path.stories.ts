@@ -16,7 +16,7 @@
 import { FormControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { Meta, moduleMetadata, StoryObj } from '@storybook/angular';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { action } from '@storybook/addon-actions';
+import { action } from 'storybook/actions';
 import { of } from 'rxjs';
 import { HttpClientModule } from '@angular/common/http';
 
@@ -39,7 +39,7 @@ export default {
     }),
   ],
   argTypes: {},
-  render: (args) => ({
+  render: args => ({
     template: `<gio-form-listeners-context-path [ngModel]="listeners"></gio-form-listeners-context-path>`,
     props: args,
   }),
@@ -65,10 +65,10 @@ export const Filled: StoryObj = {
 };
 
 export const ReactiveForm: StoryObj = {
-  render: (args) => {
+  render: args => {
     const formControl = new FormControl(args.listeners);
 
-    formControl.valueChanges.subscribe((value) => {
+    formControl.valueChanges.subscribe(value => {
       action('Listeners')(value);
     });
 

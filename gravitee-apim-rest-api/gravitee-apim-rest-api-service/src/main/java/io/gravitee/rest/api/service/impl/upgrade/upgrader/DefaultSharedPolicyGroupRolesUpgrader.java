@@ -32,7 +32,7 @@ import io.gravitee.rest.api.model.permissions.RoleScope;
 import io.gravitee.rest.api.service.RoleService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import java.util.Optional;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -41,7 +41,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class DefaultSharedPolicyGroupRolesUpgrader implements Upgrader {
 
     private final RoleService roleService;
@@ -57,23 +57,19 @@ public class DefaultSharedPolicyGroupRolesUpgrader implements Upgrader {
     @Override
     public boolean upgrade() throws UpgraderException {
         return this.wrapException(() -> {
-                organizationRepository
-                    .findAll()
-                    .forEach(organization -> {
-                        ExecutionContext executionContext = new ExecutionContext(organization);
-                        updateDefaultAPIPublisherRoles(
-                            executionContext,
-                            ROLE_ENVIRONMENT_API_PUBLISHER.getName(),
-                            new char[] { CREATE.getId(), READ.getId(), UPDATE.getId(), DELETE.getId() }
-                        );
-                        updateDefaultAPIPublisherRoles(
-                            executionContext,
-                            DEFAULT_ROLE_ENVIRONMENT_USER.getName(),
-                            new char[] { READ.getId() }
-                        );
-                    });
-                return true;
-            });
+            organizationRepository
+                .findAll()
+                .forEach(organization -> {
+                    ExecutionContext executionContext = new ExecutionContext(organization);
+                    updateDefaultAPIPublisherRoles(
+                        executionContext,
+                        ROLE_ENVIRONMENT_API_PUBLISHER.getName(),
+                        new char[] { CREATE.getId(), READ.getId(), UPDATE.getId(), DELETE.getId() }
+                    );
+                    updateDefaultAPIPublisherRoles(executionContext, DEFAULT_ROLE_ENVIRONMENT_USER.getName(), new char[] { READ.getId() });
+                });
+            return true;
+        });
     }
 
     private void updateDefaultAPIPublisherRoles(ExecutionContext executionContext, String roleName, char[] permissions) {

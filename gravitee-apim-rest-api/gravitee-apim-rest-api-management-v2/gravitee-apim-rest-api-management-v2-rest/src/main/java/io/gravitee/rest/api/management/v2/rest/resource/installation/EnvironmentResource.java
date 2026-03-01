@@ -16,16 +16,25 @@
 package io.gravitee.rest.api.management.v2.rest.resource.installation;
 
 import io.gravitee.common.http.MediaType;
+import io.gravitee.rest.api.kafkaexplorer.resource.KafkaExplorerResource;
 import io.gravitee.rest.api.management.v2.rest.mapper.EnvironmentMapper;
 import io.gravitee.rest.api.management.v2.rest.model.Environment;
 import io.gravitee.rest.api.management.v2.rest.resource.AbstractResource;
 import io.gravitee.rest.api.management.v2.rest.resource.api.ApisResource;
+import io.gravitee.rest.api.management.v2.rest.resource.api_product.ApiProductsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.application.ApplicationsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.category.CategoriesResource;
+import io.gravitee.rest.api.management.v2.rest.resource.cluster.ClustersResource;
 import io.gravitee.rest.api.management.v2.rest.resource.environment.EnvironmentAnalyticsResource;
+import io.gravitee.rest.api.management.v2.rest.resource.environment.EnvironmentLogsResource;
+import io.gravitee.rest.api.management.v2.rest.resource.environment.EnvironmentNewtAIResource;
 import io.gravitee.rest.api.management.v2.rest.resource.environment.EnvironmentScoringResource;
+import io.gravitee.rest.api.management.v2.rest.resource.environment.PortalNavigationItemsResource;
+import io.gravitee.rest.api.management.v2.rest.resource.environment.PortalPageContentsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.environment.SharedPolicyGroupsResource;
+import io.gravitee.rest.api.management.v2.rest.resource.environment.SubscriptionFormsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.group.GroupsResource;
+import io.gravitee.rest.api.management.v2.rest.resource.kafka_console.ProxyKafkaConsoleResource;
 import io.gravitee.rest.api.management.v2.rest.resource.ui.PortalMenuLinksResource;
 import io.gravitee.rest.api.management.v2.rest.resource.ui.ThemesResource;
 import io.gravitee.rest.api.service.EnvironmentService;
@@ -85,6 +94,11 @@ public class EnvironmentResource extends AbstractResource {
         return resourceContext.getResource(SharedPolicyGroupsResource.class);
     }
 
+    @Path("/clusters")
+    public ClustersResource getClustersResource() {
+        return resourceContext.getResource(ClustersResource.class);
+    }
+
     @Path("/scoring")
     public EnvironmentScoringResource getEnvironmentScoringResource() {
         return resourceContext.getResource(EnvironmentScoringResource.class);
@@ -95,9 +109,54 @@ public class EnvironmentResource extends AbstractResource {
         return resourceContext.getResource(EnvironmentAnalyticsResource.class);
     }
 
+    @Path("/newtai")
+    public EnvironmentNewtAIResource getEnvironmentNewtAIResource() {
+        return resourceContext.getResource(EnvironmentNewtAIResource.class);
+    }
+
+    @Path("/instances")
+    public InstancesResource getInstancesResource() {
+        return resourceContext.getResource(InstancesResource.class);
+    }
+
+    @Path("/portal-navigation-items")
+    public PortalNavigationItemsResource getPortalNavigationItemsResource() {
+        return resourceContext.getResource(PortalNavigationItemsResource.class);
+    }
+
+    @Path("/portal-page-contents")
+    public PortalPageContentsResource getPortalPageContentsResource() {
+        return resourceContext.getResource(PortalPageContentsResource.class);
+    }
+
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Environment getEnvironment(@PathParam("envId") String envId) {
         return EnvironmentMapper.INSTANCE.map(environmentService.findByOrgAndIdOrHrid(GraviteeContext.getCurrentOrganization(), envId));
+    }
+
+    @Path("/proxy-kafka-console")
+    public ProxyKafkaConsoleResource getProxyKafkaConsoleResource() {
+        return resourceContext.getResource(ProxyKafkaConsoleResource.class);
+    }
+
+    @Path("/api-products")
+    public ApiProductsResource getApiProductsResource() {
+        return resourceContext.getResource(ApiProductsResource.class);
+    }
+
+    @Path("/logs")
+    public EnvironmentLogsResource getEnvironmentLogsResource() {
+        return resourceContext.getResource(EnvironmentLogsResource.class);
+    }
+
+    @Path("/subscription-forms")
+    public SubscriptionFormsResource getSubscriptionFormsResource() {
+        return resourceContext.getResource(SubscriptionFormsResource.class);
+    }
+
+    @Path("/kafka-explorer")
+    public KafkaExplorerResource getKafkaExplorerResource() {
+        return resourceContext.getResource(KafkaExplorerResource.class);
     }
 }

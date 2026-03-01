@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import { EditorOptions, Editor } from '@toast-ui/editor';
-// eslint-disable-next-line import/no-unresolved
 import { ToolbarItemOptions } from '@toast-ui/editor/types/ui';
 import codeSyntaxHighlightPlugin from '@toast-ui/editor-plugin-code-syntax-highlight';
 import Prism from 'prismjs';
@@ -104,14 +103,14 @@ class ComponentCtrl implements ng.IComponentController {
             this.NotificationService.showError(
               `The uploaded file is too big, you are limited to ${this.Constants.env.settings.portal.uploadMedia.maxSizeInOctet} bytes`,
             );
-            return false;
+            return;
           }
 
-          this.$http.post(mediaURL + 'upload', fd, { headers: { 'Content-Type': undefined } }).then((response) => {
+          this.$http.post(mediaURL + 'upload', fd, { headers: { 'Content-Type': undefined } }).then(response => {
             callback(mediaURL + response.data, (blob as File).name);
           });
 
-          return false;
+          return;
         },
       },
       plugins: [[codeSyntaxHighlightPlugin, { highlighter: Prism }]],
@@ -129,7 +128,7 @@ class ComponentCtrl implements ng.IComponentController {
             title: 'Create a link to a page',
           },
         })
-        .then((page) => {
+        .then(page => {
           if (page) {
             if (this.activatedRoute?.snapshot?.params?.apiId) {
               const pageLinkTag = `[${page.name}](/#!/apis/${this.activatedRoute?.snapshot?.params?.apiId}/documentation/${page.id})`;

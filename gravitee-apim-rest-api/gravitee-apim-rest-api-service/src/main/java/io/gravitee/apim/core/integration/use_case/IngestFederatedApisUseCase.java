@@ -45,13 +45,19 @@ import io.gravitee.apim.core.notification.domain_service.TriggerNotificationDoma
 import io.gravitee.apim.core.notification.model.hook.portal.FederatedApisIngestionCompleteHookContext;
 import io.gravitee.apim.core.plan.crud_service.PlanCrudService;
 import io.gravitee.apim.core.plan.domain_service.CreatePlanDomainService;
+import io.gravitee.apim.core.plan.domain_service.DeletePlanDomainService;
 import io.gravitee.apim.core.plan.domain_service.UpdatePlanDomainService;
+import io.gravitee.apim.core.plan.model.Plan;
 import io.gravitee.apim.core.plan.model.factory.PlanModelFactory;
+import io.gravitee.apim.core.subscription.domain_service.CloseSubscriptionDomainService;
+import io.gravitee.apim.core.subscription.domain_service.DeleteSubscriptionDomainService;
+import io.gravitee.apim.core.subscription.query_service.SubscriptionQueryService;
 import io.gravitee.common.utils.TimeProvider;
 import io.gravitee.rest.api.service.common.UuidString;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.schedulers.Schedulers;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -60,11 +66,11 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @UseCase
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class IngestFederatedApisUseCase {
 
@@ -76,6 +82,10 @@ public class IngestFederatedApisUseCase {
     private final PageQueryService pageQueryService;
     private final CreateApiDomainService createApiDomainService;
     private final UpdateFederatedApiDomainService updateFederatedApiDomainService;
+    private final SubscriptionQueryService subscriptionQueryService;
+    private final CloseSubscriptionDomainService closeSubscriptionDomainService;
+    private final DeleteSubscriptionDomainService deleteSubscriptionDomainService;
+    private final DeletePlanDomainService deletePlanDomainService;
     private final CreatePlanDomainService createPlanDomainService;
     private final UpdatePlanDomainService updatePlanDomainService;
     private final CreateApiDocumentationDomainService createApiDocumentationDomainService;
@@ -92,8 +102,7 @@ public class IngestFederatedApisUseCase {
         var ingestJobId = input.ingestJobId;
         var organizationId = input.organizationId();
 
-        return Maybe
-            .defer(() -> Maybe.fromOptional(asyncJobCrudService.findById(ingestJobId)))
+        return Maybe.defer(() -> Maybe.fromOptional(asyncJobCrudService.findById(ingestJobId)))
             .subscribeOn(Schedulers.computation())
             .doOnSuccess(job -> {
                 var environmentId = job.getEnvironmentId();
@@ -152,9 +161,18 @@ public class IngestFederatedApisUseCase {
                 .map(plan -> PlanModelFactory.fromIntegration(plan, federatedApi))
                 .forEach(p -> createPlanDomainService.create(p, List.of(), federatedApi, bulk.auditInfo()));
 
-            stream(integrationApi.pages())
+            var pages = stream(integrationApi.pages())
                 .flatMap(page -> buildPage(page, integrationApi, federatedApi.getId()))
-                .forEach(page -> createApiDocumentationDomainService.createPage(page, bulk.auditInfo()));
+                .map(page -> createApiDocumentationDomainService.createPage(page, bulk.auditInfo()))
+                .toList();
+            pages
+                .stream()
+                .filter(Page::isHomepage)
+                .sorted(Comparator.comparing(Page::getCreatedAt).reversed())
+                .map(Page::getId)
+                .distinct()
+                .findFirst()
+                .ifPresent(homepageId -> homepageDomainService.setPreviousHomepageToFalse(federatedApi.getId(), homepageId));
         } catch (Exception e) {
             log.warn("An error occurred while importing api {}", federatedApi, e);
         }
@@ -171,18 +189,39 @@ public class IngestFederatedApisUseCase {
         try {
             UnaryOperator<Api> updater = update(federatedApi);
             updateFederatedApiDomainService.update(federatedApi.getId(), updater, auditInfo, primaryOwner, bulk.get());
+            Collection<Plan> plans = planCrudService.findByApiId(federatedApi.getId());
+            Map<String, Plan> existingPlanMap = plans.stream().collect(Collectors.toMap(Plan::getId, p -> p));
+            Map<String, Plan> integrationPlanMap = stream(integrationApi.plans())
+                .map(plan -> PlanModelFactory.fromIntegration(plan, federatedApi))
+                .collect(Collectors.toMap(Plan::getId, p -> p));
 
-            stream(integrationApi.plans())
-                .map(p -> PlanModelFactory.fromIntegration(p, federatedApi))
-                .forEach(p ->
-                    planCrudService
-                        .findById(p.getId())
-                        .ifPresentOrElse(
-                            existingPlan -> updatePlanDomainService.update(p, List.of(), Map.of(), null, bulk.auditInfo()),
-                            () -> createPlanDomainService.create(p, List.of(), federatedApi, bulk.auditInfo())
-                        )
-                );
+            for (Plan existing : plans) {
+                if (!integrationPlanMap.containsKey(existing.getId())) {
+                    log.debug("Plan has been removed in provider, so close and delete all subscriptions from APIM");
+                    subscriptionQueryService
+                        .findActiveSubscriptionsByPlan(existing.getId())
+                        .forEach(activeSubscription ->
+                            closeSubscriptionDomainService.closeSubscription(activeSubscription.getId(), federatedApi, auditInfo)
+                        );
 
+                    //Delete all subscriptions
+                    subscriptionQueryService
+                        .findSubscriptionsByPlan(existing.getId())
+                        .forEach(subscription -> deleteSubscriptionDomainService.delete(subscription, auditInfo));
+                    log.debug("Plan has been removed in provider, so finally delete the plan from APIM");
+                    deletePlanDomainService.delete(existing, bulk.auditInfo());
+                }
+            }
+            for (String integratedPlanId : integrationPlanMap.keySet()) {
+                Plan planToUpdate = integrationPlanMap.get(integratedPlanId);
+                if (existingPlanMap.containsKey(integratedPlanId)) {
+                    log.debug("Plan has been updated in provider, so update in APIM");
+                    updatePlanDomainService.update(planToUpdate, List.of(), Map.of(), null, bulk.auditInfo());
+                } else {
+                    log.debug("New plan in provider, so create in APIM");
+                    createPlanDomainService.create(planToUpdate, List.of(), federatedApi, bulk.auditInfo());
+                }
+            }
             var ingestedPagesNames = integrationApi.pages().stream().map(IntegrationApi.Page::filename).toList();
             clearIngestedApiDocumentationDomainService.clearIngestedPagesOf(federatedApi.getId(), ingestedPagesNames, bulk.auditInfo());
             var existingPages = pageQueryService
@@ -237,8 +276,7 @@ public class IngestFederatedApisUseCase {
 
     private Page buildSwaggerPage(String referenceId, IntegrationApi.Page page) {
         var now = Date.from(TimeProvider.instantNow());
-        return Page
-            .builder()
+        return Page.builder()
             .id(UuidString.generateRandom())
             .name(page.filename())
             .content(page.content())
@@ -257,8 +295,7 @@ public class IngestFederatedApisUseCase {
 
     private Page buildAsyncApiPage(String referenceId, IntegrationApi.Page page) {
         var now = Date.from(TimeProvider.instantNow());
-        return Page
-            .builder()
+        return Page.builder()
             .id(UuidString.generateRandom())
             .name(page.filename())
             .content(page.content())
@@ -281,24 +318,22 @@ public class IngestFederatedApisUseCase {
                 .name(newOne.getName())
                 .description(newOne.getDescription())
                 .version(newOne.getVersion())
-                .federatedApiDefinition(newOne.getFederatedApiDefinition())
+                .apiDefinitionValue(newOne.getApiDefinitionValue())
                 .build();
     }
 
     private static List<ApiMetadata> metadata(IntegrationApi api, Api federatedApi) {
         return stream(api.metadata())
             .map(md -> {
-                var format =
-                    switch (md.format()) {
-                        case STRING -> Metadata.MetadataFormat.STRING;
-                        case NUMERIC -> Metadata.MetadataFormat.NUMERIC;
-                        case MAIL -> Metadata.MetadataFormat.MAIL;
-                        case DATE -> Metadata.MetadataFormat.DATE;
-                        case URL -> Metadata.MetadataFormat.URL;
-                        case BOOLEAN -> Metadata.MetadataFormat.BOOLEAN;
-                    };
-                return ApiMetadata
-                    .builder()
+                var format = switch (md.format()) {
+                    case STRING -> Metadata.MetadataFormat.STRING;
+                    case NUMERIC -> Metadata.MetadataFormat.NUMERIC;
+                    case MAIL -> Metadata.MetadataFormat.MAIL;
+                    case DATE -> Metadata.MetadataFormat.DATE;
+                    case URL -> Metadata.MetadataFormat.URL;
+                    case BOOLEAN -> Metadata.MetadataFormat.BOOLEAN;
+                };
+                return ApiMetadata.builder()
                     .apiId(federatedApi.getId())
                     .name(md.name())
                     .key(md.name())

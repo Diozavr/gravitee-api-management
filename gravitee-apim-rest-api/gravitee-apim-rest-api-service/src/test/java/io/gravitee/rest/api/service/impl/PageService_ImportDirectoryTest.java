@@ -17,8 +17,15 @@ package io.gravitee.rest.api.service.impl;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.gravitee.plugin.core.api.PluginManager;
@@ -35,17 +42,17 @@ import io.gravitee.rest.api.service.AuditService;
 import io.gravitee.rest.api.service.GraviteeDescriptorService;
 import io.gravitee.rest.api.service.PageRevisionService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
-import io.gravitee.rest.api.service.common.GraviteeContext;
 import io.gravitee.rest.api.service.common.UuidString;
 import io.gravitee.rest.api.service.search.SearchEngineService;
 import io.gravitee.rest.api.service.spring.ImportConfiguration;
 import java.util.List;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.context.ApplicationContext;
 
@@ -53,7 +60,7 @@ import org.springframework.context.ApplicationContext;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 public class PageService_ImportDirectoryTest {
 
     @InjectMocks
@@ -88,6 +95,11 @@ public class PageService_ImportDirectoryTest {
 
     private ObjectMapper mapper = new ObjectMapper();
 
+    @BeforeEach
+    void setUp() {
+        pageService.setObjectMapper(mapper);
+    }
+
     @Test
     public void shouldImportDirectory() throws Exception {
         // We mock the validateSafeContent method because the fetcher keeps sending the same json descriptor which is
@@ -105,8 +117,9 @@ public class PageService_ImportDirectoryTest {
         Class<PageService_ImportDirectoryMockFetcher> mockFetcherClass = PageService_ImportDirectoryMockFetcher.class;
         when(fetcherPlugin.fetcher()).thenReturn(mockFetcherClass);
         PageService_MockFilesFetcherConfiguration fetcherConfiguration = new PageService_MockFilesFetcherConfiguration();
-        when(fetcherConfigurationFactory.create(eq(PageService_MockFilesFetcherConfiguration.class), anyString()))
-            .thenReturn(fetcherConfiguration);
+        when(fetcherConfigurationFactory.create(eq(PageService_MockFilesFetcherConfiguration.class), anyString())).thenReturn(
+            fetcherConfiguration
+        );
         AutowireCapableBeanFactory mockAutowireCapableBeanFactory = mock(AutowireCapableBeanFactory.class);
         when(applicationContext.getAutowireCapableBeanFactory()).thenReturn(mockAutowireCapableBeanFactory);
         Page newPage = mock(Page.class);
@@ -136,79 +149,80 @@ public class PageService_ImportDirectoryTest {
         verify(pageRepository, times(3)).create(argThat(pageToCreate -> "FOLDER".equals(pageToCreate.getType())));
 
         // /src
-        verify(pageRepository)
-            .create(
-                argThat(pageToCreate ->
+        verify(pageRepository).create(
+            argThat(
+                pageToCreate ->
                     "src".equals(pageToCreate.getName()) && "FOLDER".equals(pageToCreate.getType()) && null == pageToCreate.getParentId()
-                )
-            );
+            )
+        );
         // /src/doc
-        verify(pageRepository)
-            .create(
-                argThat(pageToCreate ->
+        verify(pageRepository).create(
+            argThat(
+                pageToCreate ->
                     "doc".equals(pageToCreate.getName()) && "FOLDER".equals(pageToCreate.getType()) && null != pageToCreate.getParentId()
-                )
-            );
+            )
+        );
         // /src/folder.with.dot/
-        verify(pageRepository)
-            .create(
-                argThat(pageToCreate ->
+        verify(pageRepository).create(
+            argThat(
+                pageToCreate ->
                     "folder.with.dot".equals(pageToCreate.getName()) &&
                     "FOLDER".equals(pageToCreate.getType()) &&
                     null != pageToCreate.getParentId()
-                )
-            );
+            )
+        );
 
         // //////////////////////
         // verify files creation
         // //////////////////////
-        verify(pageRepository, times(5))
-            .create(argThat(pageToCreate -> pageToCreate.getType() != null && !"FOLDER".equals(pageToCreate.getType())));
+        verify(pageRepository, times(5)).create(
+            argThat(pageToCreate -> pageToCreate.getType() != null && !"FOLDER".equals(pageToCreate.getType()))
+        );
 
         // /src/doc/m1.md
-        verify(pageRepository)
-            .create(
-                argThat(pageToCreate ->
+        verify(pageRepository).create(
+            argThat(
+                pageToCreate ->
                     "m1".equals(pageToCreate.getName()) && "MARKDOWN".equals(pageToCreate.getType()) && null != pageToCreate.getParentId()
-                )
-            );
+            )
+        );
 
         // /swagger.json
-        verify(pageRepository)
-            .create(
-                argThat(pageToCreate ->
+        verify(pageRepository).create(
+            argThat(
+                pageToCreate ->
                     "asciidoc".equals(pageToCreate.getName()) &&
                     "ASCIIDOC".equals(pageToCreate.getType()) &&
                     null == pageToCreate.getParentId()
-                )
-            );
+            )
+        );
 
         // /src/doc/sub.m11.md
-        verify(pageRepository)
-            .create(
-                argThat(pageToCreate ->
+        verify(pageRepository).create(
+            argThat(
+                pageToCreate ->
                     "sub.m11".equals(pageToCreate.getName()) &&
                     "MARKDOWN".equals(pageToCreate.getType()) &&
                     null != pageToCreate.getParentId()
-                )
-            );
+            )
+        );
 
         // /src/doc/m2.yaml
-        verify(pageRepository)
-            .create(
-                argThat(pageToCreate ->
+        verify(pageRepository).create(
+            argThat(
+                pageToCreate ->
                     "asciidoc2".equals(pageToCreate.getName()) &&
                     "ASCIIDOC".equals(pageToCreate.getType()) &&
                     null != pageToCreate.getParentId()
-                )
-            );
+            )
+        );
         // /src/folder.with.dot/m2.MD
-        verify(pageRepository)
-            .create(
-                argThat(pageToCreate ->
+        verify(pageRepository).create(
+            argThat(
+                pageToCreate ->
                     "m2".equals(pageToCreate.getName()) && "MARKDOWN".equals(pageToCreate.getType()) && null != pageToCreate.getParentId()
-                )
-            );
+            )
+        );
 
         verify(pageRevisionService, times(3)).create(any());
     }

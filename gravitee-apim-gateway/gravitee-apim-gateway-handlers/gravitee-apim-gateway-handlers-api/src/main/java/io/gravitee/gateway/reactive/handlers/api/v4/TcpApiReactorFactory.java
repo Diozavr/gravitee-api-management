@@ -33,7 +33,6 @@ import io.gravitee.node.api.opentelemetry.InstrumenterTracerFactory;
 import io.gravitee.node.api.opentelemetry.Tracer;
 import io.gravitee.node.opentelemetry.OpenTelemetryFactory;
 import io.gravitee.node.opentelemetry.configuration.OpenTelemetryConfiguration;
-import io.gravitee.node.opentelemetry.tracer.noop.NoOpTracer;
 import io.gravitee.plugin.endpoint.EndpointConnectorPluginManager;
 import io.gravitee.plugin.entrypoint.EntrypointConnectorPluginManager;
 import java.util.List;
@@ -63,7 +62,11 @@ public class TcpApiReactorFactory implements ReactorFactory<Api> {
         return (
             api.getDefinitionVersion() == DefinitionVersion.V4 &&
             api.getDefinition().getType() == ApiType.PROXY &&
-            api.getDefinition().getListeners().stream().anyMatch(listener -> listener.getType() == ListenerType.TCP)
+            api
+                .getDefinition()
+                .getListeners()
+                .stream()
+                .anyMatch(listener -> listener.getType() == ListenerType.TCP)
         );
     }
 

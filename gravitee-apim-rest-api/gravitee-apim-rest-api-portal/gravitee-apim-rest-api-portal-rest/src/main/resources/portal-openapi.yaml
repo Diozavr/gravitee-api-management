@@ -10,7 +10,7 @@ info:
     license:
         name: Apache 2.0
         url: http://www.apache.org/licenses/LICENSE-2.0
-    version: "4.9.0-SNAPSHOT"
+    version: "4.11.0-SNAPSHOT"
 servers:
     - url: /portal/environments/{envId}
       description: The portal API for a given environment
@@ -79,6 +79,99 @@ paths:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ApisResponse"
+                500:
+                    $ref: "#/components/responses/InternalServerError"
+    /portal-pages:
+        get:
+            tags:
+                - Portal
+            summary: Get Portal pages per context.
+            description: Returns a list of Portal pages based on the provided type. Use expands=content to include the page content. Only published pages are returned.
+            operationId: getPortalPages
+            security:
+                - {}
+                - BasicAuth: []
+                - CookieAuth: []
+            parameters:
+                - in: query
+                  name: type
+                  description: Type of portal page to retrieve (e.g., HOMEPAGE)
+                  required: true
+                  schema:
+                      type: string
+                - in: query
+                  name: expands
+                  description: Expand options. Use "CONTENT" to include the page content.
+                  required: false
+                  schema:
+                      type: array
+                      items:
+                          type: string
+                          enum:
+                              - CONTENT
+                              - UPDATED_AT
+                              - CREATED_AT
+            responses:
+                200:
+                    description: List of portal pages
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    type: object
+                                    properties:
+                                        page:
+                                            type: object
+                                            properties:
+                                                id:
+                                                    type: string
+                                                    description: ID of the portal page
+                                                pageContent:
+                                                    type: string
+                                                    description: Markdown content of the portal page (present only if expands includes "CONTENT")
+                                                    nullable: true
+                                                createdAt:
+                                                    type: string
+                                                    format: date-time
+                                                    description: Creation date of the portal page
+                                                    nullable: true
+                                                updatedAt:
+                                                    type: string
+                                                    format: date-time
+                                                    description: Last update date of the portal page
+                                                    nullable: true
+                                        viewDetails:
+                                            type: object
+                                            properties:
+                                                context:
+                                                    type: string
+                                                    description: Portal view context (e.g., HOMEPAGE)
+                                                published:
+                                                    type: boolean
+                                                    description: Whether the page is published
+                404:
+                    description: No page found for the provided context
+                500:
+                    $ref: "#/components/responses/InternalServerError"
+    /subscription-form:
+        get:
+            tags:
+                - Portal
+            summary: Get the subscription form for the environment.
+            description: |
+              Returns the subscription form content when the form exists and is enabled.
+              Returns 404 when no subscription form exists for the environment or when the form is disabled.
+            operationId: getSubscriptionForm
+            responses:
+                200:
+                    description: The subscription form content (GMD).
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/SubscriptionForm"
+                404:
+                    description: Subscription form not found or disabled for the environment.
                 500:
                     $ref: "#/components/responses/InternalServerError"
     /apis/_search:
@@ -1608,24 +1701,24 @@ paths:
                 User must have the APPLICATION_LOG[READ] permission.
             operationId: getApplicationLogMessagesByApplicationIdAndLogId
             responses:
-              200:
-                description: Page of message logs with aggregated entrypoint and endpoint information.
-                content:
-                  application/json:
-                    schema:
-                      $ref: "#/components/schemas/AggregatedMessageLogsResponse"
-              400:
-                description: Invalid query params.
-                content:
-                  application/json:
-                    schema:
-                      $ref: "#/components/schemas/ErrorResponse"
-              403:
-                $ref: "#/components/responses/PermissionError"
-              404:
-                $ref: "#/components/responses/ApplicationNotFoundError"
-              500:
-                $ref: "#/components/responses/InternalServerError"
+                200:
+                    description: Page of message logs with aggregated entrypoint and endpoint information.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/AggregatedMessageLogsResponse"
+                400:
+                    description: Invalid query params.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                403:
+                    $ref: "#/components/responses/PermissionError"
+                404:
+                    $ref: "#/components/responses/ApplicationNotFoundError"
+                500:
+                    $ref: "#/components/responses/InternalServerError"
     /applications/{applicationId}/_renew_secret:
         parameters:
             - $ref: "#/components/parameters/applicationIdParam"
@@ -1934,6 +2027,8 @@ paths:
             parameters:
                 - $ref: "#/components/parameters/apiIdQueryParam"
                 - $ref: "#/components/parameters/applicationIdQueryParam"
+                - $ref: "#/components/parameters/apiIdsQueryParam"
+                - $ref: "#/components/parameters/applicationIdsQueryParam"
                 - $ref: "#/components/parameters/subscriptionStatusesQueryParam"
                 - $ref: "#/components/parameters/pageNumberParam"
                 - $ref: "#/components/parameters/pageSizeParam"
@@ -2115,7 +2210,7 @@ paths:
                     $ref: "#/components/responses/InternalServerError"
     /subscriptions/{subscriptionId}/_resumeFailure:
         parameters:
-            -   $ref: "#/components/parameters/subscriptionIdParam"
+            - $ref: "#/components/parameters/subscriptionIdParam"
         post:
             tags:
                 - Subscription
@@ -3042,6 +3137,7 @@ paths:
                     $ref: "#/components/responses/InternalServerError"
     /portal-menu-links:
         get:
+            deprecated: true
             tags:
                 - Portal
             summary: Get the portal menu links for Portal NEXT.
@@ -3063,6 +3159,103 @@ paths:
                                     $ref: "#/components/schemas/PortalMenuLink"
                 500:
                     $ref: "#/components/responses/InternalServerError"
+    /portal-navigation-items:
+        get:
+            tags:
+                - Portal
+            summary: Get the portal navigation items.
+            operationId: getPortalNavigationItems
+            description: |
+                Get all the navigation items to be displayed in given area.
+            security:
+                - {}
+                - BasicAuth: []
+                - CookieAuth: []
+            parameters:
+                - name: area
+                  in: query
+                  required: true
+                  description: The area of the navigation items (e.g., 'APPLICATION', 'API', etc.)
+                  schema:
+                      $ref: "#/components/schemas/PortalArea"
+                - name: parentId
+                  in: query
+                  required: false
+                  description: The parent ID to filter navigation items.
+                  schema:
+                      type: string
+                - name: loadChildren
+                  in: query
+                  required: false
+                  description: Whether to load child navigation items.
+                  schema:
+                      type: boolean
+            responses:
+                200:
+                    $ref: "#/components/responses/PortalNavigationItemsSuccess"
+                500:
+                    $ref: "#/components/responses/InternalServerError"
+
+    /portal-navigation-items/{portalNavigationItemId}:
+        parameters:
+            - name: portalNavigationItemId
+              in: path
+              required: true
+              description: Id of a portal navigation item.
+              schema:
+                  type: string
+        get:
+            tags:
+                - Portal
+            summary: Get a specific portal navigation item by its ID.
+            operationId: getPortalNavigationItemById
+            description: |
+                Get a specific portal navigation item by its ID.
+            security:
+                - {}
+                - BasicAuth: []
+                - CookieAuth: []
+            responses:
+                200:
+                    $ref: "#/components/responses/PortalNavigationItemSuccess"
+                404:
+                    $ref: "#/components/responses/PortalNavigationItemNotFoundError"
+                500:
+                    $ref: "#/components/responses/InternalServerError"
+
+    /portal-navigation-items/{portalNavigationItemId}/content:
+        parameters:
+            - name: portalNavigationItemId
+              in: path
+              required: true
+              description: Id of a portal navigation item.
+              schema:
+                  type: string
+        get:
+            tags:
+                - Portal
+            summary: Get portal navigation item content by ID.
+            operationId: getPortalNavigationItemContentById
+            description: |
+                Get a specific portal navigation item's content by its ID.
+                Only portal navigation items of type 'PAGE' have content.
+            security:
+                - {}
+                - BasicAuth: []
+                - CookieAuth: []
+            responses:
+                200:
+                    $ref: "#/components/responses/PortalNavigationItemContentSuccess"
+                400:
+                    description: The portal navigation item is not of type 'PAGE'.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                404:
+                    $ref: "#/components/responses/PortalNavigationItemNotFoundError"
+                500:
+                    $ref: "#/components/responses/InternalServerError"
 
 components:
     requestBodies:
@@ -3076,9 +3269,9 @@ components:
         searchApplicationLogsRequestBody:
             description: Use to search application logs
             content:
-              application/json:
-                schema:
-                  $ref: "#/components/schemas/SearchApplicationsLogsParams"
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/SearchApplicationsLogsParams"
             required: true
 
     parameters:
@@ -3212,16 +3405,38 @@ components:
             name: apiId
             in: query
             required: false
-            description: Id of an api.
+            deprecated: true
+            description: |
+                Id of an api. Deprecated. Use apiIds instead for multi-select filtering.
             schema:
                 type: string
         applicationIdQueryParam:
             name: applicationId
             in: query
             required: false
-            description: Id of an application.
+            deprecated: true
+            description: |
+                Id of an application. Deprecated. Use applicationIds instead for multi-select filtering.
             schema:
                 type: string
+        apiIdsQueryParam:
+            name: apiIds
+            in: query
+            required: false
+            description: List of API IDs to filter subscriptions.
+            schema:
+                type: array
+                items:
+                    type: string
+        applicationIdsQueryParam:
+            name: applicationIds
+            in: query
+            required: false
+            description: List of application IDs to filter subscriptions.
+            schema:
+                type: array
+                items:
+                    type: string
         mineQueryParam:
             name: mine
             in: query
@@ -3629,6 +3844,23 @@ components:
         #####################
         # Responses Objects #
         #####################
+        SubscriptionForm:
+            type: object
+            description: Subscription form returned to API consumers when the form is enabled. Contains only the form content (GMD).
+            required:
+                - gmdContent
+            properties:
+                gmdContent:
+                    type: string
+                    description: |-
+                      Gravitee Markdown (GMD) content defining the form.
+                      Supports form components like gmd-input, gmd-textarea, gmd-select, gmd-checkbox, gmd-radio.
+                    example: |-
+                      # Subscription Information
+
+                      <gmd-input name="consumer_company_name" label="Company Name" required="true"/>
+                      <gmd-textarea name="consumer_use_case" label="Use Case" required="true"/>
+
         ErrorResponse:
             properties:
                 errors:
@@ -3649,71 +3881,71 @@ components:
                 links:
                     $ref: "#/components/schemas/Links"
         SearchApplicationsLogsParams:
-          type: object
-          description: Search filters for application logs
-          properties:
-              from:
-                description: Timestamp in ms for the connection log date lower limit
-                type: integer
-                example: 1460222528644
-              to:
-                description: Timestamp in ms for the connection log date upper limit. Must be superior to the timestamp provided in the 'to' parameter
-                type: integer
-                example: 1460222528644
-              planIds:
-                  description: Filter with list of plan IDs
-                  type: array
-                  items:
-                    type: string
-              methods:
-                  description: Filter with list of HTTP methods
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/HttpMethod"
-              statuses:
-                  description: Filter with list of response statuses
-                  example: [ 200 ]
-                  type: array
-                  items:
+            type: object
+            description: Search filters for application logs
+            properties:
+                from:
+                    description: Timestamp in ms for the connection log date lower limit
                     type: integer
-              apiIds:
-                  description: Filter with list of API IDs
-                  type: array
-                  items:
+                    example: 1460222528644
+                to:
+                    description: Timestamp in ms for the connection log date upper limit. Must be superior to the timestamp provided in the 'to' parameter
+                    type: integer
+                    example: 1460222528644
+                planIds:
+                    description: Filter with list of plan IDs
+                    type: array
+                    items:
+                        type: string
+                methods:
+                    description: Filter with list of HTTP methods
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/HttpMethod"
+                statuses:
+                    description: Filter with list of response statuses
+                    example: [200]
+                    type: array
+                    items:
+                        type: integer
+                apiIds:
+                    description: Filter with list of API IDs
+                    type: array
+                    items:
+                        type: string
+                requestIds:
+                    description: Filter with list of connection log request IDs
+                    type: array
+                    items:
+                        type: string
+                transactionIds:
+                    description: Filter with list of connection log transaction IDs
+                    type: array
+                    items:
+                        type: string
+                path:
+                    description: Filter with path used for the request
                     type: string
-              requestIds:
-                  description: Filter with list of connection log request IDs
-                  type: array
-                  items:
+                responseTimeRanges:
+                    type: array
+                    description: List of filters for response time ranges
+                    items:
+                        $ref: "#/components/schemas/ResponseTimeRange"
+                bodyText:
                     type: string
-              transactionIds:
-                  description: Filter with list of connection log transaction IDs
-                  type: array
-                  items:
-                    type: string
-              path:
-                  description: Filter with path used for the request
-                  type: string
-              responseTimeRanges:
-                type: array
-                description: List of filters for response time ranges
-                items:
-                  $ref: "#/components/schemas/ResponseTimeRange"
-              bodyText:
-                type: string
-                description: Filter for text in either the request or response body
-          required:
-            - to
-            - from
+                    description: Filter for text in either the request or response body
+            required:
+                - to
+                - from
 
         ResponseTimeRange:
-          properties:
-            from:
-              type: integer
-              description: Lower limit in milliseconds
-            to:
-              type: integer
-              description: Upper limit in milliseconds
+            properties:
+                from:
+                    type: integer
+                    description: Lower limit in milliseconds
+                to:
+                    type: integer
+                    description: Upper limit in milliseconds
         ApplicationsResponse:
             properties:
                 data:
@@ -3844,16 +4076,16 @@ components:
                 links:
                     $ref: "#/components/schemas/Links"
         AggregatedMessageLogsResponse:
-          properties:
-            data:
-              description: Page of messages with aggregated entrypoint and endpoint information
-              type: array
-              items:
-                $ref: "#/components/schemas/AggregatedMessageLog"
-            metadata:
-              $ref: "#/components/schemas/MetadataMap"
-            links:
-              $ref: "#/components/schemas/Links"
+            properties:
+                data:
+                    description: Page of messages with aggregated entrypoint and endpoint information
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/AggregatedMessageLog"
+                metadata:
+                    $ref: "#/components/schemas/MetadataMap"
+                links:
+                    $ref: "#/components/schemas/Links"
         SubscriptionsResponse:
             properties:
                 data:
@@ -4133,6 +4365,9 @@ components:
             type: string
             example: PROXY
             enum:
+                - A2A_PROXY
+                - LLM_PROXY
+                - MCP_PROXY
                 - PROXY
                 - MESSAGE
                 - NATIVE
@@ -4168,9 +4403,9 @@ components:
                     description: Name of the group.
                     type: string
         Mcp:
-          description: MCP configuration of the API.
-          type: object
-          additionalProperties: true
+            description: MCP configuration of the API.
+            type: object
+            additionalProperties: true
         Page:
             required:
                 - id
@@ -4396,6 +4631,9 @@ components:
                 applicationType:
                     description: Type of the application (Web, Mobile, ...).
                     type: string
+                origin:
+                    description: Application origin. e.g., MANAGEMENT, KUBERNETES, INTEGRATION.
+                    type: string
                 hasClientId:
                     description: True if the application has client id.
                     type: boolean
@@ -4616,81 +4854,81 @@ components:
         AggregatedMessageLog:
             type: object
             properties:
-              requestId:
-                type: string
-                description: The id of the request.
-                example: 1719d8d1-8d01-48f6-99d8-d18d0178f6d4
-              apiId:
-                type: string
-                description: The id of the request.
-                example: 1719d8d1-8d01-48f6-99d8-d18d0178f6d4
-              timestamp:
-                type: string
-                format: date-time
-                description: The date (as timestamp) of the log.
-                example: 2023-05-18T12:40:46.184Z
-              clientIdentifier:
-                type: string
-                description: The client identifier of the request.
-                example: 12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0
-              correlationId:
-                type: string
-                description: The correlation id.
-                example: 00f8c9e7-78fc-4907-b8c9-e778fc790750
-              parentCorrelationId:
-                type: string
-                description: The parent correlation id.
-                example: 00f8c9e7-78fc-4907-b8c9-e778fc790750
-              operation:
-                type: string
-                description: The operation.
-                example: subscribe
-              entrypoint:
-                $ref: "#/components/schemas/MessageLogContent"
-              endpoint:
-                $ref: "#/components/schemas/MessageLogContent"
+                requestId:
+                    type: string
+                    description: The id of the request.
+                    example: 1719d8d1-8d01-48f6-99d8-d18d0178f6d4
+                apiId:
+                    type: string
+                    description: The id of the request.
+                    example: 1719d8d1-8d01-48f6-99d8-d18d0178f6d4
+                timestamp:
+                    type: string
+                    format: date-time
+                    description: The date (as timestamp) of the log.
+                    example: 2023-05-18T12:40:46.184Z
+                clientIdentifier:
+                    type: string
+                    description: The client identifier of the request.
+                    example: 12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0
+                correlationId:
+                    type: string
+                    description: The correlation id.
+                    example: 00f8c9e7-78fc-4907-b8c9-e778fc790750
+                parentCorrelationId:
+                    type: string
+                    description: The parent correlation id.
+                    example: 00f8c9e7-78fc-4907-b8c9-e778fc790750
+                operation:
+                    type: string
+                    description: The operation.
+                    example: subscribe
+                entrypoint:
+                    $ref: "#/components/schemas/MessageLogContent"
+                endpoint:
+                    $ref: "#/components/schemas/MessageLogContent"
         MessageLogContent:
-          type: object
-          description: The message content.
-          example: |
-            {
-            			"id": "0",
-            			"payload": "mock message",
-            			"headers": {
-            				"X-Mock": [
-            					"mocked"
-            				]
-            			},
-            			"metadata": {
-            				"MessageMetadata": "A metadata"
-            			}
-            		}
-          properties:
-            id:
-              type: string
-              description: The internal UUID of the Message.
-              example: 00f8c9e7-78fc-4907-b8c9-e778fc790750
-            connectorId:
-              type: string
-              description: The id of connector for this log.
-              example: kafka
-            payload:
-              type: string
-              description: The payload of the Message.
-              example: "This is a message"
-            isError:
-              type: boolean
-              description: Is the Message in error.
-              example: false
-            headers:
-              type: object
-              description: The list of headers associated with this message.
-              example:
-                - name: X-My-Header
-                  value: [ my-value ]
-            metadata:
-              type: object
-              description: The list of Message's metadata.
+            type: object
+            description: The message content.
+            example: |
+                {
+                			"id": "0",
+                			"payload": "mock message",
+                			"headers": {
+                				"X-Mock": [
+                					"mocked"
+                				]
+                			},
+                			"metadata": {
+                				"MessageMetadata": "A metadata"
+                			}
+                		}
+            properties:
+                id:
+                    type: string
+                    description: The internal UUID of the Message.
+                    example: 00f8c9e7-78fc-4907-b8c9-e778fc790750
+                connectorId:
+                    type: string
+                    description: The id of connector for this log.
+                    example: kafka
+                payload:
+                    type: string
+                    description: The payload of the Message.
+                    example: "This is a message"
+                isError:
+                    type: boolean
+                    description: Is the Message in error.
+                    example: false
+                headers:
+                    type: object
+                    description: The list of headers associated with this message.
+                    example:
+                        - name: X-My-Header
+                          value: [my-value]
+                metadata:
+                    type: object
+                    description: The list of Message's metadata.
         Subscription:
             required:
                 - id
@@ -4703,8 +4941,17 @@ components:
                     description: Unique identifier of a subscription.
                     type: string
                 api:
-                    description: Subscribed API.
+                    description: Subscribed API (API id; same as reference_id when reference_type is API).
                     type: string
+                reference_id:
+                    description: Reference id (API id or API Product id). Use with reference_type for subscription context.
+                    type: string
+                reference_type:
+                    description: Reference type of the subscription (API or API_PRODUCT). Portal returns API subscriptions only.
+                    type: string
+                    enum:
+                        - API
+                        - API_PRODUCT
                 application:
                     description: Subscribing application.
                     type: string
@@ -4722,9 +4969,9 @@ components:
                     type: string
                     format: date-time
                 updated_at:
-                  description: Updated date and time of the subscription.
-                  type: string
-                  format: date-time
+                    description: Updated date and time of the subscription.
+                    type: string
+                    format: date-time
                 processed_at:
                     description: Date and time when the subscription request was processed.
                     type: string
@@ -4772,11 +5019,11 @@ components:
                     description: The cause of the failure
                     type: string
                 origin:
-                  description: The origin of the subscription
-                  type: string
-                  enum:
-                    - KUBERNETES
-                    - MANAGEMENT
+                    description: The origin of the subscription
+                    type: string
+                    enum:
+                        - KUBERNETES
+                        - MANAGEMENT
                 ###################
                 # may be included #
                 ###################
@@ -5077,7 +5324,7 @@ components:
                     description: Permitted Kafka Sasl Mechanisms. Used by portal to display allowed Kafka Sasl Mechanisms.
                     type: array
                     items:
-                      type: string
+                        type: string
                 support:
                     $ref: "#/components/schemas/Enabled"
                 applicationCreation:
@@ -5121,39 +5368,39 @@ components:
                     description: Subtitle to display on the homepage banner.
                     type: string
                 primaryButton:
-                  $ref: "#/components/schemas/BannerButton"
+                    $ref: "#/components/schemas/BannerButton"
                 secondaryButton:
-                  $ref: "#/components/schemas/BannerButton"
+                    $ref: "#/components/schemas/BannerButton"
         BannerButton:
-          type: object
-          description: Button displayed in the Portal Next banner
-          properties:
-            enabled:
-              description: Button is displayed
-              type: boolean
-            label:
-              description: Button label
-              type: string
-            type:
-              description: Type of link
-              enum:
-                - EXTERNAL
-            target:
-              description: Target of the link
-              type: string
-            visibility:
-              description: Visibility of the button
-              enum:
-                - PUBLIC
-                - PRIVATE
+            type: object
+            description: Button displayed in the Portal Next banner
+            properties:
+                enabled:
+                    description: Button is displayed
+                    type: boolean
+                label:
+                    description: Button label
+                    type: string
+                type:
+                    description: Type of link
+                    enum:
+                        - EXTERNAL
+                target:
+                    description: Target of the link
+                    type: string
+                visibility:
+                    description: Visibility of the button
+                    enum:
+                        - PUBLIC
+                        - PRIVATE
         ConfigurationPortalNextCatalog:
-          type: object
-          description: Configuration of the catalog for Portal Next
-          properties:
-            viewMode:
-              description: View mode used by the Catalog. If the value is invalid, the TABS view will be shown by default.
-              type: string
-              example: TABS
+            type: object
+            description: Configuration of the catalog for Portal Next
+            properties:
+                viewMode:
+                    description: View mode used by the Catalog. If the value is invalid, the TABS view will be shown by default.
+                    type: string
+                    example: TABS
         ConfigurationPortalApis:
             properties:
                 tilesMode:
@@ -5213,8 +5460,8 @@ components:
                     description: URL of the main documentation.
                     type: string
                 pageNotFoundMessage:
-                  description: Message to display when a page is not found.
-                  type: string
+                    description: Message to display when a page is not found.
+                    type: string
         ConfigurationPlan:
             properties:
                 security:
@@ -5342,10 +5589,10 @@ components:
         ConnectorsResponse:
             description: List of Connectors.
             properties:
-              data:
-                type: array
-                items:
-                    $ref: "#/components/schemas/Connector"
+                data:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/Connector"
         Connector:
             description: |
                 Describes a connector.
@@ -5369,6 +5616,9 @@ components:
                     description: ApiType supported by the connector.
                     type: string
                     enum:
+                        - a2a_proxy
+                        - llm_proxy
+                        - mcp_proxy
                         - proxy
                         - message
                         - native
@@ -5378,11 +5628,11 @@ components:
                     items:
                         type: string
                         enum:
+                            - entrypoint_connect
+                            - interact
                             - subscribe
                             - publish
                             - request_response
-                            - connect
-                            - interact
                             - socket
                 supportedQos:
                     type: array
@@ -5765,7 +6015,7 @@ components:
                 additional_client_metadata:
                     type: object
                     additionalProperties:
-                      type: string
+                        type: string
         TlsClientSettings:
             properties:
                 client_certificate:
@@ -5807,6 +6057,9 @@ components:
                 try_it:
                     type: boolean
                     description: Enable "Try It!" mode in documentation page.
+                disable_syntax_highlight:
+                    type: boolean
+                    description: Disable response body styling for large JSON payloads
                 try_it_anonymous:
                     type: boolean
                     description: Enable "Try It!" mode in documentation page for anonymous users.
@@ -5900,8 +6153,8 @@ components:
                     type: string
                     format: date-time
                 hash:
-                  type: string
-                  description: The MD5 hash of the API Key
+                    type: string
+                    description: The MD5 hash of the API Key
         AlertType:
             type: string
             enum:
@@ -6141,35 +6394,125 @@ components:
                         type: string
 
         SubscriptionConsumerConfiguration:
-          type: object
-          description: Consumer configuration associated to the subscription in case it is attached to a push plan.
-          properties:
-            entrypointId:
-              type: string
-              description: The id of the targeted entrypoint
-              example: webhook
-            channel:
-              type: string
-              description: The channel to consume
-              example: /channel1
-            entrypointConfiguration:
-              type: object
-              description: The configuration to use at subscription time to push to the target service.
-              example: |
-                {
-                    "callbackUrl": "https://webhook.site/aaaaaaaa-ffff-ffff-ffff-aaaaaaaa",
-                    "headers": [
+            type: object
+            description: Consumer configuration associated to the subscription in case it is attached to a push plan.
+            properties:
+                entrypointId:
+                    type: string
+                    description: The id of the targeted entrypoint
+                    example: webhook
+                channel:
+                    type: string
+                    description: The channel to consume
+                    example: /channel1
+                entrypointConfiguration:
+                    type: object
+                    description: The configuration to use at subscription time to push to the target service.
+                    example: |
                         {
-                            "name": "demoHeader",
-                            "value": "my-value"
-                        },
-                        {
-                            "name": "anotherHeader",
-                            "value": "my-value2"
+                            "callbackUrl": "https://webhook.site/aaaaaaaa-ffff-ffff-ffff-aaaaaaaa",
+                            "headers": [
+                                {
+                                    "name": "demoHeader",
+                                    "value": "my-value"
+                                },
+                                {
+                                    "name": "anotherHeader",
+                                    "value": "my-value2"
+                                }
+                            ]
                         }
-                    ]
-                }
-          required: [ entrypointId ]
+            required: [entrypointId]
+        PortalArea:
+            type: string
+            description: The portal area (used by portal navigation items)
+            enum: [HOMEPAGE, TOP_NAVBAR]
+        BasePortalNavigationItem:
+            type: object
+            description: Base portal navigation item
+            properties:
+                id:
+                    type: string
+                    description: The unique ID of the navigation item
+                title:
+                    type: string
+                    description: The title of the navigation item
+                type:
+                    type: string
+                    description: The type of the navigation item
+                area:
+                    $ref: "#/components/schemas/PortalArea"
+                parentId:
+                    type: string
+                    description: The parent ID of the navigation item
+                order:
+                    type: integer
+                    description: The order of the navigation item
+            required: [id, organizationId, environmentId, title, type, area, order]
+            discriminator:
+                propertyName: type
+                mapping:
+                    PAGE: "#/components/schemas/PortalNavigationPage"
+                    FOLDER: "#/components/schemas/PortalNavigationFolder"
+                    LINK: "#/components/schemas/PortalNavigationLink"
+                    API: "#/components/schemas/PortalNavigationApi"
+        PortalNavigationPage:
+            allOf:
+                - $ref: "#/components/schemas/BasePortalNavigationItem"
+                - properties:
+                      portalPageContentId:
+                          type: string
+                          description: The UUID of the portal page content
+                  required: [portalPageContentId]
+        PortalNavigationFolder:
+            allOf:
+                - $ref: "#/components/schemas/BasePortalNavigationItem"
+        PortalNavigationLink:
+            allOf:
+                - $ref: "#/components/schemas/BasePortalNavigationItem"
+                - properties:
+                      url:
+                          type: string
+                          description: The URL for the link
+                  required: [url]
+        PortalNavigationApi:
+          allOf:
+            - $ref: "#/components/schemas/BasePortalNavigationItem"
+            - properties:
+                apiId:
+                  type: string
+                  description: The ApiId for the navigation item
+              required: [ apiId ]
+        PortalNavigationItem:
+            oneOf:
+                - $ref: "#/components/schemas/PortalNavigationPage"
+                - $ref: "#/components/schemas/PortalNavigationFolder"
+                - $ref: "#/components/schemas/PortalNavigationLink"
+                - $ref: "#/components/schemas/PortalNavigationApi"
+            discriminator:
+                propertyName: type
+                mapping:
+                    PAGE: "#/components/schemas/PortalNavigationPage"
+                    FOLDER: "#/components/schemas/PortalNavigationFolder"
+                    LINK: "#/components/schemas/PortalNavigationLink"
+                    API: "#/components/schemas/PortalNavigationApi"
+
+        PortalPageContent:
+            type: object
+            description: Portal page content
+            properties:
+                type:
+                    $ref: "#/components/schemas/PortalPageContentType"
+                content:
+                    type: string
+                    description: The content of the page
+            required: [type, content]
+        PortalPageContentType:
+            type: string
+            description: Type of portal page content
+            enum:
+                - GRAVITEE_MARKDOWN
+                - OPENAPI
 
     responses:
         InternalServerError:
@@ -6204,6 +6547,12 @@ components:
                         $ref: "#/components/schemas/ErrorResponse"
         GroupNotFoundError:
             description: Group not found
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
+        PortalNavigationItemNotFoundError:
+            description: Portal navigation item not found
             content:
                 application/json:
                     schema:
@@ -6246,6 +6595,26 @@ components:
                     schema:
                         type: string
                         format: binary
+        PortalNavigationItemsSuccess:
+            description: List of portal navigation items
+            content:
+                application/json:
+                    schema:
+                        type: array
+                        items:
+                            $ref: "#/components/schemas/PortalNavigationItem"
+        PortalNavigationItemSuccess:
+            description: A portal navigation item
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/PortalNavigationItem"
+        PortalNavigationItemContentSuccess:
+            description: Portal page content
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/PortalPageContent"
 
     securitySchemes:
         BasicAuth:

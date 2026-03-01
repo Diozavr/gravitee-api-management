@@ -18,17 +18,15 @@ package io.gravitee.gateway.services.healthcheck;
 import io.gravitee.common.service.AbstractService;
 import io.gravitee.gateway.services.healthcheck.verticle.EndpointHealthcheckVerticle;
 import io.vertx.core.Vertx;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class EndpointHealthcheckService extends AbstractService {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(EndpointHealthcheckService.class);
 
     @Autowired
     private Vertx vertx;
@@ -41,16 +39,13 @@ public class EndpointHealthcheckService extends AbstractService {
         final EndpointHealthcheckVerticle healthcheckVerticle = new EndpointHealthcheckVerticle();
         applicationContext.getAutowireCapableBeanFactory().autowireBean(healthcheckVerticle);
 
-        vertx.deployVerticle(
-            healthcheckVerticle,
-            event -> {
-                if (event.failed()) {
-                    LOGGER.error("Health-check service cannot be started", event.cause());
-                }
-
-                deploymentId = event.result();
+        vertx.deployVerticle(healthcheckVerticle, event -> {
+            if (event.failed()) {
+                log.error("Health-check service cannot be started", event.cause());
             }
-        );
+
+            deploymentId = event.result();
+        });
         return this;
     }
 

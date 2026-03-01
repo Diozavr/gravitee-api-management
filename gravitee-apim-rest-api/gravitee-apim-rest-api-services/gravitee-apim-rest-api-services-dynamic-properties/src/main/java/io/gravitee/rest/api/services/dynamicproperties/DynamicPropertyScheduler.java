@@ -46,13 +46,13 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.Builder;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class DynamicPropertyScheduler {
 
     private final ClusterManager clusterManager;
@@ -84,34 +84,32 @@ public class DynamicPropertyScheduler {
         CronTrigger cronTrigger = new CronTrigger(schedule);
         log.debug("[{}] Running dynamic properties scheduler", api.getId());
 
-        disposable =
-            Observable
-                .defer(() -> Observable.timer(cronTrigger.nextExecutionIn(), TimeUnit.MILLISECONDS))
-                .observeOn(Schedulers.computation())
-                .filter(aLong -> clusterManager.self().primary())
-                .switchMapCompletable(aLong ->
-                    provider
-                        .get()
-                        .flatMapCompletable(dynamicProperties ->
-                            Completable.fromRunnable(() -> {
-                                log.debug("[{}] Got {} dynamic properties to update", api.getId(), dynamicProperties.size());
-                                authenticateAsAdmin();
-                                update(dynamicProperties);
-                            })
-                        )
-                        .doOnComplete(() -> log.debug("[{}] Dynamic properties updated", api.getId()))
-                )
-                .onErrorResumeNext(throwable -> {
-                    log.error(
-                        "[{}] Unexpected error while getting dynamic properties from provider: {}",
-                        api.getId(),
-                        provider.name(),
-                        throwable
-                    );
-                    return Completable.complete();
-                })
-                .repeat()
-                .subscribe(() -> {}, throwable -> log.error("Unable to run Dynamic Properties for Api: {}", api.getId()));
+        disposable = Observable.defer(() -> Observable.timer(cronTrigger.nextExecutionIn(), TimeUnit.MILLISECONDS))
+            .observeOn(Schedulers.computation())
+            .filter(aLong -> clusterManager.self().primary())
+            .switchMapCompletable(aLong ->
+                provider
+                    .get()
+                    .flatMapCompletable(dynamicProperties ->
+                        Completable.fromRunnable(() -> {
+                            log.debug("[{}] Got {} dynamic properties to update", api.getId(), dynamicProperties.size());
+                            authenticateAsAdmin();
+                            update(dynamicProperties);
+                        })
+                    )
+                    .doOnComplete(() -> log.debug("[{}] Dynamic properties updated", api.getId()))
+            )
+            .onErrorResumeNext(throwable -> {
+                log.error(
+                    "[{}] Unexpected error while getting dynamic properties from provider: {}",
+                    api.getId(),
+                    provider.name(),
+                    throwable
+                );
+                return Completable.complete();
+            })
+            .repeat()
+            .subscribe(() -> {}, throwable -> log.error("Unable to run Dynamic Properties for Api: {}", api.getId()));
     }
 
     public void cancel() {
@@ -134,7 +132,10 @@ public class DynamicPropertyScheduler {
         List<Property> properties = (latestApi.getProperties() != null)
             ? latestApi.getProperties().getProperties()
             : Collections.emptyList();
-        List<Property> userDefinedProperties = properties.stream().filter(property -> !property.isDynamic()).toList();
+        List<Property> userDefinedProperties = properties
+            .stream()
+            .filter(property -> !property.isDynamic())
+            .toList();
 
         Map<String, Property> propertyMap = properties.stream().collect(Collectors.toMap(Property::getKey, property -> property));
 
@@ -174,7 +175,7 @@ public class DynamicPropertyScheduler {
             // Update API
             try {
                 log.debug("[{}] Updating API", latestApi.getId());
-                apiService.update(executionContext, latestApi.getId(), apiConverter.toUpdateApiEntity(latestApi), false, false);
+                apiService.update(executionContext, latestApi.getId(), apiConverter.toUpdateApiEntity(latestApi), false, false, true);
                 log.debug("[{}] API has been updated", latestApi.getId());
             } catch (TechnicalManagementException e) {
                 log.error("An error occurred while updating the API with new values of dynamic properties, deployment will be skipped.", e);

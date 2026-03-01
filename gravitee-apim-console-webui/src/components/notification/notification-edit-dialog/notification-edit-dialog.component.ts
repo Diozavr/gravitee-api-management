@@ -68,7 +68,7 @@ export class NotificationEditDialogComponent {
     }
     const raw = this.staticForm.getRawValue();
 
-    const cleansedGroups = raw.groups ? Object.values(raw.groups).filter((g) => g !== this.primaryOwner) : [];
+    const cleansedGroups = raw.groups ? Object.values(raw.groups).filter(g => g !== this.primaryOwner) : [];
 
     this.dialogRef.close({
       ...this.notification,
@@ -76,7 +76,7 @@ export class NotificationEditDialogComponent {
       useSystemProxy: raw?.notifier?.useSystemProxy,
       groups: cleansedGroups,
       hooks: Object.values(raw.hooks)
-        .map((category) => {
+        .map(category => {
           return Object.entries(category)
             .filter(([_, value]) => value)
             .map(([key, _]) => key);
@@ -98,7 +98,7 @@ export class NotificationEditDialogComponent {
         : {}),
       groups: new FormControl({
         value: this.withPrimaryOwner(this.notification),
-        disabled: this.isReadonly,
+        disabled: false,
       }),
       hooks: toFormGroup(this.categories, this.notification, this.isReadonly),
     });
@@ -136,8 +136,8 @@ const addHookToGroup = (notification: NotificationSettings, readonly: boolean) =
   group.addControl(
     hook.id,
     new FormControl({
-      value: notification.hooks.includes(hook.id),
-      disabled: readonly,
+      value: notification.hooks.includes(hook.id) || notification.groupHooks?.includes(hook.id),
+      disabled: readonly || notification.groupHooks?.includes(hook.id),
     }),
   );
   return group;

@@ -18,10 +18,12 @@ package io.gravitee.apim.core.audit.domain_service;
 import io.gravitee.apim.core.DomainService;
 import io.gravitee.apim.core.audit.crud_service.AuditCrudService;
 import io.gravitee.apim.core.audit.model.ApiAuditLogEntity;
+import io.gravitee.apim.core.audit.model.ApiProductAuditLogEntity;
 import io.gravitee.apim.core.audit.model.ApplicationAuditLogEntity;
 import io.gravitee.apim.core.audit.model.AuditActor;
 import io.gravitee.apim.core.audit.model.AuditEntity;
 import io.gravitee.apim.core.audit.model.AuditProperties;
+import io.gravitee.apim.core.audit.model.DashboardAuditLogEntity;
 import io.gravitee.apim.core.audit.model.EnvironmentAuditLogEntity;
 import io.gravitee.apim.core.json.JsonDiffProcessor;
 import io.gravitee.apim.core.user.crud_service.UserCrudService;
@@ -29,9 +31,9 @@ import io.gravitee.rest.api.service.common.UuidString;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import java.util.Map;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 @DomainService
 public class AuditDomainService {
 
@@ -47,8 +49,7 @@ public class AuditDomainService {
 
     public void createApiAuditLog(ApiAuditLogEntity audit) {
         try {
-            var entity = AuditEntity
-                .builder()
+            var entity = AuditEntity.builder()
                 .id(UuidString.generateRandom())
                 .organizationId(audit.organizationId())
                 .environmentId(audit.environmentId())
@@ -69,8 +70,7 @@ public class AuditDomainService {
 
     public void createApplicationAuditLog(ApplicationAuditLogEntity audit) {
         try {
-            var entity = AuditEntity
-                .builder()
+            var entity = AuditEntity.builder()
                 .id(UuidString.generateRandom())
                 .organizationId(audit.organizationId())
                 .environmentId(audit.environmentId())
@@ -91,8 +91,7 @@ public class AuditDomainService {
 
     public void createEnvironmentAuditLog(EnvironmentAuditLogEntity audit) {
         try {
-            var entity = AuditEntity
-                .builder()
+            var entity = AuditEntity.builder()
                 .id(UuidString.generateRandom())
                 .organizationId(audit.organizationId())
                 .environmentId(audit.environmentId())
@@ -108,6 +107,48 @@ public class AuditDomainService {
             auditCrudService.create(entity);
         } catch (TechnicalManagementException e) {
             log.error("Error occurs during the creation of an Environment Audit Log.", e);
+        }
+    }
+
+    public void createApiProductAuditLog(ApiProductAuditLogEntity audit) {
+        try {
+            var entity = AuditEntity.builder()
+                .id(UuidString.generateRandom())
+                .organizationId(audit.organizationId())
+                .environmentId(audit.environmentId())
+                .createdAt(audit.createdAt())
+                .user(createActor(audit.actor()))
+                .properties(adaptAuditLogProperties(audit.properties()))
+                .referenceType(AuditEntity.AuditReferenceType.API_PRODUCT)
+                .referenceId(audit.apiProductId())
+                .event(audit.event().name())
+                .patch(jsonDiffProcessor.diff(audit.oldValue(), audit.newValue()))
+                .build();
+
+            auditCrudService.create(entity);
+        } catch (TechnicalManagementException e) {
+            log.error("Error occurs during the creation of an API Product Audit Log.", e);
+        }
+    }
+
+    public void createDashboardAuditLog(DashboardAuditLogEntity audit) {
+        try {
+            var entity = AuditEntity.builder()
+                .id(UuidString.generateRandom())
+                .organizationId(audit.organizationId())
+                .environmentId(audit.environmentId())
+                .createdAt(audit.createdAt())
+                .user(createActor(audit.actor()))
+                .properties(adaptAuditLogProperties(audit.properties()))
+                .referenceType(AuditEntity.AuditReferenceType.DASHBOARD)
+                .referenceId(audit.dashboardId())
+                .event(audit.event().name())
+                .patch(jsonDiffProcessor.diff(audit.oldValue(), audit.newValue()))
+                .build();
+
+            auditCrudService.create(entity);
+        } catch (TechnicalManagementException e) {
+            log.error("Error occurs during the creation of an API Product Audit Log.", e);
         }
     }
 

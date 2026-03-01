@@ -66,6 +66,7 @@ import io.gravitee.gateway.reactive.handlers.api.security.HttpSecurityChain;
 import io.gravitee.gateway.reactive.handlers.api.v4.analytics.logging.LoggingHook;
 import io.gravitee.gateway.reactive.policy.PolicyManager;
 import io.gravitee.gateway.reactor.handler.HttpAcceptorFactory;
+import io.gravitee.gateway.report.guard.LogGuardService;
 import io.gravitee.gateway.resource.ResourceLifecycleManager;
 import io.gravitee.node.api.Node;
 import io.gravitee.node.api.configuration.Configuration;
@@ -94,6 +95,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.helpers.NOPLogger;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -244,6 +246,9 @@ class SyncApiReactorTest {
 
     private TracingContext tracingContext = TracingContext.noop();
 
+    @Mock
+    private LogGuardService logGuardService;
+
     @BeforeEach
     void init() {
         lenient().when(apiDefinition.getProxy()).thenReturn(mock(Proxy.class));
@@ -279,35 +284,37 @@ class SyncApiReactorTest {
         lenient().when(requestTimeoutConfiguration.getRequestTimeoutGraceDelay()).thenReturn(REQUEST_TIMEOUT_GRACE_DELAY);
 
         templateVariableProviders = new ArrayList<>();
-        cut =
-            new SyncApiReactor(
-                api,
-                componentProvider,
-                templateVariableProviders,
-                defaultInvoker,
-                resourceLifecycleManager,
-                apiProcessorChainFactory,
-                policyManager,
-                flowChainFactory,
-                groupLifecycleManager,
-                configuration,
-                node,
-                requestTimeoutConfiguration,
-                accessPointManager,
-                eventManager,
-                new HttpAcceptorFactory(false),
-                tracingContext
-            );
+        cut = new SyncApiReactor(
+            api,
+            componentProvider,
+            templateVariableProviders,
+            defaultInvoker,
+            resourceLifecycleManager,
+            apiProcessorChainFactory,
+            policyManager,
+            flowChainFactory,
+            groupLifecycleManager,
+            configuration,
+            node,
+            requestTimeoutConfiguration,
+            accessPointManager,
+            eventManager,
+            new HttpAcceptorFactory(false),
+            tracingContext,
+            logGuardService
+        );
 
+        lenient().when(ctx.withLogger(any())).thenReturn(NOPLogger.NOP_LOGGER);
         lenient().when(ctx.getInternalAttribute(ATTR_INTERNAL_INVOKER)).thenReturn(invokerAdapter);
         lenient()
             .when(
                 ctx.interruptWith(
-                    argThat(argument ->
-                        argument != null &&
-                        argument.statusCode() == 504 &&
-                        argument.message().equals("Request timeout") &&
-                        argument.key().equals("REQUEST_TIMEOUT")
+                    argThat(
+                        argument ->
+                            argument != null &&
+                            argument.statusCode() == 504 &&
+                            argument.message().equals("Request timeout") &&
+                            argument.key().equals("REQUEST_TIMEOUT")
                     )
                 )
             )
@@ -345,8 +352,7 @@ class SyncApiReactorTest {
         verify(policyManager).start();
         verify(groupLifecycleManager).start();
         assertThat(cut.httpSecurityChain).isNotNull();
-        assertThat(cut.processorChainHooks).hasSize(1);
-        assertThat(cut.processorChainHooks.get(0)).isInstanceOf(TracingHook.class);
+        assertThat(cut.processorChainHooks).isEmpty();
         assertThat(cut.invokerHooks).hasSize(1);
         assertThat(cut.invokerHooks.get(0)).isInstanceOf(TracingHook.class);
     }

@@ -24,13 +24,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Yann TAVERNIER (yann.tavernier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class SubscriptionTrustStoreLoaderManager {
 
     private final Map<String, SubscriptionTrustStoreLoader> subscriptionTrustStoreLoaders = new ConcurrentHashMap<>();
@@ -60,19 +60,25 @@ public class SubscriptionTrustStoreLoaderManager {
             .filter(server -> deployOnServers.isEmpty() || deployOnServers.contains(server.id()))
             .map(s -> (VertxServer<?, ?>) s)
             .forEach(server -> server.trustStoreLoaderManager().registerLoader(loader));
-        subscriptionTrustStoreLoaders.put(subscription.getId(), loader);
-        subscriptionsByApi.put(
-            buildCacheKeyFromCertificateDigest(subscription.getApi(), loader.certificateDigest(), subscription.getPlan()),
-            subscription
-        );
+        subscriptionTrustStoreLoaders.putIfAbsent(subscription.getId(), loader);
+        loader
+            .certificateDigests()
+            .forEach(digest ->
+                subscriptionsByApi.put(
+                    buildCacheKeyFromCertificateDigest(subscription.getApi(), digest, subscription.getPlan()),
+                    subscription
+                )
+            );
     }
 
     public void unregisterSubscription(Subscription subscription) {
         final SubscriptionTrustStoreLoader loader = subscriptionTrustStoreLoaders.remove(subscription.getId());
         if (loader != null) {
-            subscriptionsByApi.remove(
-                buildCacheKeyFromCertificateDigest(subscription.getApi(), loader.certificateDigest(), subscription.getPlan())
-            );
+            loader
+                .certificateDigests()
+                .forEach(digest ->
+                    subscriptionsByApi.remove(buildCacheKeyFromCertificateDigest(subscription.getApi(), digest, subscription.getPlan()))
+                );
             log.debug("Stopping TrustStoreLoader for subscription {}", subscription.getId());
             loader.stop();
             loader.onEvent(new KeyStoreEvent.UnloadEvent(loader.id()));

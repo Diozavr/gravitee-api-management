@@ -15,24 +15,30 @@
  */
 package io.gravitee.rest.api.service.impl.configuration.identity;
 
+import static io.gravitee.repository.management.model.IdentityProvider.AuditEvent.IDENTITY_PROVIDER_ACTIVATED;
+import static io.gravitee.repository.management.model.IdentityProvider.AuditEvent.IDENTITY_PROVIDER_DEACTIVATED;
+
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.IdentityProviderActivationRepository;
 import io.gravitee.repository.management.model.Audit;
-import io.gravitee.repository.management.model.IdentityProvider;
 import io.gravitee.repository.management.model.IdentityProviderActivation;
 import io.gravitee.rest.api.model.configuration.identity.IdentityProviderActivationEntity;
 import io.gravitee.rest.api.model.configuration.identity.IdentityProviderActivationReferenceType;
 import io.gravitee.rest.api.service.AuditService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
-import io.gravitee.rest.api.service.common.GraviteeContext;
 import io.gravitee.rest.api.service.configuration.identity.IdentityProviderActivationService;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import io.gravitee.rest.api.service.impl.AbstractService;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -41,10 +47,9 @@ import org.springframework.stereotype.Component;
  * @author Florent CHAMFROY (florent.chamfroy at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class IdentityProviderActivationServiceImpl extends AbstractService implements IdentityProviderActivationService {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(IdentityProviderActivationServiceImpl.class);
 
     @Lazy
     @Autowired
@@ -59,7 +64,7 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
         String identityProviderId,
         ActivationTarget... targetsToAdd
     ) {
-        LOGGER.debug("Activate identity provider {} on targets {} ", identityProviderId, targetsToAdd);
+        log.debug("Activate identity provider {} on targets {} ", identityProviderId, targetsToAdd);
 
         try {
             Set<IdentityProviderActivationEntity> createdActivations = new HashSet<>();
@@ -73,17 +78,12 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
             }
             return createdActivations;
         } catch (TechnicalException ex) {
-            LOGGER.error(
-                "An error occurs while trying to Activate identity provider {} on targets {}",
-                identityProviderId,
-                targetsToAdd,
-                ex
-            );
+            log.error("An error occurs while trying to Activate identity provider {} on targets {}", identityProviderId, targetsToAdd, ex);
             throw new TechnicalManagementException(
                 "An error occurs while trying to Activate identity provider " +
-                identityProviderId +
-                " on targets " +
-                Arrays.toString(targetsToAdd),
+                    identityProviderId +
+                    " on targets " +
+                    Arrays.toString(targetsToAdd),
                 ex
             );
         }
@@ -95,7 +95,7 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
         ActivationTarget target,
         String... identityProviderIdsToAdd
     ) {
-        LOGGER.debug("Add identity providers {} on target {} ", identityProviderIdsToAdd, target);
+        log.debug("Add identity providers {} on target {} ", identityProviderIdsToAdd, target);
 
         try {
             Set<IdentityProviderActivationEntity> createdActivations = new HashSet<>();
@@ -109,12 +109,12 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
             }
             return createdActivations;
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to add identity providers {} on target {}", identityProviderIdsToAdd, target, ex);
+            log.error("An error occurs while trying to add identity providers {} on target {}", identityProviderIdsToAdd, target, ex);
             throw new TechnicalManagementException(
                 "An error occurs while trying to add identity providers " +
-                Arrays.toString(identityProviderIdsToAdd) +
-                " on target " +
-                target,
+                    Arrays.toString(identityProviderIdsToAdd) +
+                    " on target " +
+                    target,
                 ex
             );
         }
@@ -122,7 +122,7 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
 
     @Override
     public Set<IdentityProviderActivationEntity> findAllByIdentityProviderId(String identityProviderId) {
-        LOGGER.debug("Find all activations for identity provider {}", identityProviderId);
+        log.debug("Find all activations for identity provider {}", identityProviderId);
 
         try {
             return identityProviderActivationRepository
@@ -131,7 +131,7 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
                 .map(this::convert)
                 .collect(Collectors.toSet());
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to find all activations for identity provider {}", identityProviderId, ex);
+            log.error("An error occurs while trying to find all activations for identity provider {}", identityProviderId, ex);
             throw new TechnicalManagementException(
                 "An error occurs while trying to find all activations for identity provider " + identityProviderId,
                 ex
@@ -141,7 +141,7 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
 
     @Override
     public Set<IdentityProviderActivationEntity> findAllByTarget(ActivationTarget target) {
-        LOGGER.debug("Find all activations for target {}", target);
+        log.debug("Find all activations for target {}", target);
 
         try {
             return identityProviderActivationRepository
@@ -150,21 +150,21 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
                 .map(this::convert)
                 .collect(Collectors.toSet());
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to find all activations for target {}", target, ex);
+            log.error("An error occurs while trying to find all activations for target {}", target, ex);
             throw new TechnicalManagementException("An error occurs while trying to find all activations for target " + target, ex);
         }
     }
 
     @Override
     public void deactivateIdpOnTargets(ExecutionContext executionContext, String identityProviderId, ActivationTarget... targetsToRemove) {
-        LOGGER.debug("Deactivate identity provider {} on targets {} ", identityProviderId, targetsToRemove);
+        log.debug("Deactivate identity provider {} on targets {} ", identityProviderId, targetsToRemove);
 
         try {
             for (ActivationTarget target : targetsToRemove) {
                 deleteIdentityProviderActivation(executionContext, identityProviderId, target);
             }
         } catch (TechnicalException ex) {
-            LOGGER.error(
+            log.error(
                 "An error occurs while trying to deactivate identity provider {} on targets {}",
                 identityProviderId,
                 targetsToRemove,
@@ -172,9 +172,9 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
             );
             throw new TechnicalManagementException(
                 "An error occurs while trying to deactivate identity provider " +
-                identityProviderId +
-                " on targets " +
-                Arrays.toString(targetsToRemove),
+                    identityProviderId +
+                    " on targets " +
+                    Arrays.toString(targetsToRemove),
                 ex
             );
         }
@@ -182,14 +182,14 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
 
     @Override
     public void removeIdpsFromTarget(ExecutionContext executionContext, ActivationTarget target, String... identityProviderIdsToRemove) {
-        LOGGER.debug("Remove identity providers {} from target {} ", identityProviderIdsToRemove, target);
+        log.debug("Remove identity providers {} from target {} ", identityProviderIdsToRemove, target);
 
         try {
             for (String identityProviderId : identityProviderIdsToRemove) {
                 deleteIdentityProviderActivation(executionContext, identityProviderId, target);
             }
         } catch (TechnicalException ex) {
-            LOGGER.error(
+            log.error(
                 "An error occurs while trying to remove identity providers {} from target {}",
                 identityProviderIdsToRemove,
                 target,
@@ -197,9 +197,9 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
             );
             throw new TechnicalManagementException(
                 "An error occurs while trying to remove identity providers " +
-                Arrays.toString(identityProviderIdsToRemove) +
-                " from target " +
-                target,
+                    Arrays.toString(identityProviderIdsToRemove) +
+                    " from target " +
+                    target,
                 ex
             );
         }
@@ -207,7 +207,7 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
 
     @Override
     public void deactivateIdpOnAllTargets(ExecutionContext executionContext, String identityProviderId) {
-        LOGGER.debug("Deactivate identity provider {} on all targets", identityProviderId);
+        log.debug("Deactivate identity provider {} on all targets", identityProviderId);
 
         try {
             Set<IdentityProviderActivation> iPAsToRemove = identityProviderActivationRepository.findAllByIdentityProviderId(
@@ -219,17 +219,19 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
             for (IdentityProviderActivation ipa : iPAsToRemove) {
                 auditService.createAuditLog(
                     executionContext,
-                    Audit.AuditReferenceType.valueOf(ipa.getReferenceType().name()),
-                    ipa.getReferenceId(),
-                    Collections.singletonMap(Audit.AuditProperties.IDENTITY_PROVIDER, ipa.getIdentityProviderId()),
-                    IdentityProvider.AuditEvent.IDENTITY_PROVIDER_DEACTIVATED,
-                    new Date(),
-                    ipa,
-                    null
+                    AuditService.AuditLogData.builder()
+                        .referenceType(Audit.AuditReferenceType.valueOf(ipa.getReferenceType().name()))
+                        .referenceId(ipa.getReferenceId())
+                        .properties(Collections.singletonMap(Audit.AuditProperties.IDENTITY_PROVIDER, ipa.getIdentityProviderId()))
+                        .event(IDENTITY_PROVIDER_DEACTIVATED)
+                        .createdAt(new Date())
+                        .oldValue(ipa)
+                        .newValue(null)
+                        .build()
                 );
             }
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to deactivate identity provider {} on all targets", identityProviderId, ex);
+            log.error("An error occurs while trying to deactivate identity provider {} on all targets", identityProviderId, ex);
             throw new TechnicalManagementException(
                 "An error occurs while trying to deactivate identity provider " + identityProviderId + " on all targets",
                 ex
@@ -239,7 +241,7 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
 
     @Override
     public void removeAllIdpsFromTarget(ExecutionContext executionContext, ActivationTarget target) {
-        LOGGER.debug("Remove all identity providers from target {} ", target);
+        log.debug("Remove all identity providers from target {} ", target);
 
         try {
             Set<IdentityProviderActivation> iPAsToRemove = identityProviderActivationRepository.findAllByReferenceIdAndReferenceType(
@@ -255,17 +257,19 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
             for (IdentityProviderActivation ipa : iPAsToRemove) {
                 auditService.createAuditLog(
                     executionContext,
-                    Audit.AuditReferenceType.valueOf(ipa.getReferenceType().name()),
-                    ipa.getReferenceId(),
-                    Collections.singletonMap(Audit.AuditProperties.IDENTITY_PROVIDER, ipa.getReferenceId()),
-                    IdentityProvider.AuditEvent.IDENTITY_PROVIDER_DEACTIVATED,
-                    new Date(),
-                    ipa,
-                    null
+                    AuditService.AuditLogData.builder()
+                        .referenceType(Audit.AuditReferenceType.valueOf(ipa.getReferenceType().name()))
+                        .referenceId(ipa.getReferenceId())
+                        .properties(Collections.singletonMap(Audit.AuditProperties.IDENTITY_PROVIDER, ipa.getReferenceId()))
+                        .event(IDENTITY_PROVIDER_DEACTIVATED)
+                        .createdAt(new Date())
+                        .oldValue(ipa)
+                        .newValue(null)
+                        .build()
                 );
             }
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to remove all identity providers from target {}", target, ex);
+            log.error("An error occurs while trying to remove all identity providers from target {}", target, ex);
             throw new TechnicalManagementException(
                 "An error occurs while trying to remove all identity providers from target " + target,
                 ex
@@ -300,13 +304,20 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
 
         auditService.createAuditLog(
             executionContext,
-            Audit.AuditReferenceType.valueOf(target.getReferenceType().name()),
-            target.getReferenceId(),
-            Collections.singletonMap(Audit.AuditProperties.IDENTITY_PROVIDER, createdIdentityProviderActivation.getIdentityProviderId()),
-            IdentityProvider.AuditEvent.IDENTITY_PROVIDER_ACTIVATED,
-            createdIdentityProviderActivation.getCreatedAt(),
-            null,
-            createdIdentityProviderActivation
+            AuditService.AuditLogData.builder()
+                .referenceType(Audit.AuditReferenceType.valueOf(target.getReferenceType().name()))
+                .referenceId(target.getReferenceId())
+                .properties(
+                    Collections.singletonMap(
+                        Audit.AuditProperties.IDENTITY_PROVIDER,
+                        createdIdentityProviderActivation.getIdentityProviderId()
+                    )
+                )
+                .event(IDENTITY_PROVIDER_ACTIVATED)
+                .createdAt(createdIdentityProviderActivation.getCreatedAt())
+                .oldValue(null)
+                .newValue(createdIdentityProviderActivation)
+                .build()
         );
 
         return createdIdentityProviderActivation;
@@ -327,13 +338,15 @@ public class IdentityProviderActivationServiceImpl extends AbstractService imple
 
         auditService.createAuditLog(
             executionContext,
-            Audit.AuditReferenceType.valueOf(target.getReferenceType().name()),
-            target.getReferenceId(),
-            Collections.singletonMap(Audit.AuditProperties.IDENTITY_PROVIDER, identityProviderId),
-            IdentityProvider.AuditEvent.IDENTITY_PROVIDER_DEACTIVATED,
-            new Date(),
-            optIPAToRemove.get(),
-            null
+            AuditService.AuditLogData.builder()
+                .referenceType(Audit.AuditReferenceType.valueOf(target.getReferenceType().name()))
+                .referenceId(target.getReferenceId())
+                .properties(Collections.singletonMap(Audit.AuditProperties.IDENTITY_PROVIDER, identityProviderId))
+                .event(IDENTITY_PROVIDER_DEACTIVATED)
+                .createdAt(new Date())
+                .oldValue(optIPAToRemove.get())
+                .newValue(null)
+                .build()
         );
     }
 

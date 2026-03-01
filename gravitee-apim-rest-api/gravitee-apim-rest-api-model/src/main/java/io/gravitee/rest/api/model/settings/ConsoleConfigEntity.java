@@ -39,6 +39,8 @@ public class ConsoleConfigEntity {
     private Federation federation;
     private CloudHosted cloudHosted;
     private UserGroup userGroup;
+    private NewtAIELGen elGen;
+    private KafkaConsole kafkaConsole;
 
     public ConsoleConfigEntity() {
         super();
@@ -58,5 +60,7 @@ public class ConsoleConfigEntity {
         federation = new Federation();
         cloudHosted = new CloudHosted();
         userGroup = new UserGroup();
+        elGen = new NewtAIELGen();
+        kafkaConsole = new KafkaConsole();
     }
 }

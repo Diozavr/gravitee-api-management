@@ -20,6 +20,7 @@ import { mergeMap, takeUntil, tap } from 'rxjs/operators';
 
 import { PolicyService } from '../../../../../services-ngx/policy.service';
 import { InternalPlanFormValue } from '../api-plan-form.component';
+import { ApiFederated, ApiV2, ApiV4 } from '../../../../../entities/management-api-v2';
 
 @Component({
   selector: 'plan-edit-restriction-step',
@@ -32,6 +33,9 @@ export class PlanEditRestrictionStepComponent implements OnInit, OnDestroy {
 
   @Input()
   public initialFormValues: InternalPlanFormValue['restriction'];
+
+  @Input()
+  api?: ApiV2 | ApiV4 | ApiFederated;
 
   public restrictionForm: UntypedFormGroup;
 
@@ -54,7 +58,7 @@ export class PlanEditRestrictionStepComponent implements OnInit, OnDestroy {
     });
 
     this.rateLimitSchema$ = this.restrictionForm.get('rateLimitEnabled').valueChanges.pipe(
-      mergeMap((enabled) => (!enabled ? of(undefined) : this.policyService.getSchema('rate-limit'))),
+      mergeMap(enabled => (!enabled ? of(undefined) : this.policyService.getSchema('rate-limit'))),
       tap(() =>
         this.restrictionForm.setControl('rateLimitConfig', new UntypedFormControl(this.initialFormValues?.rateLimitConfig ?? {}), {
           emitEvent: false,
@@ -65,7 +69,7 @@ export class PlanEditRestrictionStepComponent implements OnInit, OnDestroy {
     );
 
     this.quotaSchema$ = this.restrictionForm.get('quotaEnabled').valueChanges.pipe(
-      mergeMap((enabled) => (!enabled ? of(undefined) : this.policyService.getSchema('quota'))),
+      mergeMap(enabled => (!enabled ? of(undefined) : this.policyService.getSchema('quota'))),
       tap(() =>
         this.restrictionForm.setControl('quotaConfig', new UntypedFormControl(this.initialFormValues?.quotaConfig ?? {}), {
           emitEvent: false,
@@ -76,7 +80,7 @@ export class PlanEditRestrictionStepComponent implements OnInit, OnDestroy {
     );
 
     this.resourceFilteringSchema$ = this.restrictionForm.get('resourceFilteringEnabled').valueChanges.pipe(
-      mergeMap((enabled) => (!enabled ? of(undefined) : this.policyService.getSchema('resource-filtering'))),
+      mergeMap(enabled => (!enabled ? of(undefined) : this.policyService.getSchema('resource-filtering'))),
       tap(() =>
         this.restrictionForm.setControl(
           'resourceFilteringConfig',
@@ -94,5 +98,9 @@ export class PlanEditRestrictionStepComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.unsubscribe$.next(true);
     this.unsubscribe$.unsubscribe();
+  }
+
+  get isAIApi(): boolean {
+    return !!this.api && 'type' in this.api && ['MCP_PROXY', 'LLM_PROXY', 'A2A_PROXY'].includes(this.api.type);
   }
 }

@@ -20,7 +20,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.ok;
 import static io.gravitee.apim.integration.tests.secrets.SecuredVaultContainer.TEST_POLICY_NAME;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
+import static org.awaitility.Awaitility.await;
 
 import io.github.jopenlibs.vault.VaultException;
 import io.github.jopenlibs.vault.api.Auth;
@@ -295,15 +295,14 @@ class SecuredVaultSecretProviderIntegrationTest extends AbstractSecuredVaultSecr
             writeSecret("secret/tls-test", Map.of("crt", newSSLPairs.cert(), "key", newSSLPairs.privateKey()));
 
             // create a new client to avoid sharing the connection
-            var newHttpClient = getBean(Vertx.class)
-                .createHttpClient(
-                    new HttpClientOptions()
-                        .setDefaultPort(httpConfig.httpPort())
-                        .setDefaultHost("localhost")
-                        .setSsl(true)
-                        .setVerifyHost(false)
-                        .setTrustOptions(new PemTrustOptions().addCertValue(Buffer.buffer(sslPairs.cert())))
-                );
+            var newHttpClient = getBean(Vertx.class).createHttpClient(
+                new HttpClientOptions()
+                    .setDefaultPort(httpConfig.httpPort())
+                    .setDefaultHost("localhost")
+                    .setSsl(true)
+                    .setVerifyHost(false)
+                    .setTrustOptions(new PemTrustOptions().addCertValue(Buffer.buffer(sslPairs.cert())))
+            );
 
             await()
                 .pollInterval(1, TimeUnit.SECONDS)
@@ -351,7 +350,9 @@ class SecuredVaultSecretProviderIntegrationTest extends AbstractSecuredVaultSecr
             Environment environment = getBean(Environment.class);
             assertThatCode(() -> environment.getProperty("missing")).isInstanceOf(Exception.class);
             assertThatCode(() -> environment.getProperty("missing2")).isInstanceOf(Exception.class);
-            assertThat(environment.getProperty("no_plugin")).isEqualTo("secret://foo/test:pass"); // not recognized as a secret does not return value
+            assertThat(environment.getProperty("no_plugin")).isEqualTo("secret://foo/test:pass"); // not recognized as a
+            // secret does not
+            // return value
         }
     }
 }

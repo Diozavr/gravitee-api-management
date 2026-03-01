@@ -21,10 +21,11 @@ import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.repository.analytics.AnalyticsException;
 import io.gravitee.repository.common.query.QueryContext;
 import io.gravitee.repository.log.v4.api.LogRepository;
+import io.gravitee.repository.log.v4.api.MetricsRepository;
 import io.gravitee.repository.log.v4.model.LogResponse;
-import io.gravitee.repository.log.v4.model.connection.ConnectionLog;
 import io.gravitee.repository.log.v4.model.connection.ConnectionLogDetailQuery;
-import io.gravitee.repository.log.v4.model.connection.ConnectionLogQuery;
+import io.gravitee.repository.log.v4.model.connection.Metrics;
+import io.gravitee.repository.log.v4.model.connection.MetricsQuery;
 import io.gravitee.rest.api.model.analytics.SearchLogsFilters;
 import io.gravitee.rest.api.model.common.Pageable;
 import io.gravitee.rest.api.model.common.PageableImpl;
@@ -38,19 +39,31 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 class ConnectionLogsCrudServiceImpl implements ConnectionLogsCrudService {
 
     private final LogRepository logRepository;
+    private final MetricsRepository metricsRepository;
 
-    public ConnectionLogsCrudServiceImpl(@Lazy LogRepository logRepository) {
+    public ConnectionLogsCrudServiceImpl(@Lazy LogRepository logRepository, @Lazy MetricsRepository metricsRepository) {
         this.logRepository = logRepository;
+        this.metricsRepository = metricsRepository;
+    }
+
+    @Override
+    public SearchLogsResponse<BaseConnectionLog> searchApiConnectionLogs(
+        ExecutionContext executionContext,
+        SearchLogsFilters logsFilters,
+        Pageable pageable,
+        List<DefinitionVersion> definitionVersions
+    ) {
+        return searchApiConnectionLogs(executionContext, logsFilters.apiIds(), logsFilters, pageable, definitionVersions);
     }
 
     @Override
@@ -61,17 +74,28 @@ class ConnectionLogsCrudServiceImpl implements ConnectionLogsCrudService {
         Pageable pageable,
         List<DefinitionVersion> definitionVersions
     ) {
+        return searchApiConnectionLogs(executionContext, Set.of(apiId), logsFilters, pageable, definitionVersions);
+    }
+
+    @Override
+    public SearchLogsResponse<BaseConnectionLog> searchApiConnectionLogs(
+        ExecutionContext executionContext,
+        Set<String> apiIds,
+        SearchLogsFilters logsFilters,
+        Pageable pageable,
+        List<DefinitionVersion> definitionVersions
+    ) {
         try {
             var response = getConnectionLogsResponse(
                 executionContext,
-                mapToConnectionLogQueryFilterBuilder(logsFilters).apiIds(Set.of(apiId)).build(),
+                mapToConnectionLogQueryFilterBuilder(logsFilters).apiIds(apiIds).build(),
                 pageable,
                 definitionVersions
             );
             return mapToConnectionResponse(response);
         } catch (AnalyticsException e) {
-            log.error("An error occurs while trying to search connection logs of api [apiId={}]", apiId, e);
-            throw new TechnicalManagementException("Error while searching connection logs of api " + apiId, e);
+            String joinedApiIds = String.join(",", apiIds);
+            throw new TechnicalManagementException("Error while searching connection logs of api " + joinedApiIds, e);
         }
     }
 
@@ -91,8 +115,7 @@ class ConnectionLogsCrudServiceImpl implements ConnectionLogsCrudService {
             if (executeConnectionLogDetailsSearch) {
                 var connectionLogDetailsResponse = searchConnectionLogDetails(
                     executionContext,
-                    ConnectionLogDetailQuery
-                        .builder()
+                    ConnectionLogDetailQuery.builder()
                         .projectionFields(List.of("_id", "request-id"))
                         .filter(mapToConnectionLogDetailQueryFilterBuilder(logsFilters).build())
                         .page(pageable.getPageNumber())
@@ -138,8 +161,7 @@ class ConnectionLogsCrudServiceImpl implements ConnectionLogsCrudService {
         try {
             var response = logRepository.searchConnectionLogDetail(
                 new QueryContext(executionContext.getOrganizationId(), executionContext.getEnvironmentId()),
-                ConnectionLogDetailQuery
-                    .builder()
+                ConnectionLogDetailQuery.builder()
                     .filter(ConnectionLogDetailQuery.Filter.builder().apiIds(Set.of(apiId)).requestIds(Set.of(requestId)).build())
                     .build()
             );
@@ -150,7 +172,7 @@ class ConnectionLogsCrudServiceImpl implements ConnectionLogsCrudService {
         }
     }
 
-    private SearchLogsResponse<BaseConnectionLog> mapToConnectionResponse(LogResponse<ConnectionLog> logs) {
+    private SearchLogsResponse<BaseConnectionLog> mapToConnectionResponse(LogResponse<Metrics> logs) {
         var total = logs != null ? logs.total() : 0L;
         var data = ConnectionLogAdapter.INSTANCE.toEntitiesList(logs != null ? logs.data() : new ArrayList<>());
 
@@ -163,15 +185,15 @@ class ConnectionLogsCrudServiceImpl implements ConnectionLogsCrudService {
         return ConnectionLogAdapter.INSTANCE.toEntity(connectionLogDetail);
     }
 
-    private static ConnectionLogQuery.Filter.FilterBuilder mapToConnectionLogQueryFilterBuilder(SearchLogsFilters searchLogsFilters) {
-        return ConnectionLogQuery.Filter
-            .builder()
+    private static MetricsQuery.Filter.FilterBuilder mapToConnectionLogQueryFilterBuilder(SearchLogsFilters searchLogsFilters) {
+        return MetricsQuery.Filter.builder()
             .from(searchLogsFilters.from())
             .to(searchLogsFilters.to())
             .applicationIds(searchLogsFilters.applicationIds())
             .apiIds(searchLogsFilters.apiIds())
             .planIds(searchLogsFilters.planIds())
             .methods(searchLogsFilters.methods())
+            .mcpMethods(searchLogsFilters.mcpMethods())
             .statuses(searchLogsFilters.statuses())
             .entrypointIds(searchLogsFilters.entrypointIds())
             .requestIds(searchLogsFilters.requestIds())
@@ -183,8 +205,7 @@ class ConnectionLogsCrudServiceImpl implements ConnectionLogsCrudService {
     private static ConnectionLogDetailQuery.Filter.FilterBuilder mapToConnectionLogDetailQueryFilterBuilder(
         SearchLogsFilters searchLogsFilters
     ) {
-        return ConnectionLogDetailQuery.Filter
-            .builder()
+        return ConnectionLogDetailQuery.Filter.builder()
             .from(searchLogsFilters.from())
             .to(searchLogsFilters.to())
             .apiIds(searchLogsFilters.apiIds())
@@ -195,20 +216,15 @@ class ConnectionLogsCrudServiceImpl implements ConnectionLogsCrudService {
             .bodyText(searchLogsFilters.bodyText());
     }
 
-    private @NotNull LogResponse<ConnectionLog> getConnectionLogsResponse(
+    private @NotNull LogResponse<Metrics> getConnectionLogsResponse(
         ExecutionContext executionContext,
-        ConnectionLogQuery.Filter connectionLogQueryFilter,
+        MetricsQuery.Filter connectionLogQueryFilter,
         Pageable pageable,
         List<DefinitionVersion> definitionVersions
     ) throws AnalyticsException {
-        return logRepository.searchConnectionLogs(
+        return metricsRepository.searchMetrics(
             new QueryContext(executionContext.getOrganizationId(), executionContext.getEnvironmentId()),
-            ConnectionLogQuery
-                .builder()
-                .filter(connectionLogQueryFilter)
-                .page(pageable.getPageNumber())
-                .size(pageable.getPageSize())
-                .build(),
+            MetricsQuery.builder().filter(connectionLogQueryFilter).page(pageable.getPageNumber()).size(pageable.getPageSize()).build(),
             definitionVersions
         );
     }

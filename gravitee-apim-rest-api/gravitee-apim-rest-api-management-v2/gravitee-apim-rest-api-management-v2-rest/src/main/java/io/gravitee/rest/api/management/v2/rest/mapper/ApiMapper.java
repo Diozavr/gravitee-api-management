@@ -31,6 +31,7 @@ import io.gravitee.definition.model.v4.flow.AbstractFlow;
 import io.gravitee.definition.model.v4.listener.AbstractListener;
 import io.gravitee.definition.model.v4.listener.entrypoint.AbstractEntrypoint;
 import io.gravitee.definition.model.v4.service.AbstractApiServices;
+import io.gravitee.node.logging.NodeLoggerFactory;
 import io.gravitee.rest.api.management.v2.rest.model.Api;
 import io.gravitee.rest.api.management.v2.rest.model.ApiFederated;
 import io.gravitee.rest.api.management.v2.rest.model.ApiFederatedAgent;
@@ -43,6 +44,7 @@ import io.gravitee.rest.api.management.v2.rest.model.BaseOriginContext;
 import io.gravitee.rest.api.management.v2.rest.model.CreateApiV4;
 import io.gravitee.rest.api.management.v2.rest.model.DefinitionVersion;
 import io.gravitee.rest.api.management.v2.rest.model.ExposedEntrypoint;
+import io.gravitee.rest.api.management.v2.rest.model.FlowV4;
 import io.gravitee.rest.api.management.v2.rest.model.GenericApi;
 import io.gravitee.rest.api.management.v2.rest.model.IngestedApi;
 import io.gravitee.rest.api.management.v2.rest.model.IntegrationOriginContext;
@@ -64,6 +66,7 @@ import io.gravitee.rest.api.model.v4.nativeapi.NativeApiEntity;
 import jakarta.annotation.Nullable;
 import jakarta.ws.rs.core.UriInfo;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -75,7 +78,6 @@ import org.mapstruct.Named;
 import org.mapstruct.ValueMapping;
 import org.mapstruct.factory.Mappers;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Mapper(
     uses = {
@@ -98,7 +100,7 @@ import org.slf4j.LoggerFactory;
     }
 )
 public interface ApiMapper {
-    Logger logger = LoggerFactory.getLogger(ApiMapper.class);
+    Logger log = NodeLoggerFactory.getLogger(ApiMapper.class);
     ApiMapper INSTANCE = Mappers.getMapper(ApiMapper.class);
 
     // Api
@@ -148,7 +150,7 @@ public interface ApiMapper {
             } catch (Exception e) {
                 // Ignore APIs throwing conversion issues in the list
                 // As v4 was out there in alpha version, we still want to build the list event if some APIs cannot be converted
-                logger.error("Unable to convert API {}", api.getId(), e);
+                log.error("Unable to convert API {}", api.getId(), e);
             }
         });
         return result;
@@ -228,7 +230,21 @@ public interface ApiMapper {
     @Mapping(target = "links", expression = "java(computeCoreApiLinks(source, uriInfo))")
     @Mapping(target = "listeners", source = "source.apiDefinitionNativeV4.listeners", qualifiedByName = "fromNativeListeners")
     @Mapping(target = "state", source = "source.lifecycleState")
+    @Mapping(target = "analytics", source = "source.apiDefinitionNativeV4.analytics")
     ApiV4 mapToNativeV4(io.gravitee.apim.core.api.model.Api source, UriInfo uriInfo, GenericApi.DeploymentStateEnum deploymentState);
+
+    @Mapping(target = "definitionContext", source = "source.originContext")
+    @Mapping(target = "apiVersion", source = "source.version")
+    @Mapping(target = "analytics", source = "source.apiDefinitionHttpV4.analytics")
+    @Mapping(target = "deploymentState", source = "deploymentState")
+    @Mapping(target = "endpointGroups", source = "source.apiDefinitionHttpV4.endpointGroups")
+    @Mapping(target = "flowExecution", source = "source.apiDefinitionHttpV4.flowExecution")
+    @Mapping(target = "flows", source = "source.flows", qualifiedByName = "mapToFlowV4List")
+    @Mapping(target = "lifecycleState", source = "source.apiLifecycleState")
+    @Mapping(target = "links", expression = "java(computeCoreApiLinks(source, uriInfo))")
+    @Mapping(target = "listeners", source = "source.apiDefinitionHttpV4.listeners", qualifiedByName = "fromHttpListeners")
+    @Mapping(target = "state", source = "source.lifecycleState")
+    ApiV4 mapToV4(io.gravitee.apim.core.api.model.ApiWithFlows source, UriInfo uriInfo, GenericApi.DeploymentStateEnum deploymentState);
 
     @Mapping(target = "definitionContext", source = "apiEntity.originContext")
     @Mapping(target = "links", expression = "java(computeApiLinks(apiEntity, uriInfo))")
@@ -333,11 +349,11 @@ public interface ApiMapper {
             .entrySet()
             .stream()
             .map(entry -> {
-                var key = entry.getKey();
+                String key = entry.getKey();
                 var plan = entry.getValue();
                 return Map.entry(key, PlanMapper.INSTANCE.fromPlanCRD(plan, spec.getType().name()));
             })
-            .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+            .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (v1, v2) -> v1, LinkedHashMap::new));
     }
 
     default List<? extends AbstractFlow> mapApiCRDFlows(io.gravitee.rest.api.management.v2.rest.model.ApiCRDSpec spec) {
@@ -465,4 +481,23 @@ public interface ApiMapper {
     ExposedEntrypoint map(io.gravitee.apim.core.api.model.ExposedEntrypoint entrypoint);
 
     List<ExposedEntrypoint> map(List<io.gravitee.apim.core.api.model.ExposedEntrypoint> entrypoints);
+
+    @Named("mapToFlowV4List")
+    default List<FlowV4> mapToFlowV4List(List<? extends AbstractFlow> flows) {
+        if (flows == null) {
+            return null;
+        }
+        return flows
+            .stream()
+            .map(flow -> {
+                if (flow instanceof io.gravitee.definition.model.v4.flow.Flow httpFlow) {
+                    return FlowMapper.INSTANCE.mapFromHttpV4(httpFlow);
+                } else if (flow instanceof io.gravitee.definition.model.v4.nativeapi.NativeFlow nativeFlow) {
+                    return FlowMapper.INSTANCE.mapFromNativeV4(nativeFlow);
+                }
+                return null;
+            })
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toList());
+    }
 }

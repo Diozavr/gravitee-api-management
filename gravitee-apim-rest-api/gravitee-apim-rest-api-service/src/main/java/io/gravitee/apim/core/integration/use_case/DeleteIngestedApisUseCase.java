@@ -42,10 +42,10 @@ import io.reactivex.rxjava3.core.Flowable;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.Builder;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @UseCase
 @RequiredArgsConstructor
 public class DeleteIngestedApisUseCase {
@@ -77,8 +77,7 @@ public class DeleteIngestedApisUseCase {
             )
             .toList();
 
-        Flowable
-            .fromIterable(apisToDelete)
+        Flowable.fromIterable(apisToDelete)
             .subscribe(
                 api -> {
                     if (api.getApiLifecycleState().equals(Api.ApiLifecycleState.PUBLISHED)) {
@@ -112,7 +111,9 @@ public class DeleteIngestedApisUseCase {
                 //Close active Subscriptions
                 subscriptionQueryService
                     .findActiveSubscriptionsByPlan(plan.getId())
-                    .forEach(activeSubscription -> closeSubscriptionDomainService.closeSubscription(activeSubscription.getId(), auditInfo));
+                    .forEach(activeSubscription ->
+                        closeSubscriptionDomainService.closeSubscription(activeSubscription.getId(), api, auditInfo)
+                    );
 
                 //Delete all subscriptions
                 subscriptionQueryService
@@ -144,8 +145,7 @@ public class DeleteIngestedApisUseCase {
 
     private void createAuditLog(AuditInfo auditInfo, Api api) {
         auditDomainService.createApiAuditLog(
-            ApiAuditLogEntity
-                .builder()
+            ApiAuditLogEntity.builder()
                 .organizationId(auditInfo.organizationId())
                 .environmentId(auditInfo.environmentId())
                 .apiId(api.getId())

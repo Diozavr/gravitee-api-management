@@ -15,7 +15,7 @@
  */
 
 import { Meta, moduleMetadata, StoryObj } from '@storybook/angular';
-import { action } from '@storybook/addon-actions';
+import { action } from 'storybook/actions';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { MatTableModule } from '@angular/material/table';
 import { MatSortModule } from '@angular/material/sort';
@@ -56,7 +56,7 @@ export default {
 } as Meta;
 
 export const Default: StoryObj = {
-  render: (args) => ({
+  render: args => ({
     template: `
     <div *ngIf="!insideMatCard">
         <ng-container *ngTemplateOutlet="contentTemplate;"></ng-container>

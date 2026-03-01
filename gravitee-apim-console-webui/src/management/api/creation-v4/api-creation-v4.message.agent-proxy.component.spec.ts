@@ -113,7 +113,7 @@ describe('ApiCreationV4Component - Message - Agent Proxy', () => {
 
   const agentToAgent: Partial<ConnectorPlugin> = {
     id: AGENT_TO_AGENT.id,
-    supportedApiType: 'MESSAGE',
+    supportedApiType: 'A2A_PROXY',
     name: AGENT_TO_AGENT.name,
     supportedListenerType: 'HTTP',
   };
@@ -127,7 +127,7 @@ describe('ApiCreationV4Component - Message - Agent Proxy', () => {
   });
 
   describe('Entrypoint and endpoint validation', () => {
-    /* We save the A2A or the Agent proxy as MESSAGE only but if Protocol Mediation is selected, 
+    /* We save the A2A or the Agent proxy as MESSAGE only but if Protocol Mediation is selected,
     agent-to-agent entry/end point is not visible and vice versa. */
 
     it('should not show the agent-to-agent entrypoint when Protocol Mediation is selected', fakeAsync(async () => {
@@ -150,21 +150,22 @@ describe('ApiCreationV4Component - Message - Agent Proxy', () => {
 
     it('should select the agent-to-agent entrypoint automatically when Agent Proxy is selected', fakeAsync(async () => {
       await stepperHelper.fillAndValidateStep1_ApiDetails('API', '1.0', 'Description');
-      // Select A2A architecture and validate the expected entry/end point get request
-      await stepperHelper.fillAndValidateStep2_0_EntrypointsArchitecture('A2A');
+      // Select AI architecture
+      await stepperHelper.fillAndValidateStep2_0_EntrypointsArchitecture('AI');
+      // Select A2A and validate the expected entry/end point get request
+      await stepperHelper.fillAndValidateStep2_1_EntrypointsList('AI', [agentToAgent]);
       fixture.detectChanges();
       // agent-to-agent entrypoint gets selected automatically
       expect(component.currentStep.payload.selectedEntrypoints).toEqual([
         {
-          icon: 'gio-literal:agent-to-agent',
+          icon: 'gio-literal:a2a-proxy',
           id: AGENT_TO_AGENT.id,
           name: AGENT_TO_AGENT.name,
           supportedListenerType: 'HTTP',
           deployed: true,
-          selectedQos: 'NONE', // default
+          selectedQos: 'NONE',
         },
       ]);
-      expect(component.currentStep.payload.isA2ASelected).toBeTruthy;
       httpExpects.expectRestrictedDomainsGetRequest([]);
       httpExpects.expectSchemaGetRequest([agentToAgent]);
       httpExpects.expectApiGetPortalConfiguration();
@@ -179,7 +180,7 @@ describe('ApiCreationV4Component - Message - Agent Proxy', () => {
 
       httpExpects.expectEntrypointsGetRequest([{ id: 'sse', supportedApiType: 'MESSAGE', name: 'SSE', supportedListenerType: 'HTTP' }]);
 
-      await step2Harness.getAsyncEntrypoints().then((form) => form.selectOptionsByIds(['sse']));
+      await step2Harness.getAsyncEntrypoints().then(form => form.selectOptionsByIds(['sse']));
       await step2Harness.clickValidate();
       httpExpects.expectRestrictedDomainsGetRequest([]);
       httpExpects.expectSchemaGetRequest([{ id: 'sse', name: 'SSE' }]);
@@ -205,13 +206,14 @@ describe('ApiCreationV4Component - Message - Agent Proxy', () => {
 
     it('should select the agent-to-agent endpoint automatically when Agent Proxy is selected', fakeAsync(async () => {
       await stepperHelper.fillAndValidateStep1_ApiDetails('API name', '1.0', 'Description');
-      await stepperHelper.fillAndValidateStep2_0_EntrypointsArchitecture('A2A');
+      await stepperHelper.fillAndValidateStep2_0_EntrypointsArchitecture('AI');
+      await stepperHelper.fillAndValidateStep2_1_EntrypointsList('AI', [agentToAgent]);
       await stepperHelper.fillAndValidateStep2_2_EntrypointsConfig([agentToAgent]);
       await stepperHelper.fillAndValidateStep3_2_EndpointsConfig([agentToAgent]);
       // agent-to-agent endpoint gets selected automatically
       expect(component.currentStep.payload.selectedEndpoints).toEqual([
         {
-          icon: 'gio-literal:agent-to-agent',
+          icon: 'gio-literal:a2a-proxy',
           id: AGENT_TO_AGENT.id,
           name: AGENT_TO_AGENT.name,
           configuration: {},
@@ -227,7 +229,8 @@ describe('ApiCreationV4Component - Message - Agent Proxy', () => {
   describe('API Creation', () => {
     it('should create the API', fakeAsync(async () => {
       await stepperHelper.fillAndValidateStep1_ApiDetails('API name', '1.0', 'Description');
-      await stepperHelper.fillAndValidateStep2_0_EntrypointsArchitecture('A2A');
+      await stepperHelper.fillAndValidateStep2_0_EntrypointsArchitecture('AI');
+      await stepperHelper.fillAndValidateStep2_1_EntrypointsList('AI', [agentToAgent]);
       await stepperHelper.fillAndValidateStep2_2_EntrypointsConfig([agentToAgent]);
       await stepperHelper.fillAndValidateStep3_2_EndpointsConfig([agentToAgent]);
       await stepperHelper.validateStep4_1_SecurityPlansList();
@@ -242,10 +245,10 @@ describe('ApiCreationV4Component - Message - Agent Proxy', () => {
 
       const step2Summary = await step5Harness.getStepSummaryTextContent(2);
       expect(step2Summary).toContain('Type:' + 'HTTP');
-      expect(step2Summary).toContain('Entrypoints:' + ' Agent to agent');
+      expect(step2Summary).toContain('Entrypoints: A2A Proxy');
 
       const step3Summary = await step5Harness.getStepSummaryTextContent(3);
-      expect(step3Summary).toContain('Endpoints' + 'Endpoints: ' + AGENT_TO_AGENT.name);
+      expect(step3Summary).toContain('Endpoints: ' + AGENT_TO_AGENT.name);
 
       const step4Summary = await step5Harness.getStepSummaryTextContent(4);
       expect(step4Summary).toContain('Default Keyless (UNSECURED)' + 'KEY_LESS');

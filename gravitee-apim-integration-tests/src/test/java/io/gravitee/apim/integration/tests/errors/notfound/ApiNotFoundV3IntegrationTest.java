@@ -15,7 +15,7 @@
  */
 package io.gravitee.apim.integration.tests.errors.notfound;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import io.gravitee.apim.gateway.tests.sdk.AbstractGatewayTest;
 import io.gravitee.apim.gateway.tests.sdk.annotations.GatewayTest;
@@ -88,8 +88,9 @@ public class ApiNotFoundV3IntegrationTest {
                 .flatMap(response -> {
                     assertThat(response.statusCode()).isEqualTo(404);
                     assertThat(response.getHeader(HttpHeaders.CONTENT_TYPE)).isEqualTo(MediaType.APPLICATION_JSON);
-                    assertThat(response.getHeader(HttpHeaders.CONTENT_LENGTH))
-                        .isEqualTo(Integer.toString(errorMessage.toBuffer().length()));
+                    assertThat(response.getHeader(HttpHeaders.CONTENT_LENGTH)).isEqualTo(
+                        Integer.toString(errorMessage.toBuffer().length())
+                    );
                     return response.body();
                 })
                 .test()

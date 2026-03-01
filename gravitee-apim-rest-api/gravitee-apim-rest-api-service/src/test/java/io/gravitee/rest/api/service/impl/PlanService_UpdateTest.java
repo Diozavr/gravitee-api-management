@@ -147,10 +147,11 @@ public class PlanService_UpdateTest {
         when(plan.getStatus()).thenReturn(Plan.Status.STAGING);
         when(plan.getType()).thenReturn(Plan.PlanType.API);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.API_KEY);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
 
         UpdatePlanEntity updatePlan = mock(UpdatePlanEntity.class);
@@ -170,10 +171,11 @@ public class PlanService_UpdateTest {
         when(plan.getStatus()).thenReturn(Plan.Status.STAGING);
         when(plan.getType()).thenReturn(Plan.PlanType.API);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.API_KEY);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
         mockApiDefinitionVersion(V2);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
 
@@ -195,10 +197,11 @@ public class PlanService_UpdateTest {
         when(plan.getStatus()).thenReturn(PUBLISHED);
         when(plan.getType()).thenReturn(Plan.PlanType.API);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.API_KEY);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
 
         UpdatePlanEntity updatePlan = mock(UpdatePlanEntity.class);
         when(updatePlan.getId()).thenReturn(PLAN_ID);
@@ -246,10 +249,11 @@ public class PlanService_UpdateTest {
         when(plan.getStatus()).thenReturn(planStatus);
         when(plan.getType()).thenReturn(Plan.PlanType.API);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.API_KEY);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
 
         mockApiDefinitionVersion(apiVersion);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
@@ -277,11 +281,12 @@ public class PlanService_UpdateTest {
         when(plan.getStatus()).thenReturn(PUBLISHED);
         when(plan.getType()).thenReturn(Plan.PlanType.API);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.KEY_LESS);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
         when(planRepository.update(any())).thenReturn(plan);
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
 
         mockApiDefinitionVersion(V2);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
@@ -302,12 +307,13 @@ public class PlanService_UpdateTest {
         when(plan.getStatus()).thenReturn(PUBLISHED);
         when(plan.getType()).thenReturn(Plan.PlanType.API);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.KEY_LESS);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(plan.getOrder()).thenReturn(1);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
         when(planRepository.update(any())).thenReturn(plan);
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
 
         mockApiDefinitionVersion(V2);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
@@ -327,10 +333,11 @@ public class PlanService_UpdateTest {
     public void shouldUpdateApi_PlanWithoutFlow() throws Exception {
         final String PAGE_ID = "PAGE_ID_TEST";
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.KEY_LESS);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
 
         mockApiDefinitionVersion(V2);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
@@ -355,11 +362,12 @@ public class PlanService_UpdateTest {
         when(plan.getStatus()).thenReturn(PUBLISHED);
         when(plan.getType()).thenReturn(Plan.PlanType.API);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.KEY_LESS);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
         when(planRepository.update(any())).thenReturn(plan);
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
 
         mockApiDefinitionVersion(V2);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
@@ -386,10 +394,11 @@ public class PlanService_UpdateTest {
         when(plan.getStatus()).thenReturn(Plan.Status.STAGING);
         when(plan.getType()).thenReturn(Plan.PlanType.API);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.API_KEY);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
 
         UpdatePlanEntity updatePlan = mock(UpdatePlanEntity.class);
@@ -407,11 +416,12 @@ public class PlanService_UpdateTest {
 
     @Test(expected = TagNotAllowedException.class)
     public void should_throw_tagNotAllowedException_if_tag_validation_fails() throws Exception {
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.KEY_LESS);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
 
         UpdatePlanEntity updatePlan = mock(UpdatePlanEntity.class);
         when(updatePlan.getId()).thenReturn(PLAN_ID);
@@ -436,10 +446,11 @@ public class PlanService_UpdateTest {
         when(plan.getStatus()).thenReturn(Plan.Status.STAGING);
         when(plan.getType()).thenReturn(Plan.PlanType.API);
         when(plan.getSecurity()).thenReturn(Plan.PlanSecurityType.API_KEY);
-        when(plan.getApi()).thenReturn(API_ID);
+        when(plan.getReferenceId()).thenReturn(API_ID);
         when(planRepository.findById(PLAN_ID)).thenReturn(Optional.of(plan));
-        when(parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT)))
-            .thenReturn(true);
+        when(
+            parameterService.findAsBoolean(eq(GraviteeContext.getExecutionContext()), any(), eq(ParameterReferenceType.ENVIRONMENT))
+        ).thenReturn(true);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
 
         UpdatePlanEntity updatePlan = mock(UpdatePlanEntity.class);

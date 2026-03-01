@@ -43,6 +43,8 @@ import io.gravitee.gateway.env.RequestTimeoutConfiguration;
 import io.gravitee.gateway.handlers.accesspoint.manager.AccessPointManager;
 import io.gravitee.gateway.platform.organization.manager.OrganizationManager;
 import io.gravitee.gateway.policy.impl.PolicyLoader;
+import io.gravitee.gateway.reactive.core.connection.ConnectionDrainManager;
+import io.gravitee.gateway.reactive.core.connection.DefaultConnectionDrainManager;
 import io.gravitee.gateway.reactive.core.v4.endpoint.EndpointManager;
 import io.gravitee.gateway.reactive.handlers.api.ApiPolicyManager;
 import io.gravitee.gateway.reactive.handlers.api.el.ApiTemplateVariableProvider;
@@ -54,6 +56,7 @@ import io.gravitee.gateway.reactor.handler.HttpAcceptorFactory;
 import io.gravitee.gateway.reactor.handler.ReactorHandler;
 import io.gravitee.gateway.reactor.handler.context.ApiTemplateVariableProviderFactory;
 import io.gravitee.gateway.report.ReporterService;
+import io.gravitee.gateway.report.guard.LogGuardService;
 import io.gravitee.gateway.resource.internal.v4.DefaultResourceManager;
 import io.gravitee.node.api.Node;
 import io.gravitee.node.api.configuration.Configuration;
@@ -69,7 +72,6 @@ import io.gravitee.plugin.resource.ResourcePlugin;
 import io.gravitee.resource.api.ResourceManager;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -152,33 +154,40 @@ class DefaultApiReactorFactoryTest {
     @Mock
     private GatewayConfiguration gatewayConfiguration;
 
+    @Mock
+    private LogGuardService logGuardService;
+
+    private ConnectionDrainManager connectionDrainManager;
+
     @BeforeEach
     void init() {
+        connectionDrainManager = new DefaultConnectionDrainManager();
         lenient().when(applicationContext.getBeanFactory()).thenReturn(applicationContextListable);
         lenient().when(policyFactoryManager.get(any())).thenReturn(policyFactory);
-        cut =
-            new DefaultApiReactorFactory(
-                applicationContext,
-                configuration,
-                node,
-                policyFactoryManager,
-                entrypointConnectorPluginManager,
-                endpointConnectorPluginManager,
-                apiServicePluginManager,
-                organizationPolicyChainFactoryManager,
-                organizationManager,
-                flowResolverFactory,
-                requestTimeoutConfiguration,
-                reporterService,
-                accessPointManager,
-                eventManager,
-                new HttpAcceptorFactory(false),
-                openTelemetryConfiguration,
-                openTelemetryFactory,
-                List.of(),
-                gatewayConfiguration,
-                dictionaryManager
-            );
+        cut = new DefaultApiReactorFactory(
+            applicationContext,
+            configuration,
+            node,
+            policyFactoryManager,
+            entrypointConnectorPluginManager,
+            endpointConnectorPluginManager,
+            apiServicePluginManager,
+            organizationPolicyChainFactoryManager,
+            organizationManager,
+            flowResolverFactory,
+            requestTimeoutConfiguration,
+            reporterService,
+            accessPointManager,
+            eventManager,
+            new HttpAcceptorFactory(false),
+            openTelemetryConfiguration,
+            openTelemetryFactory,
+            List.of(),
+            gatewayConfiguration,
+            dictionaryManager,
+            logGuardService,
+            connectionDrainManager
+        );
     }
 
     @Nested
@@ -311,8 +320,9 @@ class DefaultApiReactorFactoryTest {
 
         @Test
         void should_create_api_reactor_with_TemplateVariableProviders() {
-            when(dictionaryManager.createTemplateVariableProvider(any()))
-                .thenReturn(mock(EnvironmentDictionaryTemplateVariableProvider.class));
+            when(dictionaryManager.createTemplateVariableProvider(any())).thenReturn(
+                mock(EnvironmentDictionaryTemplateVariableProvider.class)
+            );
             var api = anApi();
             var reactor = cut.create(api);
 
@@ -322,11 +332,30 @@ class DefaultApiReactorFactoryTest {
             assertThat(templateVariableProviders)
                 .hasSize(3 + registeredApiTemplateVariableProvider.size())
                 .satisfies(list -> {
-                    assertThat(list.stream().filter(p -> p instanceof ApiTemplateVariableProvider).findFirst()).isPresent();
-                    assertThat(list.stream().filter(p -> p instanceof EnvironmentDictionaryTemplateVariableProvider).findFirst())
-                        .isPresent();
-                    assertThat(list.stream().filter(p -> registeredApiTemplateVariableProvider.contains(p)).findFirst()).isPresent();
-                    assertThat(list.stream().filter(p -> p instanceof EndpointManager).findFirst()).isPresent();
+                    assertThat(
+                        list
+                            .stream()
+                            .filter(p -> p instanceof ApiTemplateVariableProvider)
+                            .findFirst()
+                    ).isPresent();
+                    assertThat(
+                        list
+                            .stream()
+                            .filter(p -> p instanceof EnvironmentDictionaryTemplateVariableProvider)
+                            .findFirst()
+                    ).isPresent();
+                    assertThat(
+                        list
+                            .stream()
+                            .filter(p -> registeredApiTemplateVariableProvider.contains(p))
+                            .findFirst()
+                    ).isPresent();
+                    assertThat(
+                        list
+                            .stream()
+                            .filter(p -> p instanceof EndpointManager)
+                            .findFirst()
+                    ).isPresent();
                 });
         }
 

@@ -32,15 +32,15 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class OrganizationSynchronizer implements RepositorySynchronizer {
 
     private static final Set<EventType> EVENT_TYPES = Set.of(EventType.PUBLISH_ORGANIZATION);
@@ -59,7 +59,11 @@ public class OrganizationSynchronizer implements RepositorySynchronizer {
             .subscribeOn(Schedulers.from(syncFetcherExecutor))
             .rebatchRequests(syncFetcherExecutor.getMaximumPoolSize())
             // fetch per page
-            .flatMap(events -> Flowable.just(events).flatMapIterable(e -> e).compose(this::prepareForDeployment))
+            .flatMap(events ->
+                Flowable.just(events)
+                    .flatMapIterable(e -> e)
+                    .compose(this::prepareForDeployment)
+            )
             // per deployable
             .compose(upstream -> {
                 OrganizationDeployer organizationDeployer = deployerFactory.createOrganizationDeployer();

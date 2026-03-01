@@ -22,16 +22,28 @@ export interface ConnectionLog {
   apiId: string;
   requestId: string;
   timestamp: string;
-  clientIdentifier: string;
-  transactionId: string;
   method: HttpMethod;
   status: number;
-  requestEnded: boolean;
-
   application: BaseApplication;
   plan: BasePlan;
+  requestEnded: boolean;
+  gatewayResponseTime: number;
+  uri: string;
+  endpoint: string;
+  message?: string;
+  errorKey?: string;
+  errorComponentName?: string;
+  errorComponentType?: string;
+  warnings?: ConnectionLogDiagnostic[];
+  additionalMetrics?: { [key: string]: string };
 }
 
+export interface ConnectionLogDiagnostic {
+  componentType: string;
+  componentName: string;
+  key: string;
+  message: string;
+}
 export interface ConnectionLogDetail {
   apiId: string;
   requestId: string;
@@ -42,6 +54,11 @@ export interface ConnectionLogDetail {
   endpointRequest: ConnectionLogDetailRequest;
   entrypointResponse: ConnectionLogDetailResponse;
   endpointResponse: ConnectionLogDetailResponse;
+  message?: string;
+  errorKey?: string;
+  errorComponentName?: string;
+  errorComponentType?: string;
+  warnings?: ConnectionLogDiagnostic[];
 }
 
 export interface ConnectionLogDetailRequest {

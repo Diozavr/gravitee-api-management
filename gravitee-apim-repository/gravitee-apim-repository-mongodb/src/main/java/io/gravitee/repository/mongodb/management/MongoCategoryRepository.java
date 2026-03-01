@@ -25,8 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -34,10 +33,9 @@ import org.springframework.stereotype.Component;
  * @author Azize ELAMRANI (azize.elamrani at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class MongoCategoryRepository implements CategoryRepository {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(MongoCategoryRepository.class);
 
     @Autowired
     private CategoryMongoRepository internalCategoryRepo;
@@ -47,20 +45,23 @@ public class MongoCategoryRepository implements CategoryRepository {
 
     @Override
     public Optional<Category> findById(String categoryId) throws TechnicalException {
-        LOGGER.debug("Find category by ID [{}]", categoryId);
+        log.debug("Find category by ID [{}]", categoryId);
 
         final CategoryMongo category = internalCategoryRepo.findById(categoryId).orElse(null);
 
-        LOGGER.debug("Find category by ID [{}] - Done", categoryId);
+        log.debug("Find category by ID [{}] - Done", categoryId);
         return Optional.ofNullable(mapper.map(category));
     }
 
     @Override
     public Set<Category> findByEnvironmentIdAndIdIn(String environmentId, Set<String> ids) throws TechnicalException {
-        LOGGER.debug("Find by environment ID [{}] and ID in [{}]", environmentId, ids);
+        log.debug("Find by environment ID [{}] and ID in [{}]", environmentId, ids);
         try {
             Set<CategoryMongo> categories = internalCategoryRepo.findByEnvironmentIdAndIdIn(environmentId, ids);
-            return categories.stream().map(categoryMongo -> mapper.map(categoryMongo)).collect(Collectors.toSet());
+            return categories
+                .stream()
+                .map(categoryMongo -> mapper.map(categoryMongo))
+                .collect(Collectors.toSet());
         } catch (Exception e) {
             throw new TechnicalException("An error occurred when getting categories by ids", e);
         }
@@ -68,32 +69,35 @@ public class MongoCategoryRepository implements CategoryRepository {
 
     @Override
     public Optional<Category> findByKey(String key, String environment) throws TechnicalException {
-        LOGGER.debug("Find category by key [{}, {}]", key, environment);
+        log.debug("Find category by key [{}, {}]", key, environment);
 
         final CategoryMongo category = internalCategoryRepo.findByKeyAndEnvironment(key, environment).orElse(null);
 
-        LOGGER.debug("Find category by key [{}, {}] - Done", key, environment);
+        log.debug("Find category by key [{}, {}] - Done", key, environment);
         return Optional.ofNullable(mapper.map(category));
     }
 
     @Override
     public Set<Category> findByPage(String page) throws TechnicalException {
-        LOGGER.debug("Find categories by page [{}]", page);
+        log.debug("Find categories by page [{}]", page);
 
         final List<CategoryMongo> categories = internalCategoryRepo.findByPage(page);
-        return categories.stream().map(categoryMongo -> mapper.map(categoryMongo)).collect(Collectors.toSet());
+        return categories
+            .stream()
+            .map(categoryMongo -> mapper.map(categoryMongo))
+            .collect(Collectors.toSet());
     }
 
     @Override
     public Category create(Category category) throws TechnicalException {
-        LOGGER.debug("Create category [{}]", category.getName());
+        log.debug("Create category [{}]", category.getName());
 
         CategoryMongo categoryMongo = mapper.map(category);
         CategoryMongo createdCategoryMongo = internalCategoryRepo.insert(categoryMongo);
 
         Category res = mapper.map(createdCategoryMongo);
 
-        LOGGER.debug("Create category [{}] - Done", category.getName());
+        log.debug("Create category [{}] - Done", category.getName());
 
         return res;
     }
@@ -114,7 +118,7 @@ public class MongoCategoryRepository implements CategoryRepository {
             CategoryMongo categoryMongoUpdated = internalCategoryRepo.save(mapper.map(category));
             return mapper.map(categoryMongoUpdated);
         } catch (Exception e) {
-            LOGGER.error("An error occurred when updating category", e);
+            log.error("An error occurred when updating category", e);
             throw new TechnicalException("An error occurred when updating category");
         }
     }
@@ -124,7 +128,7 @@ public class MongoCategoryRepository implements CategoryRepository {
         try {
             internalCategoryRepo.deleteById(categoryId);
         } catch (Exception e) {
-            LOGGER.error("An error occurred when deleting category [{}]", categoryId, e);
+            log.error("An error occurred when deleting category [{}]", categoryId, e);
             throw new TechnicalException("An error occurred when deleting category");
         }
     }
@@ -132,18 +136,24 @@ public class MongoCategoryRepository implements CategoryRepository {
     @Override
     public Set<Category> findAll() throws TechnicalException {
         final List<CategoryMongo> categories = internalCategoryRepo.findAll();
-        return categories.stream().map(categoryMongo -> mapper.map(categoryMongo)).collect(Collectors.toSet());
+        return categories
+            .stream()
+            .map(categoryMongo -> mapper.map(categoryMongo))
+            .collect(Collectors.toSet());
     }
 
     @Override
     public Set<Category> findAllByEnvironment(String environmentId) throws TechnicalException {
         final List<CategoryMongo> categories = internalCategoryRepo.findByEnvironmentId(environmentId);
-        return categories.stream().map(categoryMongo -> mapper.map(categoryMongo)).collect(Collectors.toSet());
+        return categories
+            .stream()
+            .map(categoryMongo -> mapper.map(categoryMongo))
+            .collect(Collectors.toSet());
     }
 
     @Override
     public List<String> deleteByEnvironmentId(String environmentId) throws TechnicalException {
-        LOGGER.debug("Delete category by environmentId [{}]", environmentId);
+        log.debug("Delete category by environmentId [{}]", environmentId);
         try {
             final List<String> categories = internalCategoryRepo
                 .deleteByEnvironmentId(environmentId)
@@ -151,10 +161,10 @@ public class MongoCategoryRepository implements CategoryRepository {
                 .map(CategoryMongo::getId)
                 .toList();
 
-            LOGGER.debug("Delete category by environmentId [{}] - Done", environmentId);
+            log.debug("Delete category by environmentId [{}] - Done", environmentId);
             return categories;
         } catch (Exception ex) {
-            LOGGER.error("Failed to delete categories by environmentId: {}", environmentId, ex);
+            log.error("Failed to delete categories by environmentId: {}", environmentId, ex);
             throw new TechnicalException("Failed to delete categories by environmentId");
         }
     }

@@ -17,12 +17,14 @@ package io.gravitee.gateway.services.sync.process.repository.synchronizer.subscr
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.gravitee.definition.jackson.datatype.GraviteeMapper;
+import io.gravitee.gateway.handlers.api.registry.ApiProductRegistry;
 import io.gravitee.gateway.services.sync.process.common.deployer.DeployerFactory;
 import io.gravitee.gateway.services.sync.process.common.deployer.SubscriptionDeployer;
 import io.gravitee.gateway.services.sync.process.common.mapper.SubscriptionMapper;
@@ -72,15 +74,14 @@ class SubscriptionSynchronizerTest {
     @BeforeEach
     public void beforeEach() {
         planCache = new PlanService();
-        cut =
-            new SubscriptionSynchronizer(
-                subscriptionFetcher,
-                new SubscriptionMapper(objectMapper),
-                deployerFactory,
-                planCache,
-                new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>()),
-                new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>())
-            );
+        cut = new SubscriptionSynchronizer(
+            subscriptionFetcher,
+            new SubscriptionMapper(objectMapper, mock(ApiProductRegistry.class)),
+            deployerFactory,
+            planCache,
+            new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>()),
+            new ThreadPoolExecutor(1, 1, 15L, TimeUnit.SECONDS, new LinkedBlockingQueue<>())
+        );
         lenient().when(deployerFactory.createSubscriptionDeployer()).thenReturn(subscriptionDeployer);
         lenient().when(subscriptionDeployer.deploy(any())).thenReturn(Completable.complete());
         lenient().when(subscriptionDeployer.doAfterDeployment(any())).thenReturn(Completable.complete());

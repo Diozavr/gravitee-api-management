@@ -23,7 +23,7 @@ import io.gravitee.repository.management.api.EnvironmentRepository;
 import io.gravitee.repository.management.api.search.CommandCriteria;
 import io.gravitee.repository.management.model.Command;
 import io.gravitee.repository.management.model.Environment;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -32,7 +32,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class CommandOrganizationUpgrader implements Upgrader {
 
     private final EnvironmentRepository environmentRepository;
@@ -52,11 +52,11 @@ public class CommandOrganizationUpgrader implements Upgrader {
     @Override
     public boolean upgrade() throws UpgraderException {
         return this.wrapException(() -> {
-                for (Environment environment : environmentRepository.findAll()) {
-                    updateCommands(environment);
-                }
-                return true;
-            });
+            for (Environment environment : environmentRepository.findAll()) {
+                updateCommands(environment);
+            }
+            return true;
+        });
     }
 
     private void updateCommands(Environment environment) throws TechnicalException {

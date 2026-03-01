@@ -62,25 +62,18 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
 
     public static final String FIELD_API_TYPE_VALUE = "api";
 
-    private static final Map<String, Float> API_FIELD_BOOST = Map.of(
-        FIELD_NAME,
-        20.0f,
-        FIELD_NAME_LOWERCASE,
-        20.0f,
-        FIELD_NAME_SPLIT,
-        18.0f,
-        FIELD_PATHS,
-        10.0f,
-        FIELD_HOSTS,
-        10.0f,
-        FIELD_LABELS,
-        8.0f,
-        FIELD_DESCRIPTION,
-        5.0f,
-        FIELD_METADATA,
-        4.0f,
-        FIELD_TAGS,
-        1.0f
+    private static final Map<String, Float> API_FIELD_BOOST = Map.ofEntries(
+        Map.entry(FIELD_NAME, 20.0f),
+        Map.entry(FIELD_NAME_LOWERCASE, 20.0f),
+        Map.entry(FIELD_NAME_SPLIT, 18.0f),
+        Map.entry(FIELD_PATHS, 10.0f),
+        Map.entry(FIELD_PATHS_LOWERCASE, 10.0f),
+        Map.entry(FIELD_HOSTS, 10.0f),
+        Map.entry(FIELD_HOSTS_LOWERCASE, 10.0f),
+        Map.entry(FIELD_LABELS, 8.0f),
+        Map.entry(FIELD_DESCRIPTION, 5.0f),
+        Map.entry(FIELD_METADATA, 4.0f),
+        Map.entry(FIELD_TAGS, 1.0f)
     );
 
     private static final String[] API_FIELD_SEARCH = new String[] {
@@ -93,6 +86,7 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
         FIELD_DESCRIPTION_LOWERCASE,
         FIELD_DESCRIPTION_SPLIT,
         FIELD_OWNER,
+        FIELD_OWNER_LOWERCASE,
         FIELD_LABELS,
         FIELD_LABELS_SPLIT,
         FIELD_TAGS,
@@ -100,8 +94,10 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
         FIELD_CATEGORIES,
         FIELD_CATEGORIES_SPLIT,
         FIELD_PATHS,
+        FIELD_PATHS_LOWERCASE,
         FIELD_PATHS_SPLIT,
         FIELD_HOSTS,
+        FIELD_HOSTS_LOWERCASE,
         FIELD_HOSTS_SPLIT,
         FIELD_METADATA,
         FIELD_METADATA_SPLIT,
@@ -118,6 +114,7 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
         FIELD_ORIGIN,
         FIELD_HAS_HEALTH_CHECK,
         FIELD_DEFINITION_VERSION,
+        FIELD_ALLOW_IN_API_PRODUCTS,
     };
 
     public ApiDocumentSearcher(IndexWriter indexWriter) {
@@ -125,8 +122,10 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
     }
 
     private BooleanQuery.Builder buildApiQuery(ExecutionContext executionContext, Optional<Query> filterQuery) {
-        BooleanQuery.Builder apiQuery = new BooleanQuery.Builder()
-            .add(new TermQuery(new Term(FIELD_TYPE, FIELD_API_TYPE_VALUE)), BooleanClause.Occur.FILTER);
+        BooleanQuery.Builder apiQuery = new BooleanQuery.Builder().add(
+            new TermQuery(new Term(FIELD_TYPE, FIELD_API_TYPE_VALUE)),
+            BooleanClause.Occur.FILTER
+        );
 
         if (executionContext.hasEnvironmentId()) {
             apiQuery.add(buildEnvCriteria(executionContext), BooleanClause.Occur.FILTER);
@@ -206,12 +205,13 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
             final Optional<Query> baseFilterQuery = buildFilterQuery(query.getFilters(), Map.of(FIELD_API_TYPE_VALUE, FIELD_ID));
             buildExcludedFilters(query.getExcludedFilters()).ifPresent(q -> apiQuery.add(q, BooleanClause.Occur.MUST_NOT));
             buildExplicitQuery(executionContext, query, baseFilterQuery).ifPresent(q -> apiQuery.add(q, BooleanClause.Occur.MUST));
-            buildExactMatchQuery(executionContext, query, baseFilterQuery)
-                .ifPresent(q -> apiQuery.add(new BoostQuery(q, 4.0f), BooleanClause.Occur.SHOULD));
+            buildExactMatchQuery(executionContext, query, baseFilterQuery).ifPresent(q ->
+                apiQuery.add(new BoostQuery(q, 4.0f), BooleanClause.Occur.SHOULD)
+            );
             buildWildcardQuery(executionContext, query, baseFilterQuery).ifPresent(q -> apiQuery.add(q, BooleanClause.Occur.SHOULD));
             buildIdsQuery(executionContext, query).ifPresent(q -> apiQuery.add(q, BooleanClause.Occur.SHOULD));
         } catch (ParseException pe) {
-            logger.error("Invalid query to search for API documents", pe);
+            log.error("Invalid query to search for API documents", pe);
             throw new TechnicalException("Invalid query to search for API documents", pe);
         }
 
@@ -293,7 +293,7 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
                 return "";
             }
         } catch (ParseException e) {
-            logger.debug("Unable to parse query", e);
+            log.debug("Unable to parse query", e);
             return query.getQuery();
         }
     }
@@ -304,7 +304,8 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
         parser.setAllowLeadingWildcard(true);
         // Escape [ and ] because they can be used in API names
         String escapedQuery = query.replace("[", "\\[").replace("]", "\\]");
-        if (escapedQuery.startsWith("/")) { // escape if we are looking for a path
+        if (escapedQuery.startsWith("/")) {
+            // escape if we are looking for a path
             escapedQuery = QueryParserBase.escape(query);
         }
         org.apache.lucene.search.Query parse = parser.parse(escapedQuery);
@@ -396,11 +397,11 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
         if (FIELD_CATEGORIES.equals(term.field())) {
             text = formatCategoryField(term.text());
         } else if (
-            !FIELD_PATHS.equals(term.field()) &&
             !FIELD_TAGS.equals(term.field()) &&
             !FIELD_ORIGIN.equals(term.field()) &&
             !FIELD_HAS_HEALTH_CHECK.equals(term.field()) &&
-            !FIELD_DEFINITION_VERSION.equals(term.field())
+            !FIELD_DEFINITION_VERSION.equals(term.field()) &&
+            !FIELD_ALLOW_IN_API_PRODUCTS.equals(term.field())
         ) {
             text = text.toLowerCase();
             field = field.concat("_lowercase");
@@ -442,10 +443,15 @@ public class ApiDocumentSearcher extends AbstractDocumentSearcher {
                 .add(new BoostQuery(toWildcard(FIELD_NAME, token), 12.0f), BooleanClause.Occur.SHOULD)
                 .add(new BoostQuery(toWildcard(FIELD_NAME_LOWERCASE, token.toLowerCase()), 10.0f), BooleanClause.Occur.SHOULD)
                 .add(new BoostQuery(toWildcard(FIELD_PATHS, token), 8.0f), BooleanClause.Occur.SHOULD)
+                .add(new BoostQuery(toWildcard(FIELD_PATHS_LOWERCASE, token.toLowerCase()), 7.0f), BooleanClause.Occur.SHOULD)
                 .add(toWildcard(FIELD_DESCRIPTION, token), BooleanClause.Occur.SHOULD)
                 .add(toWildcard(FIELD_DESCRIPTION_LOWERCASE, token.toLowerCase()), BooleanClause.Occur.SHOULD)
                 .add(toWildcard(FIELD_HOSTS, token), BooleanClause.Occur.SHOULD)
+                .add(toWildcard(FIELD_HOSTS_LOWERCASE, token.toLowerCase()), BooleanClause.Occur.SHOULD)
+                .add(toWildcard(FIELD_OWNER, token), BooleanClause.Occur.SHOULD)
+                .add(toWildcard(FIELD_OWNER_LOWERCASE, token.toLowerCase()), BooleanClause.Occur.SHOULD)
                 .add(toWildcard(FIELD_LABELS, token), BooleanClause.Occur.SHOULD)
+                .add(toWildcard(FIELD_LABELS_LOWERCASE, token.toLowerCase()), BooleanClause.Occur.SHOULD)
                 .add(toWildcard(FIELD_CATEGORIES, token), BooleanClause.Occur.SHOULD)
                 .add(toWildcard(FIELD_TAGS, token), BooleanClause.Occur.SHOULD)
                 .add(toWildcard(FIELD_METADATA, token), BooleanClause.Occur.SHOULD);

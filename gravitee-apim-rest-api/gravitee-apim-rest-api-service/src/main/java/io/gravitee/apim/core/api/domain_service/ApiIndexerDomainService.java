@@ -28,10 +28,10 @@ import io.gravitee.apim.core.search.Indexer;
 import io.gravitee.apim.core.search.model.IndexableApi;
 import java.util.Date;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 @DomainService
-@Slf4j
+@CustomLog
 public class ApiIndexerDomainService {
 
     private final ApiMetadataDecoderDomainService apiMetadataDecoderDomainService;
@@ -90,8 +90,7 @@ public class ApiIndexerDomainService {
         var metadata = apiMetadataDecoderDomainService.decodeMetadata(
             apiToIndex.getEnvironmentId(),
             apiToIndex.getId(),
-            ApiMetadataDecodeContext
-                .builder()
+            ApiMetadataDecodeContext.builder()
                 .name(apiToIndex.getName())
                 .description(apiToIndex.getDescription())
                 .createdAt(Date.from(apiToIndex.getCreatedAt().toInstant()))

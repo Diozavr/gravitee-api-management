@@ -22,6 +22,7 @@ import io.gravitee.apim.core.exception.TechnicalDomainException;
 import io.gravitee.apim.core.integration.exception.IntegrationDiscoveryException;
 import io.gravitee.apim.core.integration.exception.IntegrationIngestionException;
 import io.gravitee.apim.core.integration.exception.IntegrationSubscriptionException;
+import io.gravitee.apim.core.integration.model.DiscoveredApis;
 import io.gravitee.apim.core.integration.model.IngestStarted;
 import io.gravitee.apim.core.integration.model.IntegrationApi;
 import io.gravitee.apim.core.integration.model.IntegrationSubscription;
@@ -45,19 +46,18 @@ import io.gravitee.integration.api.model.Subscription;
 import io.gravitee.integration.api.model.SubscriptionType;
 import io.gravitee.rest.api.model.BaseApplicationEntity;
 import io.reactivex.rxjava3.core.Completable;
-import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.core.Single;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class IntegrationAgentImpl implements IntegrationAgent {
 
     private final Optional<ExchangeController> exchangeController;
@@ -68,8 +68,7 @@ public class IntegrationAgentImpl implements IntegrationAgent {
 
     @Override
     public Single<Status> getAgentStatusFor(String integrationId) {
-        return Maybe
-            .fromOptional(exchangeController)
+        return Maybe.fromOptional(exchangeController)
             .flatMap(controller -> controller.channelsMetricsForTarget(integrationId).toList().toMaybe())
             .map(metrics -> metrics != null && metrics.stream().anyMatch(ChannelMetric::active) ? Status.CONNECTED : Status.DISCONNECTED)
             .switchIfEmpty(Single.just(Status.DISCONNECTED));
@@ -97,9 +96,11 @@ public class IntegrationAgentImpl implements IntegrationAgent {
         FederatedApi api,
         SubscriptionParameter subscriptionParameter,
         String subscriptionId,
-        BaseApplicationEntity application
+        BaseApplicationEntity application,
+        Map<String, String> providerMetadata
     ) {
         Map<String, String> metadata = api.getServer() != null ? new HashMap<>(api.getServer()) : new HashMap<>();
+        metadata.putAll(providerMetadata);
         SubscriptionType type;
         if (subscriptionParameter instanceof SubscriptionParameter.ApiKey apiKeyParams) {
             type = SubscriptionType.API_KEY;
@@ -121,8 +122,7 @@ public class IntegrationAgentImpl implements IntegrationAgent {
         }
         var payload = new SubscribeCommand.Payload(
             api.getProviderId(),
-            Subscription
-                .builder()
+            Subscription.builder()
                 .graviteeSubscriptionId(subscriptionId)
                 .graviteeApplicationId(application.getId())
                 .graviteeApplicationName(application.getName())
@@ -131,20 +131,19 @@ public class IntegrationAgentImpl implements IntegrationAgent {
                 .build()
         );
 
-        return sendSubscribeCommand(new SubscribeCommand(payload), integrationId)
-            .flatMap(reply -> {
-                if (reply.getCommandStatus() == CommandStatus.ERROR) {
-                    return Single.error(new IntegrationSubscriptionException(reply.getErrorDetails()));
-                }
-                var subscriptionResult = reply.getPayload().subscription();
-                return switch (payload.subscription().type()) {
-                    case API_KEY -> Single.just(apiKey(integrationId, subscriptionResult.apiKey(), subscriptionResult.metadata()));
-                    case OAUTH -> Single.just(oAuth(integrationId, subscriptionResult.metadata()));
-                    default -> Single.error(
-                        new IntegrationSubscriptionException("Unsupported subscription type: " + payload.subscription().type())
-                    );
-                };
-            });
+        return sendSubscribeCommand(new SubscribeCommand(payload), integrationId).flatMap(reply -> {
+            if (reply.getCommandStatus() == CommandStatus.ERROR) {
+                return Single.error(new IntegrationSubscriptionException(reply.getErrorDetails()));
+            }
+            var subscriptionResult = reply.getPayload().subscription();
+            return switch (payload.subscription().type()) {
+                case API_KEY -> Single.just(apiKey(integrationId, subscriptionResult.apiKey(), subscriptionResult.metadata()));
+                case OAUTH -> Single.just(oAuth(integrationId, subscriptionResult.metadata()));
+                default -> Single.error(
+                    new IntegrationSubscriptionException("Unsupported subscription type: " + payload.subscription().type())
+                );
+            };
+        });
     }
 
     @Override
@@ -165,30 +164,39 @@ public class IntegrationAgentImpl implements IntegrationAgent {
             Subscription.builder().graviteeSubscriptionId(subscription.getId()).metadata(metadata).build()
         );
 
-        return sendUnsubscribeCommand(new UnsubscribeCommand(payload), integrationId)
-            .flatMapCompletable(reply ->
-                reply.getCommandStatus() == CommandStatus.ERROR
-                    ? Completable.error(new IntegrationSubscriptionException(reply.getErrorDetails()))
-                    : Completable.complete()
-            );
+        return sendUnsubscribeCommand(new UnsubscribeCommand(payload), integrationId).flatMapCompletable(reply ->
+            reply.getCommandStatus() == CommandStatus.ERROR
+                ? Completable.error(new IntegrationSubscriptionException(reply.getErrorDetails()))
+                : Completable.complete()
+        );
     }
 
     @Override
-    public Flowable<IntegrationApi> discoverApis(String integrationId) {
+    public Single<DiscoveredApis> discoverApis(String integrationId) {
         var command = new DiscoverCommand();
 
         log.debug("Discover all assets for [integrationId={}]", integrationId);
-        return sendDiscoverCommand(command, integrationId)
-            .toFlowable()
-            .flatMap(discoverReply -> {
-                if (discoverReply.getCommandStatus() == CommandStatus.ERROR) {
-                    return Flowable.error(new IntegrationDiscoveryException(discoverReply.getErrorDetails()));
-                }
-                log.debug("Discovered APIs for [integrationId={}] total: [{}]", integrationId, discoverReply.getPayload().apis().size());
-                return Flowable
-                    .fromIterable(discoverReply.getPayload().apis())
-                    .map(api -> IntegrationAdapter.INSTANCE.map(api, integrationId));
-            });
+        return sendDiscoverCommand(command, integrationId).flatMap(discoverReply -> {
+            if (discoverReply.getCommandStatus() == CommandStatus.ERROR) {
+                return Single.error(new IntegrationDiscoveryException(discoverReply.getErrorDetails()));
+            }
+            boolean isPartialDiscovery = discoverReply.getPayload().isPartialDiscovery();
+
+            List<IntegrationApi> integrationApis = discoverReply
+                .getPayload()
+                .apis()
+                .stream()
+                .map(api -> IntegrationAdapter.INSTANCE.map(api, integrationId))
+                .toList();
+
+            log.debug(
+                "Discovered APIs for [integrationId={}] total: [{}], partial discovery: [{}]",
+                integrationId,
+                integrationApis.size(),
+                isPartialDiscovery
+            );
+            return Single.just(new DiscoveredApis(integrationApis, isPartialDiscovery));
+        });
     }
 
     private Single<StartIngestReply> sendStartIngestCommand(StartIngestCommand startIngestCommand, String integrationId) {

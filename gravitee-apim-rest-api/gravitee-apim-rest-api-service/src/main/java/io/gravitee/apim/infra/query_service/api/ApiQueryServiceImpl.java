@@ -33,11 +33,11 @@ import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import io.gravitee.rest.api.service.impl.AbstractService;
 import java.util.Optional;
 import java.util.stream.Stream;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
-@Slf4j
+@CustomLog
 @Service
 public class ApiQueryServiceImpl extends AbstractService implements ApiQueryService {
 
@@ -50,22 +50,21 @@ public class ApiQueryServiceImpl extends AbstractService implements ApiQueryServ
     @Override
     public Page<Api> search(ApiSearchCriteria apiCriteria, Sortable sortable, Pageable pageable, ApiFieldFilter apiFieldFilter) {
         return this.apiRepository.search(
-                apiCriteria == null ? null : ApiSearchCriteriaAdapter.INSTANCE.toCriteriaForRepository(apiCriteria),
-                sortable == null ? null : SortableAdapter.INSTANCE.toSortableForRepository(sortable),
-                convert(pageable),
-                apiFieldFilter == null ? null : ApiFieldFilterAdapter.INSTANCE.toApiFieldFilterForRepository(apiFieldFilter)
-            )
-            .map(ApiAdapter.INSTANCE::toCoreModel);
+            apiCriteria == null ? null : ApiSearchCriteriaAdapter.INSTANCE.toCriteriaForRepository(apiCriteria),
+            sortable == null ? null : SortableAdapter.INSTANCE.toSortableForRepository(sortable),
+            convert(pageable),
+            apiFieldFilter == null ? null : ApiFieldFilterAdapter.INSTANCE.toApiFieldFilterForRepository(apiFieldFilter)
+        ).map(ApiAdapter.INSTANCE::toCoreModel);
     }
 
     @Override
     public Stream<Api> search(ApiSearchCriteria apiCriteria, Sortable sortable, ApiFieldFilter apiFieldFilter) {
         return ApiAdapter.INSTANCE.toCoreModelStream(
             this.apiRepository.search(
-                    apiCriteria == null ? null : ApiSearchCriteriaAdapter.INSTANCE.toCriteriaForRepository(apiCriteria),
-                    sortable == null ? null : SortableAdapter.INSTANCE.toSortableForRepository(sortable),
-                    apiFieldFilter == null ? null : ApiFieldFilterAdapter.INSTANCE.toApiFieldFilterForRepository(apiFieldFilter)
-                )
+                apiCriteria == null ? null : ApiSearchCriteriaAdapter.INSTANCE.toCriteriaForRepository(apiCriteria),
+                sortable == null ? null : SortableAdapter.INSTANCE.toSortableForRepository(sortable),
+                apiFieldFilter == null ? null : ApiFieldFilterAdapter.INSTANCE.toApiFieldFilterForRepository(apiFieldFilter)
+            )
         );
     }
 

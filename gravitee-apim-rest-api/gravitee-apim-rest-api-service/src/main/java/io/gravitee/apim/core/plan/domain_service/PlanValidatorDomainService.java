@@ -36,10 +36,11 @@ import io.gravitee.rest.api.model.parameters.ParameterReferenceType;
 import io.gravitee.rest.api.model.v4.plan.PlanSecurityType;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 @DomainService
 public class PlanValidatorDomainService {
 
@@ -90,13 +91,29 @@ public class PlanValidatorDomainService {
         }
     }
 
+    public void validateGeneralConditionsPage(Plan plan, List<Page> pages) {
+        if (plan.getGeneralConditions() != null && !plan.getGeneralConditions().isEmpty() && (plan.isPublished() || plan.isDeprecated())) {
+            Optional<Page> candidate = pages
+                .stream()
+                .filter(page -> page.getId().equals(plan.getGeneralConditions()))
+                .findFirst();
+            if (candidate.isEmpty()) {
+                throw new ValidationDomainException("Plan references a non existing page as general conditions");
+            }
+            var isPublished = candidate.get().isPublished();
+            if (!isPublished) {
+                throw new ValidationDomainException("Plan references a non published page as general conditions");
+            }
+        }
+    }
+
     public void validateGeneralConditionsPageStatus(Plan plan) {
         if (plan.getGeneralConditions() != null && !plan.getGeneralConditions().isEmpty() && (plan.isPublished() || plan.isDeprecated())) {
             var page = pageCrudService.findById(plan.getGeneralConditions());
             if (page.isEmpty()) {
                 return;
             }
-            var isPublished = page.map(Page::isPublished).orElse(false);
+            boolean isPublished = page.map(Page::isPublished).orElse(false);
             if (!isPublished) {
                 throw new ValidationDomainException("Plan references a non published page as general conditions");
             }
@@ -105,14 +122,13 @@ public class PlanValidatorDomainService {
 
     private void ensurePlanSecurityIsAllowed(String securityType, String currentOrganizationId, String currentEnvironmentId) {
         PlanSecurityType planSecurityType = PlanSecurityType.valueOfLabel(securityType);
-        Key securityKey =
-            switch (planSecurityType) {
-                case API_KEY -> Key.PLAN_SECURITY_APIKEY_ENABLED;
-                case KEY_LESS -> Key.PLAN_SECURITY_KEYLESS_ENABLED;
-                case JWT -> Key.PLAN_SECURITY_JWT_ENABLED;
-                case OAUTH2 -> Key.PLAN_SECURITY_OAUTH2_ENABLED;
-                case MTLS -> Key.PLAN_SECURITY_MTLS_ENABLED;
-            };
+        Key securityKey = switch (planSecurityType) {
+            case API_KEY -> Key.PLAN_SECURITY_APIKEY_ENABLED;
+            case KEY_LESS -> Key.PLAN_SECURITY_KEYLESS_ENABLED;
+            case JWT -> Key.PLAN_SECURITY_JWT_ENABLED;
+            case OAUTH2 -> Key.PLAN_SECURITY_OAUTH2_ENABLED;
+            case MTLS -> Key.PLAN_SECURITY_MTLS_ENABLED;
+        };
         if (
             !parametersQueryService.findAsBoolean(
                 securityKey,
@@ -126,18 +142,8 @@ public class PlanValidatorDomainService {
     public void validatePlanSecurityAgainstEntrypoints(PlanSecurity planSecurity, List<ListenerType> listenerTypes) {
         if (
             listenerTypes.contains(ListenerType.TCP) &&
-            !(
-                PlanSecurityType.KEY_LESS.getLabel().equals(planSecurity.getType()) ||
-                PlanSecurityType.MTLS.getLabel().equals(planSecurity.getType())
-            )
-        ) {
-            throw new UnauthorizedPlanSecurityTypeException(planSecurity.getType());
-        }
-
-        if (
-            listenerTypes.contains(ListenerType.KAFKA) &&
-            planSecurity != null &&
-            PlanSecurityType.MTLS.getLabel().equals(planSecurity.getType())
+            !(PlanSecurityType.KEY_LESS.getLabel().equals(planSecurity.getType()) ||
+                PlanSecurityType.MTLS.getLabel().equals(planSecurity.getType()))
         ) {
             throw new UnauthorizedPlanSecurityTypeException(planSecurity.getType());
         }

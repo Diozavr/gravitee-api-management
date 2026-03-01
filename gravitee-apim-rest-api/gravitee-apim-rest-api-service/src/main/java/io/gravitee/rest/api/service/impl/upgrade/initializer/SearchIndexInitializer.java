@@ -19,11 +19,13 @@ import static io.gravitee.rest.api.service.common.SecurityContextHelper.authenti
 import static java.util.stream.Collectors.toList;
 
 import io.gravitee.apim.core.api.domain_service.ApiIndexerDomainService;
+import io.gravitee.apim.core.api_product.domain_service.ApiProductIndexerDomainService;
 import io.gravitee.apim.core.search.Indexer;
 import io.gravitee.apim.infra.adapter.ApiAdapter;
-import io.gravitee.definition.model.DefinitionVersion;
+import io.gravitee.apim.infra.adapter.ApiProductAdapter;
 import io.gravitee.node.api.initializer.Initializer;
 import io.gravitee.repository.exceptions.TechnicalException;
+import io.gravitee.repository.management.api.ApiProductsRepository;
 import io.gravitee.repository.management.api.ApiRepository;
 import io.gravitee.repository.management.api.EnvironmentRepository;
 import io.gravitee.repository.management.api.UserRepository;
@@ -32,6 +34,7 @@ import io.gravitee.repository.management.api.search.ApiFieldFilter;
 import io.gravitee.repository.management.api.search.UserCriteria;
 import io.gravitee.repository.management.api.search.builder.PageableBuilder;
 import io.gravitee.repository.management.model.Api;
+import io.gravitee.repository.management.model.ApiProduct;
 import io.gravitee.repository.management.model.User;
 import io.gravitee.repository.management.model.UserStatus;
 import io.gravitee.rest.api.model.PageEntity;
@@ -63,9 +66,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.CustomLog;
 import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -76,9 +78,8 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
+@CustomLog
 public class SearchIndexInitializer implements Initializer {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(SearchIndexInitializer.class);
 
     private final ApiRepository apiRepository;
 
@@ -100,6 +101,9 @@ public class SearchIndexInitializer implements Initializer {
     private final PrimaryOwnerService primaryOwnerService;
     private final ApiIndexerDomainService apiIndexerDomainService;
 
+    private final ApiProductIndexerDomainService apiProductIndexerDomainService;
+    private final ApiProductsRepository apiProductsRepository;
+
     private final UserMetadataService userMetadataService;
 
     @Autowired
@@ -114,6 +118,8 @@ public class SearchIndexInitializer implements Initializer {
         UserConverter userConverter,
         final PrimaryOwnerService primaryOwnerService,
         ApiIndexerDomainService apiIndexerDomainService,
+        @Lazy ApiProductIndexerDomainService apiProductIndexerDomainService,
+        @Lazy ApiProductsRepository apiProductsRepository,
         UserMetadataService userMetadataService
     ) {
         this.apiRepository = apiRepository;
@@ -126,6 +132,8 @@ public class SearchIndexInitializer implements Initializer {
         this.userConverter = userConverter;
         this.primaryOwnerService = primaryOwnerService;
         this.apiIndexerDomainService = apiIndexerDomainService;
+        this.apiProductIndexerDomainService = apiProductIndexerDomainService;
+        this.apiProductsRepository = apiProductsRepository;
         this.userMetadataService = userMetadataService;
     }
 
@@ -148,14 +156,21 @@ public class SearchIndexInitializer implements Initializer {
         try {
             futures.addAll(runApisIndexationAsync(executorService));
         } catch (TechnicalException e) {
-            LOGGER.error("failed to index APIs", e);
+            log.error("failed to index APIs", e);
+        }
+
+        // index API Products
+        try {
+            futures.addAll(runApiProductsIndexationAsync(executorService));
+        } catch (TechnicalException e) {
+            log.error("failed to index API Products", e);
         }
 
         // index users
         try {
             futures.addAll(runUsersIndexationAsync(executorService));
         } catch (TechnicalException e) {
-            LOGGER.error("failed to index users", e);
+            log.error("failed to index users", e);
         }
 
         CompletableFuture<Void> future = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
@@ -182,17 +197,14 @@ public class SearchIndexInitializer implements Initializer {
         authenticateAsAdmin();
 
         String environmentId = api.getEnvironmentId();
-        String organizationId = organizationIdByEnvironmentIdMap.computeIfAbsent(
-            environmentId,
-            envId -> {
-                try {
-                    return environmentRepository.findById(environmentId).get().getOrganizationId();
-                } catch (Exception e) {
-                    LOGGER.error("failed to find organization for environment {}", environmentId, e);
-                    return null;
-                }
+        String organizationId = organizationIdByEnvironmentIdMap.computeIfAbsent(environmentId, envId -> {
+            try {
+                return environmentRepository.findById(environmentId).get().getOrganizationId();
+            } catch (Exception e) {
+                log.error("failed to find organization for environment {}", environmentId, e);
+                return null;
             }
-        );
+        });
 
         ExecutionContext executionContext = new ExecutionContext(organizationId, environmentId);
         Indexable indexable;
@@ -200,23 +212,22 @@ public class SearchIndexInitializer implements Initializer {
         try {
             primaryOwner = primaryOwnerService.getPrimaryOwner(organizationId, api.getId());
         } catch (PrimaryOwnerNotFoundException e) {
-            LOGGER.warn("Failed to retrieve API primary owner, API will we indexed without his primary owner", e);
+            log.warn("Failed to retrieve API primary owner, API will we indexed without his primary owner", e);
         }
         try {
             // V2 APIs have a null definitionVersion attribute in the Repository
             if (api.getDefinitionVersion() == null) {
-                indexable = apiConverter.toApiEntity(executionContext, api, primaryOwner, false);
+                indexable = apiConverter.toApiEntity(executionContext, api, primaryOwner, false, false, true);
                 return runApiIndexationAsync(executionContext, api, primaryOwner, indexable, executorService);
             }
 
-            indexable =
-                apiIndexerDomainService.toIndexableApi(
-                    new Indexer.IndexationContext(organizationId, environmentId),
-                    ApiAdapter.INSTANCE.toCoreModel(api)
-                );
+            indexable = apiIndexerDomainService.toIndexableApi(
+                new Indexer.IndexationContext(organizationId, environmentId),
+                ApiAdapter.INSTANCE.toCoreModel(api)
+            );
             return runApiIndexationAsync(executionContext, api, primaryOwner, indexable, executorService);
         } catch (Exception e) {
-            LOGGER.error("Failed to convert API {} to indexable", api.getId(), e);
+            log.error("Failed to convert API {} to indexable", api.getId(), e);
             return CompletableFuture.failedFuture(e);
         }
     }
@@ -252,7 +263,9 @@ public class SearchIndexInitializer implements Initializer {
                                 pageService.transformSwagger(executionContext, page, genericApiEntity);
                                 searchEngineService.index(executionContext, page, true, false);
                             }
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) {
+                            log.debug("Exception ignored in SearchIndexInitializer");
+                        }
                     });
                 } finally {
                     GraviteeContext.cleanContext();
@@ -260,6 +273,49 @@ public class SearchIndexInitializer implements Initializer {
             },
             executorService
         );
+    }
+
+    protected List<CompletableFuture<?>> runApiProductsIndexationAsync(ExecutorService executorService) throws TechnicalException {
+        return apiProductsRepository
+            .findAll()
+            .stream()
+            .map(repoProduct -> runApiProductIndexationAsync(executorService, repoProduct))
+            .collect(toList());
+    }
+
+    private CompletableFuture<?> runApiProductIndexationAsync(ExecutorService executorService, ApiProduct repoProduct) {
+        authenticateAsAdmin();
+
+        String environmentId = repoProduct.getEnvironmentId();
+        String organizationId = organizationIdByEnvironmentIdMap.computeIfAbsent(environmentId, envId -> {
+            try {
+                return environmentRepository.findById(envId).get().getOrganizationId();
+            } catch (Exception e) {
+                log.error("failed to find organization for environment {}", envId, e);
+                return null;
+            }
+        });
+
+        ExecutionContext executionContext = new ExecutionContext(organizationId, environmentId);
+        try {
+            var indexable = apiProductIndexerDomainService.toIndexableApiProduct(
+                new Indexer.IndexationContext(organizationId, environmentId),
+                ApiProductAdapter.INSTANCE.toModel(repoProduct)
+            );
+            return CompletableFuture.runAsync(
+                () -> {
+                    try {
+                        searchEngineService.index(executionContext, indexable, true, false);
+                    } finally {
+                        GraviteeContext.cleanContext();
+                    }
+                },
+                executorService
+            );
+        } catch (Exception e) {
+            log.error("Failed to convert API Product {} to indexable", repoProduct.getId(), e);
+            return CompletableFuture.failedFuture(e);
+        }
     }
 
     protected List<CompletableFuture<?>> runUsersIndexationAsync(ExecutorService executorService) throws TechnicalException {

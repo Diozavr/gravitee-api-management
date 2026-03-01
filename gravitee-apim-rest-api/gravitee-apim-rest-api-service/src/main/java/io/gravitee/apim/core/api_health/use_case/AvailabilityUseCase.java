@@ -42,14 +42,13 @@ public class AvailabilityUseCase {
     }
 
     private Single<Api> validateApiRequirements(AvailabilityUseCase.Input input) {
-        return Single
-            .fromCallable(() -> apiCrudService.get(input.api()))
+        return Single.fromCallable(() -> apiCrudService.get(input.api()))
             .flatMap(api -> validateApiMultiTenancyAccess(api, input.ctx().getEnvironmentId()))
             .flatMap(this::validateApiIsNotTcp);
     }
 
     private Single<Api> validateApiIsNotTcp(Api api) {
-        return api.getApiDefinitionHttpV4().isTcpProxy() ? Single.error(new TcpProxyNotSupportedException(api.getId())) : Single.just(api);
+        return api.isTcpProxy() ? Single.error(new TcpProxyNotSupportedException(api.getId())) : Single.just(api);
     }
 
     private static Single<Api> validateApiMultiTenancyAccess(Api api, String environmentId) {

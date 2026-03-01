@@ -28,15 +28,15 @@ import io.gravitee.rest.api.service.exceptions.SubscriptionNotFoundException;
 import java.time.ZonedDateTime;
 import java.util.Objects;
 import java.util.Optional;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @Service
 @RequiredArgsConstructor
 public class SubscriptionCRDSpecDomainServiceImpl implements SubscriptionCRDSpecDomainService {
@@ -53,7 +53,9 @@ public class SubscriptionCRDSpecDomainServiceImpl implements SubscriptionCRDSpec
 
     @Override
     public SubscriptionEntity createOrUpdate(AuditInfo auditInfo, SubscriptionCRDSpec spec) {
-        return find(spec.getId()).map((existing -> update(auditInfo, existing, spec))).orElseGet(() -> create(auditInfo, spec));
+        return find(spec.getId())
+            .map((existing -> update(auditInfo, existing, spec)))
+            .orElseGet(() -> create(auditInfo, spec));
     }
 
     @Override

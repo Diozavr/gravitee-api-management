@@ -16,6 +16,7 @@
 package io.gravitee.apim.integration.tests.messages.sse;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.graviteesource.entrypoint.sse.SseEntrypointConnectorFactory;
 import io.gravitee.apim.gateway.tests.sdk.annotations.DeployApi;
@@ -31,6 +32,7 @@ import io.vertx.rxjava3.core.buffer.Buffer;
 import io.vertx.rxjava3.core.http.HttpClient;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 @GatewayTest
@@ -59,36 +61,26 @@ class SseEntrypointRabbitMQEndpointIntegrationTest extends AbstractRabbitMQEndpo
             .test();
 
         // We expect 4 chunks, 1 retry message and 3 messages
+        await()
+            .atMost(30, TimeUnit.SECONDS)
+            .until(() -> obs.values().size() >= 4);
         obs
-            .awaitCount(4)
-            .assertValueAt(
-                0,
-                chunk -> {
-                    SseAssertions.assertRetry(chunk);
-                    return true;
-                }
-            )
-            .assertValueAt(
-                1,
-                chunk -> {
-                    SseAssertions.assertOnMessage(chunk, "message1");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                2,
-                chunk -> {
-                    SseAssertions.assertOnMessage(chunk, "message2");
-                    return true;
-                }
-            )
-            .assertValueAt(
-                3,
-                chunk -> {
-                    SseAssertions.assertOnMessage(chunk, "message3");
-                    return true;
-                }
-            )
+            .assertValueAt(0, chunk -> {
+                SseAssertions.assertRetry(chunk);
+                return true;
+            })
+            .assertValueAt(1, chunk -> {
+                SseAssertions.assertOnMessage(chunk, "message1");
+                return true;
+            })
+            .assertValueAt(2, chunk -> {
+                SseAssertions.assertOnMessage(chunk, "message2");
+                return true;
+            })
+            .assertValueAt(3, chunk -> {
+                SseAssertions.assertOnMessage(chunk, "message3");
+                return true;
+            })
             .assertNoErrors();
     }
 }

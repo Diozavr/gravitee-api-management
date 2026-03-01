@@ -72,13 +72,13 @@ import jakarta.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Remi Baptiste (remi.baptiste at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class IntegrationResource extends AbstractResource {
 
     @Context
@@ -110,7 +110,13 @@ public class IntegrationResource extends AbstractResource {
     @Permissions({ @Permission(value = RolePermission.INTEGRATION_DEFINITION, acls = { RolePermissionAction.READ }) })
     public Response getIntegrationById(@PathParam("integrationId") String integrationId) {
         var integration = getIntegrationUsecase
-            .execute(new GetIntegrationUseCase.Input(integrationId, GraviteeContext.getCurrentOrganization()))
+            .execute(
+                new GetIntegrationUseCase.Input(
+                    integrationId,
+                    GraviteeContext.getCurrentOrganization(),
+                    GraviteeContext.getCurrentEnvironment()
+                )
+            )
             .integration();
 
         return Response.ok(IntegrationMapper.INSTANCE.map(integration)).build();
@@ -222,9 +228,9 @@ public class IntegrationResource extends AbstractResource {
     public Map<String, char[]> getPermissions(@PathParam("integrationId") String integrationId) {
         if (isAdmin()) {
             final char[] rights = new char[] { CREATE.getId(), READ.getId(), UPDATE.getId(), RolePermissionAction.DELETE.getId() };
-            return Arrays
-                .stream(IntegrationPermission.values())
-                .collect(Collectors.toMap(IntegrationPermission::getName, ignored -> rights));
+            return Arrays.stream(IntegrationPermission.values()).collect(
+                Collectors.toMap(IntegrationPermission::getName, ignored -> rights)
+            );
         } else if (isAuthenticated()) {
             final String username = getAuthenticatedUser();
             final ExecutionContext executionContext = GraviteeContext.getExecutionContext();

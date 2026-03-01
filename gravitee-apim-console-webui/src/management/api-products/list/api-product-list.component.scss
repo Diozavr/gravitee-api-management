@@ -1,0 +1,153 @@
+@use 'sass:map';
+
+@use '@angular/material' as mat;
+@use '@gravitee/ui-particles-angular' as gio;
+@use '../../../scss/gio-layout' as gio-layout;
+
+$typography: map.get(gio.$mat-theme, typography);
+
+:host {
+  @include gio-layout.gio-responsive-content-container;
+  display: flex;
+  flex-direction: column;
+}
+
+.api-product-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+
+    h1 {
+      @include mat.m2-typography-level($typography, headline-5);
+      margin: 0;
+    }
+
+    .subtitle {
+      @include mat.m2-typography-level($typography, body-2);
+      margin-top: 8px;
+      margin-bottom: 0;
+      color: mat.m2-get-color-from-palette(gio.$mat-space-palette, 'lighter40');
+    }
+  }
+
+  &__content-card {
+    flex: 1;
+    min-height: 25rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  &__card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid mat.m2-get-color-from-palette(gio.$mat-dove-palette, 'darker10');
+
+    h2 {
+      @include mat.m2-typography-level($typography, headline-6);
+      margin: 0;
+      color: mat.m2-get-color-from-palette(gio.$mat-smoke-palette, 'darker80');
+    }
+  }
+}
+
+.api-products-empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 18.75rem;
+  padding: 48px 24px;
+}
+
+.empty-state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  max-width: min(31.25rem, 90vw);
+
+  h3 {
+    @include mat.m2-typography-level($typography, headline-6);
+    margin: 24px 0 8px 0;
+    color: mat.m2-get-color-from-palette(gio.$mat-smoke-palette, 'darker80');
+  }
+
+  p {
+    @include mat.m2-typography-level($typography, body-2);
+    margin: 0;
+    color: mat.m2-get-color-from-palette(gio.$mat-space-palette, 'lighter40');
+  }
+}
+
+.empty-state-icon {
+  width: 5rem;
+  height: 5rem;
+  min-width: 5rem;
+  min-height: 5rem;
+  border-radius: 50%;
+  background-color: mat.m2-get-color-from-palette(gio.$mat-warning-palette, 'lighter');
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  border: 1px solid mat.m2-get-color-from-palette(gio.$mat-warning-palette, 'default');
+
+  &__svg {
+    width: 2.5rem;
+    height: 2.5rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    color: mat.m2-get-color-from-palette(gio.$mat-warning-palette, 'darker40');
+  }
+}
+
+// Table styles
+.mat-column-picture {
+  padding: 0 8px;
+  width: 3rem;
+  min-width: 3rem;
+}
+
+.mat-column-apis,
+.mat-column-version,
+.mat-column-owner,
+.mat-column-actions {
+  padding: 0 8px;
+}
+
+.mat-column-name {
+  cursor: pointer;
+  padding: 0 8px;
+  width: auto;
+}
+
+.mat-column-apis {
+  .apis__badge {
+    cursor: default;
+  }
+}
+
+.mat-column-version {
+  .version__badge {
+    cursor: default;
+  }
+}
+
+.actions__edit {
+  display: flex;
+  justify-content: center;
+}
+
+.api-products__avatar {
+  height: 2rem;
+  width: 2rem;
+}

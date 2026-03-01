@@ -34,8 +34,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -52,9 +51,8 @@ import org.springframework.core.env.StandardEnvironment;
  * @author David BRASSELY (david at gravitee.io)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class IdentityProviderManagerImpl implements IdentityProviderManager {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(IdentityProviderManagerImpl.class);
 
     private final Map<String, IdentityProvider> identityProviders = new HashMap<>();
     private final Map<IdentityProvider, Plugin> identityProviderPlugins = new HashMap<>();
@@ -94,25 +92,25 @@ public class IdentityProviderManagerImpl implements IdentityProviderManager {
     }
 
     private AuthenticationProvider authenticationProvider(String identityProviderType, Map<String, Object> properties) {
-        LOGGER.debug("Looking for an authentication provider for [{}]", identityProviderType);
+        log.debug("Looking for an authentication provider for [{}]", identityProviderType);
         IdentityProvider identityProvider = identityProviders.get(identityProviderType);
 
         if (identityProvider != null) {
             return create(identityProviderPlugins.get(identityProvider), identityProvider.authenticationProvider(), properties);
         } else {
-            LOGGER.error("No identity provider is registered for type {}", identityProviderType);
+            log.error("No identity provider is registered for type {}", identityProviderType);
             throw new IllegalStateException("No identity provider is registered for type " + identityProviderType);
         }
     }
 
     private IdentityLookup identityLookup(String identityProviderType, Map<String, Object> properties) {
-        LOGGER.debug("Looking for an identity lookup for [{}]", identityProviderType);
+        log.debug("Looking for an identity lookup for [{}]", identityProviderType);
         IdentityProvider identityProvider = identityProviders.get(identityProviderType);
 
         if (identityProvider != null) {
             return create(identityProviderPlugins.get(identityProvider), identityProvider.identityLookup(), properties);
         } else {
-            LOGGER.error("No identity provider is registered for type {}", identityProviderType);
+            log.error("No identity provider is registered for type {}", identityProviderType);
             throw new IllegalStateException("No identity provider is registered for type " + identityProviderType);
         }
     }
@@ -144,17 +142,16 @@ public class IdentityProviderManagerImpl implements IdentityProviderManager {
 
                                 // add missing converters in this newly created environment
                                 // this syntax allows a property of any kind to be converted from a secret. eg. Secret +> String -> Double
-                                this.getConversionService()
-                                    .addConverterFactory(
-                                        new ConverterFactory<Secret, Object>() {
-                                            final ConversionService conversionService = DefaultConversionService.getSharedInstance();
+                                this.getConversionService().addConverterFactory(
+                                    new ConverterFactory<Secret, Object>() {
+                                        final ConversionService conversionService = DefaultConversionService.getSharedInstance();
 
-                                            @Nonnull
-                                            public <C> Converter<Secret, C> getConverter(@Nonnull Class<C> targetType) {
-                                                return source -> conversionService.convert(source.asString(), targetType);
-                                            }
+                                        @Nonnull
+                                        public <C> Converter<Secret, C> getConverter(@Nonnull Class<C> targetType) {
+                                            return source -> conversionService.convert(source.asString(), targetType);
                                         }
-                                    );
+                                    }
+                                );
                                 // byte[] has to be created separately
                                 this.getConversionService().addConverter(Secret.class, String.class, Secret::asString);
                             }
@@ -171,7 +168,7 @@ public class IdentityProviderManagerImpl implements IdentityProviderManager {
 
             return identityObj;
         } catch (Exception ex) {
-            LOGGER.error("An unexpected error occurs while loading identity provider", ex);
+            log.error("An unexpected error occurs while loading identity provider", ex);
             return null;
         }
     }
@@ -180,7 +177,7 @@ public class IdentityProviderManagerImpl implements IdentityProviderManager {
         try {
             return clazz.newInstance();
         } catch (InstantiationException | IllegalAccessException ex) {
-            LOGGER.error("Unable to instantiate class: {}", ex);
+            log.error("Unable to instantiate class: {}", ex);
             throw ex;
         }
     }

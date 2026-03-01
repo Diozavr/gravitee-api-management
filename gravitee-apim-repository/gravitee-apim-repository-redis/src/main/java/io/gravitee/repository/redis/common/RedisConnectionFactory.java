@@ -30,7 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
 
@@ -38,7 +38,7 @@ import org.springframework.util.StringUtils;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class RedisConnectionFactory {
 
     private final Environment environment;
@@ -74,6 +74,7 @@ public class RedisConnectionFactory {
         final RedisOptions options = new RedisOptions();
 
         boolean ssl = readPropertyValue(propertyPrefix + "ssl", boolean.class, false);
+        String username = readPropertyValue(propertyPrefix + "username", String.class, null);
 
         if (isSentinelEnabled()) {
             // Sentinels + Redis master / replicas
@@ -109,11 +110,11 @@ public class RedisConnectionFactory {
 
             options.setType(RedisClientType.STANDALONE);
 
-            HostAndPort hostAndPort = HostAndPort
-                .of(
-                    readPropertyValue(propertyPrefix + "host", String.class, "localhost"),
-                    readPropertyValue(propertyPrefix + "port", int.class, 6379)
-                )
+            HostAndPort hostAndPort = HostAndPort.of(
+                readPropertyValue(propertyPrefix + "host", String.class, "localhost"),
+                readPropertyValue(propertyPrefix + "port", int.class, 6379)
+            )
+                .withUsername(username)
                 .withPassword(readPropertyValue(propertyPrefix + PASSWORD_PARAMETER, String.class))
                 .withSsl(ssl);
 
@@ -149,9 +150,9 @@ public class RedisConnectionFactory {
                 );
 
             // TLS Ciphers
-            StringUtils
-                .commaDelimitedListToSet(readPropertyValue(propertyPrefix + "tlsCiphers", String.class, ""))
-                .forEach(cipherSuite -> options.getNetClientOptions().addEnabledCipherSuite(cipherSuite.strip()));
+            StringUtils.commaDelimitedListToSet(readPropertyValue(propertyPrefix + "tlsCiphers", String.class, "")).forEach(cipherSuite ->
+                options.getNetClientOptions().addEnabledCipherSuite(cipherSuite.strip())
+            );
 
             options.getNetClientOptions().setUseAlpn(readPropertyValue(propertyPrefix + "alpn", boolean.class, false));
 
@@ -337,6 +338,7 @@ public class RedisConnectionFactory {
         private final int port;
         private String password;
         private boolean useSsl;
+        private String username;
 
         private HostAndPort(String host, int port) {
             this.host = host;
@@ -353,6 +355,11 @@ public class RedisConnectionFactory {
             return this;
         }
 
+        public HostAndPort withUsername(String username) {
+            this.username = username;
+            return this;
+        }
+
         public HostAndPort withSsl(boolean useSsl) {
             this.useSsl = useSsl;
 
@@ -365,12 +372,14 @@ public class RedisConnectionFactory {
             if (useSsl) {
                 connectionType = "rediss";
             }
-
-            if (StringUtils.hasText(password)) {
+            if (StringUtils.hasText(username) && StringUtils.hasText(password)) {
+                log.debug("Redis repository configured with username and password");
+                return connectionType + "://" + username + ":" + password + '@' + host + ':' + port;
+            } else if (StringUtils.hasText(password)) {
                 return connectionType + "://:" + password + '@' + host + ':' + port;
+            } else {
+                return connectionType + "://" + host + ':' + port;
             }
-
-            return connectionType + "://" + host + ':' + port;
         }
     }
 }

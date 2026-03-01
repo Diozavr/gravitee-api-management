@@ -22,9 +22,13 @@ import io.gravitee.repository.jdbc.orm.JdbcObjectMapper;
 import io.gravitee.repository.management.api.ClientRegistrationProviderRepository;
 import io.gravitee.repository.management.model.ClientRegistrationProvider;
 import java.sql.Types;
-import java.util.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
@@ -32,12 +36,11 @@ import org.springframework.stereotype.Repository;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Repository
 public class JdbcClientRegistrationProviderRepository
     extends JdbcAbstractCrudRepository<ClientRegistrationProvider, String>
     implements ClientRegistrationProviderRepository {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcClientRegistrationProviderRepository.class);
 
     private final String CLIENT_REGISTRATION_PROVIDER_SCOPES;
 
@@ -48,8 +51,7 @@ public class JdbcClientRegistrationProviderRepository
 
     @Override
     protected JdbcObjectMapper<ClientRegistrationProvider> buildOrm() {
-        return JdbcObjectMapper
-            .builder(ClientRegistrationProvider.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(ClientRegistrationProvider.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("environment_id", Types.NVARCHAR, String.class)
             .addColumn("name", Types.NVARCHAR, String.class)
@@ -63,6 +65,16 @@ public class JdbcClientRegistrationProviderRepository
             .addColumn("renew_client_secret_endpoint", Types.NVARCHAR, String.class)
             .addColumn("renew_client_secret_method", Types.NVARCHAR, String.class)
             .addColumn("software_id", Types.NVARCHAR, String.class)
+            .addColumn("trust_store_type", Types.NVARCHAR, String.class)
+            .addColumn("trust_store_path", Types.NVARCHAR, String.class)
+            .addColumn("trust_store_content", Types.CLOB, String.class)
+            .addColumn("trust_store_password", Types.NVARCHAR, String.class)
+            .addColumn("key_store_type", Types.NVARCHAR, String.class)
+            .addColumn("key_store_path", Types.NVARCHAR, String.class)
+            .addColumn("key_store_content", Types.CLOB, String.class)
+            .addColumn("key_store_password", Types.NVARCHAR, String.class)
+            .addColumn("key_store_alias", Types.NVARCHAR, String.class)
+            .addColumn("key_password", Types.NVARCHAR, String.class)
             .addColumn("created_at", Types.TIMESTAMP, Date.class)
             .addColumn("updated_at", Types.TIMESTAMP, Date.class)
             .build();
@@ -111,19 +123,19 @@ public class JdbcClientRegistrationProviderRepository
 
     @Override
     public Set<ClientRegistrationProvider> findAll() throws TechnicalException {
-        LOGGER.debug("JdbcClientRegistrationProviderRepository.findAll()");
+        log.debug("JdbcClientRegistrationProviderRepository.findAll()");
 
         Set<ClientRegistrationProvider> providers = super.findAll();
         for (ClientRegistrationProvider provider : providers) {
             addScopes(provider);
         }
-        LOGGER.debug("Found {} client registration providers: {}", providers.size(), providers);
+        log.debug("Found {} client registration providers: {}", providers.size(), providers);
         return providers;
     }
 
     @Override
     public Set<ClientRegistrationProvider> findAllByEnvironment(String environmentId) throws TechnicalException {
-        LOGGER.debug("JdbcClientRegistrationProviderRepository.findAllByEnvironment({})", environmentId);
+        log.debug("JdbcClientRegistrationProviderRepository.findAllByEnvironment({})", environmentId);
         try {
             Set<ClientRegistrationProvider> providers = new HashSet<>(
                 jdbcTemplate.query(getOrm().getSelectAllSql() + " where environment_id = ?", getOrm().getRowMapper(), environmentId)
@@ -133,27 +145,27 @@ public class JdbcClientRegistrationProviderRepository
             }
             return providers;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find client registration provider by environment:", ex);
+            log.error("Failed to find client registration provider by environment:", ex);
             throw new TechnicalException("Failed to find client registration provider by environment", ex);
         }
     }
 
     @Override
     public ClientRegistrationProvider create(ClientRegistrationProvider item) throws TechnicalException {
-        LOGGER.debug("JdbcClientRegistrationProviderRepository.create({})", item);
+        log.debug("JdbcClientRegistrationProviderRepository.create({})", item);
         try {
             jdbcTemplate.update(getOrm().buildInsertPreparedStatementCreator(item));
             storeScopes(item, false);
             return findById(item.getId()).orElse(null);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to create client registration provider", ex);
+            log.error("Failed to create client registration provider", ex);
             throw new TechnicalException("Failed to create client registration provider", ex);
         }
     }
 
     @Override
     public ClientRegistrationProvider update(final ClientRegistrationProvider clientRegistrationProvider) throws TechnicalException {
-        LOGGER.debug("JdbcClientRegistrationProviderRepository.update({})", clientRegistrationProvider);
+        log.debug("JdbcClientRegistrationProviderRepository.update({})", clientRegistrationProvider);
         if (clientRegistrationProvider == null) {
             throw new IllegalStateException("Failed to update null");
         }
@@ -162,16 +174,13 @@ public class JdbcClientRegistrationProviderRepository
                 getOrm().buildUpdatePreparedStatementCreator(clientRegistrationProvider, clientRegistrationProvider.getId())
             );
             storeScopes(clientRegistrationProvider, true);
-            return findById(clientRegistrationProvider.getId())
-                .orElseThrow(() ->
-                    new IllegalStateException(
-                        format("No client registration provider found with id [%s]", clientRegistrationProvider.getId())
-                    )
-                );
+            return findById(clientRegistrationProvider.getId()).orElseThrow(() ->
+                new IllegalStateException(format("No client registration provider found with id [%s]", clientRegistrationProvider.getId()))
+            );
         } catch (final IllegalStateException ex) {
             throw ex;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to update client registration provider", ex);
+            log.error("Failed to update client registration provider", ex);
             throw new TechnicalException("Failed to update client registration provider", ex);
         }
     }
@@ -184,7 +193,7 @@ public class JdbcClientRegistrationProviderRepository
 
     @Override
     public List<String> deleteByEnvironmentId(String environmentId) throws TechnicalException {
-        LOGGER.debug("JdbcClientRegistrationProviderRepository.deleteByEnvironmentId({})", environmentId);
+        log.debug("JdbcClientRegistrationProviderRepository.deleteByEnvironmentId({})", environmentId);
         try {
             List<String> rows = jdbcTemplate.queryForList(
                 "select id from " + tableName + " where environment_id = ?",
@@ -195,16 +204,16 @@ public class JdbcClientRegistrationProviderRepository
             if (!rows.isEmpty()) {
                 jdbcTemplate.update(
                     "delete from " +
-                    CLIENT_REGISTRATION_PROVIDER_SCOPES +
-                    " where client_registration_provider_id IN (" +
-                    getOrm().buildInClause(rows) +
-                    ")",
+                        CLIENT_REGISTRATION_PROVIDER_SCOPES +
+                        " where client_registration_provider_id IN (" +
+                        getOrm().buildInClause(rows) +
+                        ")",
                     rows.toArray()
                 );
                 jdbcTemplate.update("delete from " + tableName + " where environment_id = ?", environmentId);
             }
 
-            LOGGER.debug("JdbcClientRegistrationProviderRepository.deleteByEnvironmentId({})", environmentId);
+            log.debug("JdbcClientRegistrationProviderRepository.deleteByEnvironmentId({})", environmentId);
             return rows;
         } catch (Exception ex) {
             throw new TechnicalException("Failed to delete client registration providers by environment", ex);

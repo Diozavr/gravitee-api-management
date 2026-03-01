@@ -104,9 +104,9 @@ describe('GroupsComponent', () => {
     });
 
     it('should display message when there are no groups', async () => {
-      const tableRows = await getTableRows();
-
-      expect(await tableRows[0].host().then((host) => host.text())).toContain('No groups available to display.');
+      const table = await harnessLoader.getHarness(MatTableHarness);
+      const tableHost = await table.host();
+      expect(await tableHost.text()).toContain('No groups available to display.');
     });
   });
 
@@ -132,7 +132,7 @@ describe('GroupsComponent', () => {
     });
 
     it('should display list of available groups sorted by name', async () => {
-      expect(await getTableRows().then((rows) => rows.length)).toEqual(2);
+      expect(await getTableRows().then(rows => rows.length)).toEqual(2);
       expect(await getTextByColumnNameAndRowIndex('name', 0)).toEqual('Group 1');
       expect(await getTextByColumnNameAndRowIndex('name', 1)).toEqual('Group 2');
     });
@@ -204,19 +204,19 @@ describe('GroupsComponent', () => {
   }
 
   async function getTableRows(): Promise<MatRowHarness[]> {
-    return await harnessLoader.getHarness(MatTableHarness).then((table) => table.getRows());
+    return await harnessLoader.getHarness(MatTableHarness).then(table => table.getRows());
   }
 
   async function getTextByColumnNameAndRowIndex(columnName: string, index: number): Promise<string> {
     return await getTableRows()
-      .then((rows) => rows[index])
-      .then((row) => row.getCellTextByIndex({ columnName }).then((cell) => cell[0]));
+      .then(rows => rows[index])
+      .then(row => row.getCellTextByIndex({ columnName }).then(cell => cell[0]));
   }
 
   async function getButtonByRowIndexAndTooltip(rowIndex: number, tooltipText: string): Promise<MatButtonHarness | null> {
     return await getTableRows()
-      .then((rows) => rows[rowIndex].getCells({ columnName: 'actions' }))
-      .then((cells) => cells[0])
-      .then((actionCell) => actionCell.getHarnessOrNull(MatButtonHarness.with({ selector: `[mattooltip="${tooltipText}"]` })));
+      .then(rows => rows[rowIndex].getCells({ columnName: 'actions' }))
+      .then(cells => cells[0])
+      .then(actionCell => actionCell.getHarnessOrNull(MatButtonHarness.with({ selector: `[mattooltip="${tooltipText}"]` })));
   }
 });

@@ -16,8 +16,7 @@
 import '@gravitee/ui-components/wc/gv-policy-studio';
 import '@gravitee/ui-components/wc/gv-switch';
 import '@gravitee/ui-components/wc/gv-popover';
-import * as angular from 'angular';
-
+import angular from 'angular';
 import { ActivatedRoute } from '@angular/router';
 import { cloneDeep, isEmpty } from 'lodash';
 
@@ -115,14 +114,24 @@ enum Modes {
   Design = 'Design',
 }
 
+interface EventPayload {
+  groups?: string[];
+  [key: string]: any;
+}
+
+interface EventData {
+  payload: string;
+  [key: string]: any;
+}
+
 class ApiHistoryControllerAjs {
   public activatedRoute: ActivatedRoute;
   public modes = Modes;
   public modeOptions: any;
+  public groups: any;
   private studio: any;
   private mode: string;
   private api: any;
-  private groups: any;
   private events: any;
   private eventsSelected: any;
   private eventsTimeline: any;
@@ -142,7 +151,7 @@ class ApiHistoryControllerAjs {
   public hasNextEventPageToLoad = false;
 
   constructor(
-    private $mdDialog: ng.material.IDialogService,
+    private readonly $mdDialog,
     private ApiService: ApiService,
     private NotificationService,
     private PolicyService,
@@ -166,13 +175,10 @@ class ApiHistoryControllerAjs {
 
   $onInit() {
     Promise.all([
-      this.ngGroupV2Service.list(1, 99999).toPromise(),
       this.ApiService.get(this.activatedRoute.snapshot.params.apiId),
       this.ApiService.isAPISynchronized(this.activatedRoute.snapshot.params.apiId),
-    ]).then(([groups, api, apiIsSynchronizedResult]) => {
+    ]).then(([api, apiIsSynchronizedResult]) => {
       this.api = api.data;
-      this.groups = groups.data;
-
       this.eventPage = -1;
       this.events = [];
       const toDeployEventTimeline = !apiIsSynchronizedResult.data.is_synchronized
@@ -200,11 +206,12 @@ class ApiHistoryControllerAjs {
       this.eventPage,
       this.eventPageSize,
       true,
-    ).then((response) => {
+    ).then(response => {
+      this.fetchGroupsConsumed(response);
       this.events = [...(this.events ?? []), ...response.data.content];
       this.hasNextEventPageToLoad =
         response.data.totalElements > response.data.pageNumber * this.eventPageSize + response.data.pageElements;
-      this.eventsTimeline = this.events.map((event) => ({
+      this.eventsTimeline = this.events.map(event => ({
         event: event,
         badgeClass: 'info',
         badgeIconClass: 'action:check_circle',
@@ -234,6 +241,20 @@ class ApiHistoryControllerAjs {
       });
     }
   }
+
+  fetchGroupsConsumed = (data: any) => {
+    const contentArray: EventData[] = data.data.content;
+
+    const allGroups: string[][] = contentArray.map((item: EventData) => {
+      const parsedPayload: EventPayload = JSON.parse(item.payload);
+      return parsedPayload.groups ?? [];
+    });
+
+    const flatGroupList: string[] = [...new Set(allGroups.flat())];
+    this.ngGroupV2Service.listById(flatGroupList, 1, flatGroupList.length).subscribe(res => {
+      this.groups = res.data;
+    });
+  };
 
   setEventToStudio(eventTimeline, api) {
     this.studio.definition = {
@@ -325,7 +346,7 @@ class ApiHistoryControllerAjs {
     this.added = 0;
     this.removed = 0;
     const diff = JsDiff.diffJson(this.left, this.right);
-    diff.forEach((part) => {
+    diff.forEach(part => {
       if (part.added) {
         this.added += this.computeLines(part);
       } else if (part.removed) {
@@ -420,15 +441,19 @@ class ApiHistoryControllerAjs {
 
         return this.ApiService.get(this.api.id);
       })
-      .then((response) => {
+      .then(response => {
         this.api = JSON.parse(angular.toJson(cloneDeep(response.data)));
         // reload API events
         return this.ApiService.getApiEvents(this.api.id, this.eventTypes);
       })
-      .then((response) => {
+      .then(response => {
         this.events = response.data;
       })
-      .then(() => this.ngApiV2Service.get(this.api.id).toPromise()); // To update the deploy banner
+      .then(() => this.ngApiV2Service.get(this.api.id).toPromise()) // To update the deploy banner
+      .catch(err => {
+        const errorMessage = err?.data?.message || 'An unexpected error occurred while rolling back the API';
+        this.NotificationService.showError(errorMessage);
+      });
   }
 
   showRollbackAPIConfirm(ev, api) {
@@ -444,7 +469,7 @@ class ApiHistoryControllerAjs {
           confirmButton: 'Rollback',
         },
       })
-      .then((response) => {
+      .then(response => {
         if (response) {
           this.rollback(api);
         }
@@ -464,13 +489,11 @@ class ApiHistoryControllerAjs {
     delete payload.picture_url;
     delete payload.background_url;
     delete payload.categories;
-    delete payload.groups;
     delete payload.context_path;
     delete payload.disable_membership_notifications;
     delete payload.labels;
     delete payload.entrypoints;
     delete payload.lifecycle_state;
-    delete payload.path_mappings;
     delete payload.workflow_state;
     delete payload.crossId;
     delete payload.definition_context;
@@ -491,10 +514,17 @@ class ApiHistoryControllerAjs {
     if (payload.tags && isEmpty(payload.tags)) {
       delete payload.tags;
     }
+    if (payload.groups && isEmpty(payload.groups)) {
+      delete payload.groups;
+    }
+
+    if (payload.path_mappings && isEmpty(payload.path_mappings)) {
+      delete payload.path_mappings;
+    }
 
     payload.plans = (payload.plans ?? [])
-      .filter((plan) => plan.status !== 'CLOSED')
-      .map((plan) => {
+      .filter(plan => plan.status !== 'CLOSED')
+      .map(plan => {
         delete plan.characteristics;
         delete plan.comment_message;
         delete plan.comment_required;
@@ -512,7 +542,7 @@ class ApiHistoryControllerAjs {
         delete plan.validation;
         return plan;
       })
-      .sort((plan) => plan.id);
+      .sort(plan => plan.id);
 
     return JSON.stringify({ definition: JSON.stringify(payload) });
   }
@@ -527,14 +557,14 @@ class ApiHistoryControllerAjs {
       tags: eventPayloadDefinition.tags,
       proxy: eventPayloadDefinition.proxy,
       paths: eventPayloadDefinition.paths,
-      plans: (eventPayloadDefinition.plans ?? []).sort((plan) => plan.id),
+      plans: (eventPayloadDefinition.plans ?? []).sort(plan => plan.id),
       flows: eventPayloadDefinition.flows,
       properties: eventPayloadDefinition.properties,
       services: eventPayloadDefinition.services,
       resources: eventPayloadDefinition.resources,
       path_mappings: eventPayloadDefinition.path_mappings,
       response_templates: eventPayloadDefinition.response_templates,
-      groups: this.listGroups(_event.groups),
+      groups: this.listGroups(eventPayloadDefinition.groups || _event.groups),
     };
     if (reorganizedEvent.flow_mode != null) {
       reorganizedEvent.flow_mode = reorganizedEvent.flow_mode.toLowerCase();
@@ -545,7 +575,7 @@ class ApiHistoryControllerAjs {
   fetchPolicyDocumentation({ detail }) {
     const policy = detail.policy;
     this.PolicyService.getDocumentation(policy.id)
-      .then((response) => {
+      .then(response => {
         this.studio.documentation = { content: response.data, image: policy.icon, id: policy.id };
       })
       .catch(() => (this.studio.documentation = null));
@@ -556,7 +586,7 @@ class ApiHistoryControllerAjs {
       detail: { resourceType, target },
     } = event;
     this.ResourceService.getDocumentation(resourceType.id)
-      .then((response) => {
+      .then(response => {
         target.documentation = { content: response.data, image: resourceType.icon };
       })
       .catch(() => (target.documentation = null));
@@ -566,7 +596,7 @@ class ApiHistoryControllerAjs {
     if (!groupIds) {
       return [];
     }
-    return groupIds.map((groupId) => this.groups.find((group) => group.id === groupId)?.name).filter((groupName) => groupName != null);
+    return groupIds.map(groupId => this.groups.find(group => group.id === groupId)?.name).filter(groupName => groupName != null);
   }
 }
 ApiHistoryControllerAjs.$inject = [

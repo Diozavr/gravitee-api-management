@@ -20,12 +20,16 @@ import static java.lang.String.format;
 import io.gravitee.apim.core.api_key.use_case.RevokeApiSubscriptionApiKeyUseCase;
 import io.gravitee.apim.core.audit.model.AuditActor;
 import io.gravitee.apim.core.audit.model.AuditInfo;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.apim.core.subscription.model.crd.SubscriptionCRDSpec;
 import io.gravitee.apim.core.subscription.use_case.AcceptSubscriptionUseCase;
 import io.gravitee.apim.core.subscription.use_case.CloseSubscriptionUseCase;
+import io.gravitee.apim.core.subscription.use_case.CreateSubscriptionUseCase;
 import io.gravitee.apim.core.subscription.use_case.DeleteSubscriptionSpecUseCase;
+import io.gravitee.apim.core.subscription.use_case.GetSubscriptionsUseCase;
 import io.gravitee.apim.core.subscription.use_case.ImportSubscriptionSpecUseCase;
 import io.gravitee.apim.core.subscription.use_case.RejectSubscriptionUseCase;
+import io.gravitee.apim.core.subscription.use_case.UpdateSubscriptionUseCase;
 import io.gravitee.common.data.domain.Page;
 import io.gravitee.common.http.MediaType;
 import io.gravitee.rest.api.management.v2.rest.mapper.*;
@@ -216,8 +220,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
             metadata = new HashMap<>();
         }
 
-        return Response
-            .ok(subscriptionService.exportAsCsv(subscriptionPage.getContent(), metadata))
+        return Response.ok(subscriptionService.exportAsCsv(subscriptionPage.getContent(), metadata))
             .header(
                 HttpHeaders.CONTENT_DISPOSITION,
                 format("attachment;filename=subscriptions-%s-%s.csv", apiId, System.currentTimeMillis())
@@ -258,8 +261,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
             StringUtils.isNotEmpty(createSubscription.getCustomApiKey()) &&
             !parameterService.findAsBoolean(executionContext, Key.PLAN_SECURITY_APIKEY_CUSTOM_ALLOWED, ParameterReferenceType.ENVIRONMENT)
         ) {
-            return Response
-                .status(Response.Status.BAD_REQUEST)
+            return Response.status(Response.Status.BAD_REQUEST)
                 .entity(subscriptionInvalid("You are not allowed to provide a custom API Key"))
                 .build();
         }
@@ -274,10 +276,10 @@ public class ApiSubscriptionsResource extends AbstractResource {
 
         if (created.getStatus() == io.gravitee.rest.api.model.SubscriptionStatus.PENDING) {
             var result = acceptSubscriptionUsecase.execute(
-                AcceptSubscriptionUseCase.Input
-                    .builder()
+                AcceptSubscriptionUseCase.Input.builder()
+                    .referenceId(apiId)
+                    .referenceType(SubscriptionReferenceType.API)
                     .subscriptionId(created.getId())
-                    .apiId(apiId)
                     .auditInfo(getAuditInfo())
                     .customKey(getCustomApiKey(createSubscription))
                     .build()
@@ -298,6 +300,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
             GraviteeContext.getExecutionContext(),
             verifySubscriptionSubscription.getApiKey(),
             apiId,
+            SubscriptionReferenceType.API.name(),
             verifySubscriptionSubscription.getApplicationId()
         );
         return Response.ok(new VerifySubscriptionResponse().ok(canCreate)).build();
@@ -311,8 +314,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
         PaginationParam paginationParam,
         ExecutionContext executionContext
     ) {
-        final SubscriptionQuery subscriptionQuery = SubscriptionQuery
-            .builder()
+        final SubscriptionQuery subscriptionQuery = SubscriptionQuery.builder()
             .apis(List.of(apiId))
             .applications(applicationIds)
             .plans(planIds)
@@ -330,7 +332,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
     public Response getApiSubscription(@PathParam("subscriptionId") String subscriptionId, @QueryParam("expands") Set<String> expands) {
         final SubscriptionEntity subscriptionEntity = subscriptionService.findById(subscriptionId);
 
-        if (!subscriptionEntity.getApi().equals(apiId)) {
+        if (!apiId.equals(subscriptionEntity.getReferenceId())) {
             return Response.status(Response.Status.NOT_FOUND).entity(subscriptionNotFoundError(subscriptionId)).build();
         }
 
@@ -345,7 +347,9 @@ public class ApiSubscriptionsResource extends AbstractResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response importSubscriptionSpec(@Valid SubscriptionCRDSpec spec) {
-        return Response.ok(importSubscriptionSpecUseCase.execute(new ImportSubscriptionSpecUseCase.Input(getAuditInfo(), spec))).build();
+        return Response.ok(
+            importSubscriptionSpecUseCase.execute(new ImportSubscriptionSpecUseCase.Input(getAuditInfo(), spec)).status()
+        ).build();
     }
 
     @DELETE
@@ -367,13 +371,12 @@ public class ApiSubscriptionsResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final SubscriptionEntity subscriptionEntity = subscriptionService.findById(subscriptionId);
 
-        if (!subscriptionEntity.getApi().equals(apiId)) {
+        if (!apiId.equals(subscriptionEntity.getReferenceId())) {
             return Response.status(Response.Status.NOT_FOUND).entity(subscriptionNotFoundError(subscriptionId)).build();
         }
 
         final UpdateSubscriptionEntity updateSubscriptionEntity = subscriptionMapper.map(updateSubscription, subscriptionId);
-        return Response
-            .status(Response.Status.OK)
+        return Response.status(Response.Status.OK)
             .entity(subscriptionMapper.map(subscriptionService.update(executionContext, updateSubscriptionEntity)))
             .build();
     }
@@ -387,15 +390,16 @@ public class ApiSubscriptionsResource extends AbstractResource {
         @PathParam("subscriptionId") String subscriptionId,
         @Valid @NotNull AcceptSubscription acceptSubscription
     ) {
-        var input = new AcceptSubscriptionUseCase.Input(
-            apiId,
-            subscriptionId,
-            acceptSubscription.getStartingAt() != null ? acceptSubscription.getStartingAt().toZonedDateTime() : null,
-            acceptSubscription.getEndingAt() != null ? acceptSubscription.getEndingAt().toZonedDateTime() : null,
-            acceptSubscription.getReason(),
-            acceptSubscription.getCustomApiKey(),
-            getAuditInfo()
-        );
+        var input = AcceptSubscriptionUseCase.Input.builder()
+            .referenceId(apiId)
+            .referenceType(SubscriptionReferenceType.API)
+            .subscriptionId(subscriptionId)
+            .startingAt(acceptSubscription.getStartingAt() != null ? acceptSubscription.getStartingAt().toZonedDateTime() : null)
+            .endingAt(acceptSubscription.getEndingAt() != null ? acceptSubscription.getEndingAt().toZonedDateTime() : null)
+            .reasonMessage(acceptSubscription.getReason())
+            .customKey(acceptSubscription.getCustomApiKey())
+            .auditInfo(getAuditInfo())
+            .build();
 
         return Response.ok().entity(subscriptionMapper.map(acceptSubscriptionUsecase.execute(input).subscription())).build();
     }
@@ -409,7 +413,13 @@ public class ApiSubscriptionsResource extends AbstractResource {
         @PathParam("subscriptionId") String subscriptionId,
         @Valid @NotNull RejectSubscription rejectSubscription
     ) {
-        var input = new RejectSubscriptionUseCase.Input(apiId, subscriptionId, rejectSubscription.getReason(), getAuditInfo());
+        var input = RejectSubscriptionUseCase.Input.builder()
+            .referenceId(apiId)
+            .referenceType(SubscriptionReferenceType.API)
+            .subscriptionId(subscriptionId)
+            .reasonMessage(rejectSubscription.getReason())
+            .auditInfo(getAuditInfo())
+            .build();
         return Response.ok().entity(subscriptionMapper.map(rejectSubscriptionUseCase.execute(input).subscription())).build();
     }
 
@@ -422,18 +432,16 @@ public class ApiSubscriptionsResource extends AbstractResource {
         final var user = getAuthenticatedUserDetails();
 
         var result = closeSubscriptionUsecase.execute(
-            CloseSubscriptionUseCase.Input
-                .builder()
+            CloseSubscriptionUseCase.Input.builder()
                 .subscriptionId(subscriptionId)
-                .apiId(apiId)
+                .referenceId(apiId)
+                .referenceType(SubscriptionReferenceType.API)
                 .auditInfo(
-                    AuditInfo
-                        .builder()
+                    AuditInfo.builder()
                         .organizationId(executionContext.getOrganizationId())
                         .environmentId(executionContext.getEnvironmentId())
                         .actor(
-                            AuditActor
-                                .builder()
+                            AuditActor.builder()
                                 .userId(user.getUsername())
                                 .userSource(user.getSource())
                                 .userSourceId(user.getSourceId())
@@ -454,7 +462,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         SubscriptionEntity subscriptionEntity = subscriptionService.findById(subscriptionId);
 
-        if (!subscriptionEntity.getApi().equals(apiId)) {
+        if (!apiId.equals(subscriptionEntity.getReferenceId())) {
             return Response.status(Response.Status.NOT_FOUND).entity(subscriptionNotFoundError(subscriptionId)).build();
         }
 
@@ -469,7 +477,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         SubscriptionEntity subscriptionEntity = subscriptionService.findById(subscriptionId);
 
-        if (!subscriptionEntity.getApi().equals(apiId)) {
+        if (!apiId.equals(subscriptionEntity.getReferenceId())) {
             return Response.status(Response.Status.NOT_FOUND).entity(subscriptionNotFoundError(subscriptionId)).build();
         }
 
@@ -487,14 +495,14 @@ public class ApiSubscriptionsResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         SubscriptionEntity subscriptionEntity = subscriptionService.findById(subscriptionId);
 
-        if (!subscriptionEntity.getApi().equals(apiId)) {
+        if (!apiId.equals(subscriptionEntity.getReferenceId())) {
             return Response.status(Response.Status.NOT_FOUND).entity(subscriptionNotFoundError(subscriptionId)).build();
         }
 
         final TransferSubscriptionEntity transferSubscriptionEntity = subscriptionMapper.map(transferSubscription, subscriptionId);
-        return Response
-            .ok(subscriptionMapper.map(subscriptionService.transfer(executionContext, transferSubscriptionEntity, getAuthenticatedUser())))
-            .build();
+        return Response.ok(
+            subscriptionMapper.map(subscriptionService.transfer(executionContext, transferSubscriptionEntity, getAuthenticatedUser()))
+        ).build();
     }
 
     private void expandData(Subscription subscription, Set<String> expands) {
@@ -509,7 +517,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
 
         if (expands.contains(EXPAND_API)) {
-            final BaseApi baseApi = apiMapper.map(apiSearchService.findGenericById(executionContext, apiId));
+            final BaseApi baseApi = apiMapper.map(apiSearchService.findGenericById(executionContext, apiId, false, false, false));
             subscriptions.forEach(subscription -> subscription.setApi(baseApi));
         }
 
@@ -568,7 +576,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
     ) {
         final SubscriptionEntity subscriptionEntity = subscriptionService.findById(subscriptionId);
 
-        if (!subscriptionEntity.getApi().equals(apiId)) {
+        if (!apiId.equals(subscriptionEntity.getReferenceId())) {
             return Response.status(Response.Status.NOT_FOUND).entity(subscriptionNotFoundError(subscriptionId)).build();
         }
 
@@ -578,14 +586,12 @@ public class ApiSubscriptionsResource extends AbstractResource {
 
         final List<ApiKey> apiKeysSubList = computePaginationData(apiKeys, paginationParam);
 
-        return Response
-            .ok(
-                new SubscriptionApiKeysResponse()
-                    .data(apiKeysSubList)
-                    .pagination(PaginationInfo.computePaginationInfo(apiKeys.size(), apiKeysSubList.size(), paginationParam))
-                    .links(computePaginationLinks(apiKeys.size(), paginationParam))
-            )
-            .build();
+        return Response.ok(
+            new SubscriptionApiKeysResponse()
+                .data(apiKeysSubList)
+                .pagination(PaginationInfo.computePaginationInfo(apiKeys.size(), apiKeysSubList.size(), paginationParam))
+                .links(computePaginationLinks(apiKeys.size(), paginationParam))
+        ).build();
     }
 
     @POST
@@ -601,15 +607,14 @@ public class ApiSubscriptionsResource extends AbstractResource {
             StringUtils.isNotEmpty(renewApiKey.getCustomApiKey()) &&
             !parameterService.findAsBoolean(executionContext, Key.PLAN_SECURITY_APIKEY_CUSTOM_ALLOWED, ParameterReferenceType.ENVIRONMENT)
         ) {
-            return Response
-                .status(Response.Status.BAD_REQUEST)
+            return Response.status(Response.Status.BAD_REQUEST)
                 .entity(subscriptionInvalid("You are not allowed to provide a custom API Key"))
                 .build();
         }
 
         final SubscriptionEntity subscriptionEntity = subscriptionService.findById(subscriptionId);
 
-        if (!subscriptionEntity.getApi().equals(apiId)) {
+        if (!apiId.equals(subscriptionEntity.getReferenceId())) {
             return Response.status(Response.Status.NOT_FOUND).entity(subscriptionNotFoundError(subscriptionId)).build();
         }
 
@@ -631,7 +636,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
     ) {
         final SubscriptionEntity subscriptionEntity = subscriptionService.findById(subscriptionId);
 
-        if (!subscriptionEntity.getApi().equals(apiId)) {
+        if (!apiId.equals(subscriptionEntity.getReferenceId())) {
             return Response.status(Response.Status.NOT_FOUND).entity(subscriptionNotFoundError(subscriptionId)).build();
         }
 
@@ -664,14 +669,13 @@ public class ApiSubscriptionsResource extends AbstractResource {
             new RevokeApiSubscriptionApiKeyUseCase.Input(
                 apiKeyId,
                 apiId,
+                SubscriptionReferenceType.API.name(),
                 subscriptionId,
-                AuditInfo
-                    .builder()
+                AuditInfo.builder()
                     .organizationId(executionContext.getOrganizationId())
                     .environmentId(executionContext.getEnvironmentId())
                     .actor(
-                        AuditActor
-                            .builder()
+                        AuditActor.builder()
                             .userId(user.getUsername())
                             .userSource(user.getSource())
                             .userSourceId(user.getSourceId())
@@ -680,7 +684,6 @@ public class ApiSubscriptionsResource extends AbstractResource {
                     .build()
             )
         );
-
         return Response.ok(subscriptionMapper.mapToApiKey(result.apiKey())).build();
     }
 
@@ -694,7 +697,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
     ) {
         final SubscriptionEntity subscriptionEntity = subscriptionService.findById(subscriptionId);
 
-        if (!subscriptionEntity.getApi().equals(apiId)) {
+        if (!apiId.equals(subscriptionEntity.getReferenceId())) {
             return Response.status(Response.Status.NOT_FOUND).entity(subscriptionNotFoundError(subscriptionId)).build();
         }
 

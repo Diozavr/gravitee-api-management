@@ -15,10 +15,12 @@
  */
 package io.gravitee.rest.api.service.v4.impl;
 
+import static io.gravitee.repository.management.model.Workflow.AuditEvent.API_REVIEW_ACCEPTED;
+import static io.gravitee.repository.management.model.Workflow.AuditEvent.API_REVIEW_ASKED;
+import static io.gravitee.repository.management.model.Workflow.AuditEvent.API_REVIEW_REJECTED;
 import static io.gravitee.rest.api.model.WorkflowType.REVIEW;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
@@ -26,7 +28,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.gravitee.repository.management.model.Workflow;
 import io.gravitee.rest.api.model.MembershipEntity;
 import io.gravitee.rest.api.model.MembershipMemberType;
 import io.gravitee.rest.api.model.MembershipReferenceType;
@@ -54,10 +55,8 @@ import io.gravitee.rest.api.service.common.GraviteeContext;
 import io.gravitee.rest.api.service.v4.ApiNotificationService;
 import io.gravitee.rest.api.service.v4.ApiSearchService;
 import io.gravitee.rest.api.service.v4.ApiWorkflowStateService;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import org.assertj.core.api.Assertions;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -131,19 +130,18 @@ public class ApiWorkflowStateServiceImplTest {
 
     @Before
     public void setUp() {
-        apiWorkflowStateService =
-            new ApiWorkflowStateServiceImpl(
-                auditService,
-                apiMetadataService,
-                workflowService,
-                roleService,
-                userService,
-                notifierService,
-                membershipService,
-                emailService,
-                apiSearchService,
-                parameterService
-            );
+        apiWorkflowStateService = new ApiWorkflowStateServiceImpl(
+            auditService,
+            apiMetadataService,
+            workflowService,
+            roleService,
+            userService,
+            notifierService,
+            membershipService,
+            emailService,
+            apiSearchService,
+            parameterService
+        );
     }
 
     @Test
@@ -154,25 +152,29 @@ public class ApiWorkflowStateServiceImplTest {
         final ReviewEntity reviewEntity = new ReviewEntity();
         reviewEntity.setMessage("Test Review msg");
 
-        when(workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage()))
-            .thenReturn(null);
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(genericApiEntity);
+        when(
+            workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage())
+        ).thenReturn(null);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID, false, false, false)).thenReturn(
+            genericApiEntity
+        );
         when(userService.findById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(new UserEntity());
 
         apiWorkflowStateService.askForReview(GraviteeContext.getExecutionContext(), API_ID, USER_ID, reviewEntity);
 
-        verify(workflowService)
-            .create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage());
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                argThat(apiId -> apiId.equals(API_ID)),
-                anyMap(),
-                argThat(evt -> Workflow.AuditEvent.API_REVIEW_ASKED.equals(evt)),
-                any(),
-                any(),
-                any()
-            );
+        verify(workflowService).create(
+            WorkflowReferenceType.API,
+            API_ID,
+            REVIEW,
+            USER_ID,
+            WorkflowState.IN_REVIEW,
+            reviewEntity.getMessage()
+        );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getEvent().equals(API_REVIEW_ASKED)),
+            argThat(apiId -> apiId.equals(API_ID))
+        );
         verify(apiNotificationService, times(0)).triggerUpdateNotification(eq(GraviteeContext.getExecutionContext()), any(ApiEntity.class));
     }
 
@@ -184,36 +186,45 @@ public class ApiWorkflowStateServiceImplTest {
         final ReviewEntity reviewEntity = new ReviewEntity();
         reviewEntity.setMessage("Test Review msg");
 
-        when(workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage()))
-            .thenReturn(null);
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(genericApiEntity);
-        when(userService.findById(eq(GraviteeContext.getExecutionContext()), any()))
-            .thenReturn(UserEntity.builder().email("test@gio.gio").status("ACTIVE").password("password").build());
+        when(
+            workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage())
+        ).thenReturn(null);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID, false, false, false)).thenReturn(
+            genericApiEntity
+        );
+        when(userService.findById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(
+            UserEntity.builder().email("test@gio.gio").status("ACTIVE").password("password").build()
+        );
         when(roleService.findByScope(any(), any())).thenReturn(List.of(new RoleEntity()));
         when(roleService.hasPermission(any(), eq(ApiPermission.REVIEWS), any())).thenReturn(true);
-        when(membershipService.getMembershipsByReferenceAndRole(eq(MembershipReferenceType.API), eq(API_ID), any()))
-            .thenReturn(Set.of(MembershipEntity.builder().id(USER_ID).memberType(MembershipMemberType.USER).build()));
+        when(membershipService.getMembershipsByReferenceAndRole(eq(MembershipReferenceType.API), eq(API_ID), any())).thenReturn(
+            Set.of(MembershipEntity.builder().id(USER_ID).memberType(MembershipMemberType.USER).build())
+        );
         when(parameterService.findAsBoolean(any(), eq(Key.TRIAL_INSTANCE), eq(ParameterReferenceType.SYSTEM))).thenReturn(false);
         apiWorkflowStateService.askForReview(GraviteeContext.getExecutionContext(), API_ID, USER_ID, reviewEntity);
 
-        verify(workflowService)
-            .create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage());
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                argThat(apiId -> apiId.equals(API_ID)),
-                anyMap(),
-                argThat(evt -> Workflow.AuditEvent.API_REVIEW_ASKED.equals(evt)),
-                any(),
-                any(),
-                any()
-            );
+        verify(workflowService).create(
+            WorkflowReferenceType.API,
+            API_ID,
+            REVIEW,
+            USER_ID,
+            WorkflowState.IN_REVIEW,
+            reviewEntity.getMessage()
+        );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getEvent().equals(API_REVIEW_ASKED)),
+            argThat(apiId -> apiId.equals(API_ID))
+        );
         verify(apiNotificationService, times(0)).triggerUpdateNotification(eq(GraviteeContext.getExecutionContext()), any(ApiEntity.class));
         final ArgumentCaptor<EmailNotification> emailNotificationArgumentCaptor = ArgumentCaptor.forClass(EmailNotification.class);
-        verify(emailService)
-            .sendAsyncEmailNotification(eq(GraviteeContext.getExecutionContext()), emailNotificationArgumentCaptor.capture());
-        assertThat(emailNotificationArgumentCaptor.getValue())
-            .satisfies(emailNotification -> assertThat(emailNotification.getTo()).containsExactly("test@gio.gio"));
+        verify(emailService).sendAsyncEmailNotification(
+            eq(GraviteeContext.getExecutionContext()),
+            emailNotificationArgumentCaptor.capture()
+        );
+        assertThat(emailNotificationArgumentCaptor.getValue()).satisfies(emailNotification ->
+            assertThat(emailNotification.getTo()).containsExactly("test@gio.gio")
+        );
     }
 
     @Test
@@ -224,36 +235,45 @@ public class ApiWorkflowStateServiceImplTest {
         final ReviewEntity reviewEntity = new ReviewEntity();
         reviewEntity.setMessage("Test Review msg");
 
-        when(workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage()))
-            .thenReturn(null);
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(genericApiEntity);
-        when(userService.findById(eq(GraviteeContext.getExecutionContext()), any()))
-            .thenReturn(UserEntity.builder().email("test@gio.gio").status("ACTIVE").password("password").build());
+        when(
+            workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage())
+        ).thenReturn(null);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID, false, false, false)).thenReturn(
+            genericApiEntity
+        );
+        when(userService.findById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(
+            UserEntity.builder().email("test@gio.gio").status("ACTIVE").password("password").build()
+        );
         when(roleService.findByScope(any(), any())).thenReturn(List.of(new RoleEntity()));
         when(roleService.hasPermission(any(), eq(ApiPermission.REVIEWS), any())).thenReturn(true);
-        when(membershipService.getMembershipsByReferenceAndRole(eq(MembershipReferenceType.API), eq(API_ID), any()))
-            .thenReturn(Set.of(MembershipEntity.builder().id(USER_ID).memberType(MembershipMemberType.USER).build()));
+        when(membershipService.getMembershipsByReferenceAndRole(eq(MembershipReferenceType.API), eq(API_ID), any())).thenReturn(
+            Set.of(MembershipEntity.builder().id(USER_ID).memberType(MembershipMemberType.USER).build())
+        );
         when(parameterService.findAsBoolean(any(), eq(Key.TRIAL_INSTANCE), eq(ParameterReferenceType.SYSTEM))).thenReturn(true);
         apiWorkflowStateService.askForReview(GraviteeContext.getExecutionContext(), API_ID, USER_ID, reviewEntity);
 
-        verify(workflowService)
-            .create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage());
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                argThat(apiId -> apiId.equals(API_ID)),
-                anyMap(),
-                argThat(evt -> Workflow.AuditEvent.API_REVIEW_ASKED.equals(evt)),
-                any(),
-                any(),
-                any()
-            );
+        verify(workflowService).create(
+            WorkflowReferenceType.API,
+            API_ID,
+            REVIEW,
+            USER_ID,
+            WorkflowState.IN_REVIEW,
+            reviewEntity.getMessage()
+        );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getEvent().equals(API_REVIEW_ASKED)),
+            argThat(apiId -> apiId.equals(API_ID))
+        );
         verify(apiNotificationService, times(0)).triggerUpdateNotification(eq(GraviteeContext.getExecutionContext()), any(ApiEntity.class));
         final ArgumentCaptor<EmailNotification> emailNotificationArgumentCaptor = ArgumentCaptor.forClass(EmailNotification.class);
-        verify(emailService)
-            .sendAsyncEmailNotification(eq(GraviteeContext.getExecutionContext()), emailNotificationArgumentCaptor.capture());
-        assertThat(emailNotificationArgumentCaptor.getValue())
-            .satisfies(emailNotification -> assertThat(emailNotification.getTo()).containsExactly("test@gio.gio"));
+        verify(emailService).sendAsyncEmailNotification(
+            eq(GraviteeContext.getExecutionContext()),
+            emailNotificationArgumentCaptor.capture()
+        );
+        assertThat(emailNotificationArgumentCaptor.getValue()).satisfies(emailNotification ->
+            assertThat(emailNotification.getTo()).containsExactly("test@gio.gio")
+        );
     }
 
     @Test
@@ -264,30 +284,36 @@ public class ApiWorkflowStateServiceImplTest {
         final ReviewEntity reviewEntity = new ReviewEntity();
         reviewEntity.setMessage("Test Review msg");
 
-        when(workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage()))
-            .thenReturn(null);
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(genericApiEntity);
-        when(userService.findById(eq(GraviteeContext.getExecutionContext()), any()))
-            .thenReturn(UserEntity.builder().email("test@gio.gio").status("PENDING").password("password").build());
+        when(
+            workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage())
+        ).thenReturn(null);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID, false, false, false)).thenReturn(
+            genericApiEntity
+        );
+        when(userService.findById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(
+            UserEntity.builder().email("test@gio.gio").status("PENDING").password("password").build()
+        );
         when(roleService.findByScope(any(), any())).thenReturn(List.of(new RoleEntity()));
         when(roleService.hasPermission(any(), eq(ApiPermission.REVIEWS), any())).thenReturn(true);
-        when(membershipService.getMembershipsByReferenceAndRole(eq(MembershipReferenceType.API), eq(API_ID), any()))
-            .thenReturn(Set.of(MembershipEntity.builder().id(USER_ID).memberType(MembershipMemberType.USER).build()));
+        when(membershipService.getMembershipsByReferenceAndRole(eq(MembershipReferenceType.API), eq(API_ID), any())).thenReturn(
+            Set.of(MembershipEntity.builder().id(USER_ID).memberType(MembershipMemberType.USER).build())
+        );
         when(parameterService.findAsBoolean(any(), eq(Key.TRIAL_INSTANCE), eq(ParameterReferenceType.SYSTEM))).thenReturn(true);
         apiWorkflowStateService.askForReview(GraviteeContext.getExecutionContext(), API_ID, USER_ID, reviewEntity);
 
-        verify(workflowService)
-            .create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, reviewEntity.getMessage());
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                argThat(apiId -> apiId.equals(API_ID)),
-                anyMap(),
-                argThat(evt -> Workflow.AuditEvent.API_REVIEW_ASKED.equals(evt)),
-                any(),
-                any(),
-                any()
-            );
+        verify(workflowService).create(
+            WorkflowReferenceType.API,
+            API_ID,
+            REVIEW,
+            USER_ID,
+            WorkflowState.IN_REVIEW,
+            reviewEntity.getMessage()
+        );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getEvent().equals(API_REVIEW_ASKED)),
+            argThat(apiId -> apiId.equals(API_ID))
+        );
         verify(apiNotificationService, times(0)).triggerUpdateNotification(eq(GraviteeContext.getExecutionContext()), any(ApiEntity.class));
         verify(emailService, never()).sendAsyncEmailNotification(eq(GraviteeContext.getExecutionContext()), any());
     }
@@ -298,22 +324,19 @@ public class ApiWorkflowStateServiceImplTest {
         genericApiEntity.setId(API_ID);
 
         when(workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, null)).thenReturn(null);
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(genericApiEntity);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID, false, false, false)).thenReturn(
+            genericApiEntity
+        );
         when(userService.findById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(new UserEntity());
 
         apiWorkflowStateService.askForReview(GraviteeContext.getExecutionContext(), API_ID, USER_ID, null);
 
         verify(workflowService).create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.IN_REVIEW, null);
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                argThat(apiId -> apiId.equals(API_ID)),
-                anyMap(),
-                argThat(evt -> Workflow.AuditEvent.API_REVIEW_ASKED.equals(evt)),
-                any(),
-                any(),
-                any()
-            );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getEvent().equals(API_REVIEW_ASKED)),
+            argThat(apiId -> apiId.equals(API_ID))
+        );
         verify(apiNotificationService, times(0)).triggerUpdateNotification(eq(GraviteeContext.getExecutionContext()), any(ApiEntity.class));
     }
 
@@ -325,25 +348,29 @@ public class ApiWorkflowStateServiceImplTest {
         final ReviewEntity reviewEntity = new ReviewEntity();
         reviewEntity.setMessage("Test Review msg");
 
-        when(workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.REVIEW_OK, reviewEntity.getMessage()))
-            .thenReturn(null);
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(genericApiEntity);
+        when(
+            workflowService.create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.REVIEW_OK, reviewEntity.getMessage())
+        ).thenReturn(null);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID, false, false, false)).thenReturn(
+            genericApiEntity
+        );
         when(userService.findById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(new UserEntity());
 
         apiWorkflowStateService.acceptReview(GraviteeContext.getExecutionContext(), API_ID, USER_ID, reviewEntity);
 
-        verify(workflowService)
-            .create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.REVIEW_OK, reviewEntity.getMessage());
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                argThat(apiId -> apiId.equals(API_ID)),
-                anyMap(),
-                argThat(evt -> Workflow.AuditEvent.API_REVIEW_ACCEPTED.equals(evt)),
-                any(),
-                any(),
-                any()
-            );
+        verify(workflowService).create(
+            WorkflowReferenceType.API,
+            API_ID,
+            REVIEW,
+            USER_ID,
+            WorkflowState.REVIEW_OK,
+            reviewEntity.getMessage()
+        );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getEvent().equals(API_REVIEW_ACCEPTED)),
+            argThat(apiId -> apiId.equals(API_ID))
+        );
         verify(apiNotificationService, times(0)).triggerUpdateNotification(eq(GraviteeContext.getExecutionContext()), any(ApiEntity.class));
     }
 
@@ -364,25 +391,27 @@ public class ApiWorkflowStateServiceImplTest {
                 WorkflowState.REQUEST_FOR_CHANGES,
                 reviewEntity.getMessage()
             )
-        )
-            .thenReturn(null);
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(genericApiEntity);
+        ).thenReturn(null);
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), API_ID, false, false, false)).thenReturn(
+            genericApiEntity
+        );
         when(userService.findById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(new UserEntity());
 
         apiWorkflowStateService.rejectReview(GraviteeContext.getExecutionContext(), API_ID, USER_ID, reviewEntity);
 
-        verify(workflowService)
-            .create(WorkflowReferenceType.API, API_ID, REVIEW, USER_ID, WorkflowState.REQUEST_FOR_CHANGES, reviewEntity.getMessage());
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                argThat(apiId -> apiId.equals(API_ID)),
-                anyMap(),
-                argThat(evt -> Workflow.AuditEvent.API_REVIEW_REJECTED.equals(evt)),
-                any(),
-                any(),
-                any()
-            );
+        verify(workflowService).create(
+            WorkflowReferenceType.API,
+            API_ID,
+            REVIEW,
+            USER_ID,
+            WorkflowState.REQUEST_FOR_CHANGES,
+            reviewEntity.getMessage()
+        );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getEvent().equals(API_REVIEW_REJECTED)),
+            argThat(apiId -> apiId.equals(API_ID))
+        );
         verify(apiNotificationService, times(0)).triggerUpdateNotification(eq(GraviteeContext.getExecutionContext()), any(ApiEntity.class));
     }
 }

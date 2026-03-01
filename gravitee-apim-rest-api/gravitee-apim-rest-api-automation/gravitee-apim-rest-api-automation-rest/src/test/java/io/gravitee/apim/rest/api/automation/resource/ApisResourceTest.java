@@ -58,18 +58,16 @@ class ApisResourceTest extends AbstractResourceTest {
 
         @BeforeEach
         void setUp() {
-            when(importApiCRDUseCase.execute(any(ImportApiCRDUseCase.Input.class)))
-                .thenReturn(
-                    new ImportApiCRDUseCase.Output(
-                        ApiCRDStatus
-                            .builder()
-                            .id("api-id")
-                            .crossId("api-cross-id")
-                            .organizationId(ORGANIZATION)
-                            .environmentId(ENVIRONMENT)
-                            .build()
-                    )
-                );
+            when(importApiCRDUseCase.execute(any(ImportApiCRDUseCase.Input.class))).thenReturn(
+                new ImportApiCRDUseCase.Output(
+                    ApiCRDStatus.builder()
+                        .id("api-id")
+                        .crossId("api-cross-id")
+                        .organizationId(ORGANIZATION)
+                        .environmentId(ENVIRONMENT)
+                        .build()
+                )
+            );
         }
 
         @Test
@@ -81,6 +79,30 @@ class ApisResourceTest extends AbstractResourceTest {
                 soft.assertThat(state.getOrganizationId()).isEqualTo(ORGANIZATION);
                 soft.assertThat(state.getEnvironmentId()).isEqualTo(ENVIRONMENT);
                 soft.assertThat(state.getHrid()).isEqualTo("api-hrid");
+            });
+        }
+
+        @Test
+        void should_return_state_from_legacy_id() {
+            when(importApiCRDUseCase.execute(any(ImportApiCRDUseCase.Input.class))).thenAnswer(call -> {
+                ImportApiCRDUseCase.Input input = call.getArgument(0, ImportApiCRDUseCase.Input.class);
+                return new ImportApiCRDUseCase.Output(
+                    ApiCRDStatus.builder()
+                        .id(input.spec().getHrid())
+                        .crossId("api-cross-id")
+                        .organizationId(ORGANIZATION)
+                        .environmentId(ENVIRONMENT)
+                        .build()
+                );
+            });
+
+            var state = expectEntity("api-with-hrid.json", false, true);
+            SoftAssertions.assertSoftly(soft -> {
+                soft.assertThat(state.getHrid()).isEqualTo("api-hrid");
+                soft.assertThat(state.getCrossId()).isEqualTo("api-cross-id");
+                soft.assertThat(state.getId()).isEqualTo("api-hrid");
+                soft.assertThat(state.getOrganizationId()).isEqualTo(ORGANIZATION);
+                soft.assertThat(state.getEnvironmentId()).isEqualTo(ENVIRONMENT);
             });
         }
 
@@ -120,9 +142,9 @@ class ApisResourceTest extends AbstractResourceTest {
                 soft.assertThat(state.getHrid()).isEqualTo("api-hrid");
             });
 
-            verify(importApiCRDUseCase, atMostOnce())
-                .execute(
-                    argThat(input ->
+            verify(importApiCRDUseCase, atMostOnce()).execute(
+                argThat(
+                    input ->
                         input
                             .spec()
                             .getPlans()
@@ -151,8 +173,8 @@ class ApisResourceTest extends AbstractResourceTest {
                             )
                             .map(Step::getConfiguration)
                             .allMatch(assertion())
-                    )
-                );
+                )
+            );
         }
 
         @Nonnull
@@ -171,8 +193,9 @@ class ApisResourceTest extends AbstractResourceTest {
 
         @Test
         void should_return_state_from_hrid() {
-            when(validateApiCRDDomainService.validateAndSanitize(any(ValidateApiCRDDomainService.Input.class)))
-                .thenAnswer(call -> Validator.Result.ofValue(call.getArgument(0)));
+            when(validateApiCRDDomainService.validateAndSanitize(any(ValidateApiCRDDomainService.Input.class))).thenAnswer(call ->
+                Validator.Result.ofValue(call.getArgument(0))
+            );
 
             var state = expectEntity("api-with-hrid.json", dryRun);
             SoftAssertions.assertSoftly(soft -> {
@@ -186,8 +209,9 @@ class ApisResourceTest extends AbstractResourceTest {
 
         @Test
         void should_return_state_from_cross_id() {
-            when(validateApiCRDDomainService.validateAndSanitize(any(ValidateApiCRDDomainService.Input.class)))
-                .thenAnswer(call -> Validator.Result.ofValue(call.getArgument(0)));
+            when(validateApiCRDDomainService.validateAndSanitize(any(ValidateApiCRDDomainService.Input.class))).thenAnswer(call ->
+                Validator.Result.ofValue(call.getArgument(0))
+            );
 
             var state = expectEntity("api-with-cross-id-and-hrid.json", dryRun);
             SoftAssertions.assertSoftly(soft -> {
@@ -219,13 +243,18 @@ class ApisResourceTest extends AbstractResourceTest {
     }
 
     private ApiV4State expectEntity(String spec) {
-        return expectEntity(spec, false);
+        return expectEntity(spec, false, false);
     }
 
     private ApiV4State expectEntity(String spec, boolean dryRun) {
+        return expectEntity(spec, dryRun, false);
+    }
+
+    private ApiV4State expectEntity(String spec, boolean dryRun, boolean legacy) {
         try (
             var response = rootTarget()
                 .queryParam("dryRun", dryRun)
+                .queryParam("legacy", legacy)
                 .request()
                 .accept(MediaType.APPLICATION_JSON_TYPE)
                 .put(Entity.json(readJSON(spec)))

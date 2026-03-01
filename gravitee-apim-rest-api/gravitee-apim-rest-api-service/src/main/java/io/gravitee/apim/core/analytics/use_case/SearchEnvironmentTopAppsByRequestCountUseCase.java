@@ -33,10 +33,10 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.Builder;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 @UseCase
 public class SearchEnvironmentTopAppsByRequestCountUseCase {
@@ -62,8 +62,7 @@ public class SearchEnvironmentTopAppsByRequestCountUseCase {
     private Map<String, Api> getAllApisForEnv(String envId) {
         return apiQueryService
             .search(
-                ApiSearchCriteria
-                    .builder()
+                ApiSearchCriteria.builder()
                     .environmentId(envId)
                     .definitionVersion(List.of(DefinitionVersion.V4, DefinitionVersion.V2, DefinitionVersion.V1))
                     .build(),
@@ -85,8 +84,7 @@ public class SearchEnvironmentTopAppsByRequestCountUseCase {
             .sorted(Comparator.comparingLong(TopHitsApps.TopHitApp::count).reversed())
             .filter(topHitApp -> applications.containsKey(topHitApp.id()))
             .map(topHitApp ->
-                TopHitsApps.TopHitApp
-                    .builder()
+                TopHitsApps.TopHitApp.builder()
                     .id(topHitApp.id())
                     .name(applications.get(topHitApp.id()).getName())
                     .count(topHitApp.count())

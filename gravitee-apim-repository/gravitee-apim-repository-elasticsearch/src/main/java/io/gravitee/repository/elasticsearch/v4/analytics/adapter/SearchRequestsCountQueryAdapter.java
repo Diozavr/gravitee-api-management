@@ -40,7 +40,9 @@ public class SearchRequestsCountQueryAdapter {
     private static JsonObject buildEntrypointIdAggregate(boolean isEntrypointIdKeyword) {
         return JsonObject.of(
             "entrypoints",
-            JsonObject.of("terms", JsonObject.of("field", isEntrypointIdKeyword ? "entrypoint-id" : "entrypoint-id.keyword"))
+            JsonObject.of("terms", JsonObject.of("field", isEntrypointIdKeyword ? "entrypoint-id" : "entrypoint-id.keyword")),
+            "all_apis_status_ranges",
+            JsonObject.of("range", JsonObject.of("field", "status", "ranges", JsonArray.of(JsonObject.of("from", 100.0, "to", 600.0))))
         );
     }
 
@@ -53,8 +55,8 @@ public class SearchRequestsCountQueryAdapter {
         query.apiId().ifPresent(apiId -> terms.add(JsonObject.of("term", JsonObject.of("api-id", apiId))));
 
         var timestamp = new JsonObject();
-        query.from().ifPresent(from -> timestamp.put("from", from.toEpochMilli()).put("include_lower", true));
-        query.to().ifPresent(to -> timestamp.put("to", to.toEpochMilli()).put("include_upper", true));
+        query.from().ifPresent(from -> timestamp.put("gte", from.toEpochMilli()));
+        query.to().ifPresent(to -> timestamp.put("lte", to.toEpochMilli()));
 
         if (!timestamp.isEmpty()) {
             terms.add(JsonObject.of("range", JsonObject.of("@timestamp", timestamp)));

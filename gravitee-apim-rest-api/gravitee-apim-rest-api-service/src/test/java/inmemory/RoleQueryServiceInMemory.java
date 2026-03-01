@@ -71,12 +71,48 @@ public class RoleQueryServiceInMemory implements RoleQueryService, InMemoryAlter
     }
 
     @Override
+    public Optional<Role> findApiProductRole(String name, ReferenceContext referenceContext) {
+        return storage
+            .stream()
+            .filter(role -> role.getScope().equals(Role.Scope.API_PRODUCT))
+            .filter(role -> role.getReferenceType().name().equals(referenceContext.getReferenceType().name()))
+            .filter(role -> role.getReferenceId().equals(referenceContext.getReferenceId()))
+            .filter(role -> role.getName().equals(name))
+            .findFirst();
+    }
+
+    @Override
+    public Optional<Role> findByScopeAndNameAndOrganizationId(Role.Scope scope, String name, String organizationId) {
+        return storage
+            .stream()
+            .filter(role -> role.getScope().equals(scope))
+            .filter(role -> role.getName().equals(name))
+            .filter(role -> role.getReferenceType().equals(Role.ReferenceType.ORGANIZATION))
+            .filter(role -> role.getReferenceId().equals(organizationId))
+            .findFirst();
+    }
+
+    @Override
     public Set<Role> findByIds(Set<String> ids) {
         if (Objects.isNull(ids) || ids.isEmpty()) {
             return Set.of();
         }
 
-        return storage.stream().filter(role -> ids.contains(role.getId())).collect(Collectors.toSet());
+        return storage
+            .stream()
+            .filter(role -> ids.contains(role.getId()))
+            .collect(Collectors.toSet());
+    }
+
+    @Override
+    public Optional<Role> findByScopeAndName(Role.Scope scope, String name, String organizationId) {
+        return storage
+            .stream()
+            .filter(role -> role.getScope().equals(scope))
+            .filter(role -> role.getName().equals(name))
+            .filter(role -> role.getReferenceType().equals(Role.ReferenceType.ORGANIZATION))
+            .filter(role -> role.getReferenceId().equals(organizationId))
+            .findFirst();
     }
 
     public void resetSystemRoles(String organizationId) {
@@ -93,6 +129,8 @@ public class RoleQueryServiceInMemory implements RoleQueryService, InMemoryAlter
         this.storage.add(RoleFixtures.aGroupAdminRole(organizationId));
         //Integration Primary Owner
         this.storage.add(RoleFixtures.anIntegrationPrimaryOwnerRole(organizationId));
+        // API Product Primary Owner
+        this.storage.add(RoleFixtures.anApiProductPrimaryOwnerRole(organizationId));
     }
 
     @Override

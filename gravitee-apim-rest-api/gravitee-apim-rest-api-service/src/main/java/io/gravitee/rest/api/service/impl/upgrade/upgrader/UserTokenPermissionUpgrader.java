@@ -29,13 +29,13 @@ import io.gravitee.rest.api.service.common.ExecutionContext;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class UserTokenPermissionUpgrader implements Upgrader {
 
     private final RoleService roleService;
@@ -55,17 +55,17 @@ public class UserTokenPermissionUpgrader implements Upgrader {
     @Override
     public boolean upgrade() throws UpgraderException {
         return this.wrapException(() -> {
-                organizationRepository
-                    .findAll()
-                    .forEach(organization ->
-                        roleService
-                            .findByScope(RoleScope.ORGANIZATION, organization.getId())
-                            .stream()
-                            .filter(role -> !SystemRole.ADMIN.name().equalsIgnoreCase(role.getName()))
-                            .forEach(role -> processRolePermissions(role, organization))
-                    );
-                return true;
-            });
+            organizationRepository
+                .findAll()
+                .forEach(organization ->
+                    roleService
+                        .findByScope(RoleScope.ORGANIZATION, organization.getId())
+                        .stream()
+                        .filter(role -> !SystemRole.ADMIN.name().equalsIgnoreCase(role.getName()))
+                        .forEach(role -> processRolePermissions(role, organization))
+                );
+            return true;
+        });
     }
 
     private void processRolePermissions(RoleEntity role, Organization organization) {

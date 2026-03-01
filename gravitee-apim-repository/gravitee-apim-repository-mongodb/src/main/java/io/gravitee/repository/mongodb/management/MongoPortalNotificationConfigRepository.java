@@ -26,9 +26,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -37,7 +35,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class MongoPortalNotificationConfigRepository implements PortalNotificationConfigRepository {
 
     @Autowired
@@ -124,8 +122,7 @@ public class MongoPortalNotificationConfigRepository implements PortalNotificati
     }
 
     private PortalNotificationConfig map(PortalNotificationConfigMongo mongo) {
-        return PortalNotificationConfig
-            .builder()
+        return PortalNotificationConfig.builder()
             .referenceType(mongo.getId().getReferenceType())
             .referenceId(mongo.getId().getReferenceId())
             .user(mongo.getId().getUser())

@@ -17,6 +17,8 @@ package io.gravitee.rest.api.service.impl.upgrade.upgrader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.gravitee.repository.exceptions.TechnicalException;
@@ -31,6 +33,7 @@ import io.gravitee.repository.management.model.Environment;
 import io.gravitee.repository.management.model.GenericNotificationConfig;
 import io.gravitee.repository.management.model.NotificationReferenceType;
 import io.gravitee.repository.management.model.PortalNotificationConfig;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -64,24 +67,31 @@ public class AddOrgIdNotificationConfigsUpgraderTest {
 
     @Test
     public void upgrade() throws TechnicalException {
-        when(environmentRepository.findById("env1"))
-            .thenReturn(Optional.of(Environment.builder().id("env1").organizationId("org1").build()));
-        when(environmentRepository.findById("env2"))
-            .thenReturn(Optional.of(Environment.builder().id("env2").organizationId("org1").build()));
-        when(environmentRepository.findById("env3"))
-            .thenReturn(Optional.of(Environment.builder().id("env3").organizationId("org2").build()));
-        when(environmentRepository.findById("env4"))
-            .thenReturn(Optional.of(Environment.builder().id("env4").organizationId("org2").build()));
-        when(environmentRepository.findById("env5"))
-            .thenReturn(Optional.of(Environment.builder().id("env5").organizationId("org3").build()));
+        when(environmentRepository.findById("env1")).thenReturn(
+            Optional.of(Environment.builder().id("env1").organizationId("org1").build())
+        );
+        when(environmentRepository.findById("env2")).thenReturn(
+            Optional.of(Environment.builder().id("env2").organizationId("org1").build())
+        );
+        when(environmentRepository.findById("env3")).thenReturn(
+            Optional.of(Environment.builder().id("env3").organizationId("org2").build())
+        );
+        when(environmentRepository.findById("env4")).thenReturn(
+            Optional.of(Environment.builder().id("env4").organizationId("org2").build())
+        );
+        when(environmentRepository.findById("env5")).thenReturn(
+            Optional.of(Environment.builder().id("env5").organizationId("org3").build())
+        );
         when(apiRepository.findById("api1")).thenReturn(Optional.of(Api.builder().id("api1").environmentId("env1").build()));
         when(apiRepository.findById("api2")).thenReturn(Optional.of(Api.builder().id("api2").environmentId("env2").build()));
         when(apiRepository.findById("api3")).thenReturn(Optional.of(Api.builder().id("api3").environmentId("env3").build()));
         when(apiRepository.findById("api5")).thenReturn(Optional.of(Api.builder().id("api5").environmentId("env5").build()));
-        when(applicationRepository.findById("app2"))
-            .thenReturn(Optional.of(Application.builder().id("app2").environmentId("env2").build()));
-        when(applicationRepository.findById("app5"))
-            .thenReturn(Optional.of(Application.builder().id("app5").environmentId("env5").build()));
+        when(applicationRepository.findById("app2")).thenReturn(
+            Optional.of(Application.builder().id("app2").environmentId("env2").build())
+        );
+        when(applicationRepository.findById("app5")).thenReturn(
+            Optional.of(Application.builder().id("app5").environmentId("env5").build())
+        );
         var genericNotifConfigs = Set.of(
             GenericNotificationConfig.builder().id("gn1").referenceType(NotificationReferenceType.PORTAL).referenceId("env1").build(),
             GenericNotificationConfig.builder().id("gn2").referenceType(NotificationReferenceType.API).referenceId("api3").build(),
@@ -116,15 +126,67 @@ public class AddOrgIdNotificationConfigsUpgraderTest {
             () -> assertThat(genericNotifsConfigsById.get("gn5").getOrganizationId()).isEqualTo("org1"),
             () -> assertThat(portalNotifsConfigsByReferenceId.get("env4").getOrganizationId()).isEqualTo("org2"),
             () ->
-                assertThat(portalNotifsConfigsByReferenceId.get("env4").getReferenceType())
-                    .isEqualTo(NotificationReferenceType.ENVIRONMENT),
+                assertThat(portalNotifsConfigsByReferenceId.get("env4").getReferenceType()).isEqualTo(
+                    NotificationReferenceType.ENVIRONMENT
+                ),
             () -> assertThat(portalNotifsConfigsByReferenceId.get("api1").getOrganizationId()).isEqualTo("org1"),
             () -> assertThat(portalNotifsConfigsByReferenceId.get("app2").getOrganizationId()).isEqualTo("org1"),
             () -> assertThat(portalNotifsConfigsByReferenceId.get("env2").getOrganizationId()).isEqualTo("org1"),
             () ->
-                assertThat(portalNotifsConfigsByReferenceId.get("env2").getReferenceType())
-                    .isEqualTo(NotificationReferenceType.ENVIRONMENT),
+                assertThat(portalNotifsConfigsByReferenceId.get("env2").getReferenceType()).isEqualTo(
+                    NotificationReferenceType.ENVIRONMENT
+                ),
             () -> assertThat(portalNotifsConfigsByReferenceId.get("api5").getOrganizationId()).isEqualTo("org3")
         );
+    }
+
+    @Test
+    public void upgrade_should_preserve_hooks_when_converting_portal_to_environment() throws TechnicalException {
+        when(environmentRepository.findById("env1")).thenReturn(
+            Optional.of(Environment.builder().id("env1").organizationId("org1").build())
+        );
+        var hooks = List.of("HOOK_1", "HOOK_2", "HOOK_3");
+        var portalNotifConfig = PortalNotificationConfig.builder()
+            .user("user1")
+            .referenceType(NotificationReferenceType.PORTAL)
+            .referenceId("env1")
+            .hooks(hooks)
+            .build();
+
+        when(portalNotificationConfigRepository.findAll()).thenReturn(Set.of(portalNotifConfig));
+        when(genericNotificationConfigRepository.findAll()).thenReturn(Set.of());
+        boolean result = upgrader.upgrade();
+        assertThat(result).isTrue();
+        verify(portalNotificationConfigRepository).create(any(PortalNotificationConfig.class));
+        assertThat(portalNotifConfig.getHooks()).containsExactlyInAnyOrder("HOOK_1", "HOOK_2", "HOOK_3");
+        assertThat(portalNotifConfig.getReferenceType()).isEqualTo(NotificationReferenceType.ENVIRONMENT);
+        assertThat(portalNotifConfig.getOrganizationId()).isEqualTo("org1");
+    }
+
+    @Test
+    public void upgrade_should_preserve_hooks_for_generic_notification_config() throws TechnicalException {
+        when(environmentRepository.findById("env1")).thenReturn(
+            Optional.of(Environment.builder().id("env1").organizationId("org1").build())
+        );
+        var hooks = List.of("GENERIC_HOOK_1", "GENERIC_HOOK_2", "GENERIC_HOOK_3");
+        var genericNotifConfig = GenericNotificationConfig.builder()
+            .id("gn1")
+            .name("Test Generic Config")
+            .notifier("default-email")
+            .config("test-config")
+            .referenceType(NotificationReferenceType.PORTAL)
+            .referenceId("env1")
+            .hooks(hooks)
+            .build();
+
+        when(genericNotificationConfigRepository.findAll()).thenReturn(Set.of(genericNotifConfig));
+        when(portalNotificationConfigRepository.findAll()).thenReturn(Set.of());
+        boolean result = upgrader.upgrade();
+        assertThat(result).isTrue();
+        verify(genericNotificationConfigRepository).delete("gn1");
+        verify(genericNotificationConfigRepository).create(any(GenericNotificationConfig.class));
+        assertThat(genericNotifConfig.getHooks()).containsExactlyInAnyOrder("GENERIC_HOOK_1", "GENERIC_HOOK_2", "GENERIC_HOOK_3");
+        assertThat(genericNotifConfig.getReferenceType()).isEqualTo(NotificationReferenceType.ENVIRONMENT);
+        assertThat(genericNotifConfig.getOrganizationId()).isEqualTo("org1");
     }
 }

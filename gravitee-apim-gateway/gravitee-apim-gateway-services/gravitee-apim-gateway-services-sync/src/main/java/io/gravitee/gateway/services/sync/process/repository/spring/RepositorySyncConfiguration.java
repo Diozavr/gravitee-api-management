@@ -18,9 +18,12 @@ package io.gravitee.gateway.services.sync.process.repository.spring;
 import static io.gravitee.gateway.services.sync.SyncConfiguration.DEFAULT_BULK_ITEMS;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.gravitee.gateway.api.service.ApiKeyService;
+import io.gravitee.gateway.api.service.SubscriptionService;
 import io.gravitee.gateway.env.GatewayConfiguration;
 import io.gravitee.gateway.handlers.api.manager.ApiManager;
 import io.gravitee.gateway.handlers.api.services.SubscriptionCacheService;
+import io.gravitee.gateway.services.sync.process.common.deployer.ApiProductSubscriptionRefresher;
 import io.gravitee.gateway.services.sync.process.common.deployer.DeployerFactory;
 import io.gravitee.gateway.services.sync.process.common.mapper.SubscriptionMapper;
 import io.gravitee.gateway.services.sync.process.distributed.DistributedSynchronizer;
@@ -38,6 +41,7 @@ import io.gravitee.gateway.services.sync.process.repository.fetcher.Subscription
 import io.gravitee.gateway.services.sync.process.repository.mapper.AccessPointMapper;
 import io.gravitee.gateway.services.sync.process.repository.mapper.ApiKeyMapper;
 import io.gravitee.gateway.services.sync.process.repository.mapper.ApiMapper;
+import io.gravitee.gateway.services.sync.process.repository.mapper.ApiProductMapper;
 import io.gravitee.gateway.services.sync.process.repository.mapper.DebugMapper;
 import io.gravitee.gateway.services.sync.process.repository.mapper.DictionaryMapper;
 import io.gravitee.gateway.services.sync.process.repository.mapper.OrganizationMapper;
@@ -50,6 +54,8 @@ import io.gravitee.gateway.services.sync.process.repository.synchronizer.api.Api
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.api.PlanAppender;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.api.SubscriptionAppender;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.apikey.ApiKeySynchronizer;
+import io.gravitee.gateway.services.sync.process.repository.synchronizer.apiproduct.ApiProductPlanAppender;
+import io.gravitee.gateway.services.sync.process.repository.synchronizer.apiproduct.ApiProductSynchronizer;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.debug.DebugSynchronizer;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.dictionary.DictionarySynchronizer;
 import io.gravitee.gateway.services.sync.process.repository.synchronizer.license.LicenseSynchronizer;
@@ -66,6 +72,7 @@ import io.gravitee.repository.management.api.EventLatestRepository;
 import io.gravitee.repository.management.api.EventRepository;
 import io.gravitee.repository.management.api.InstallationRepository;
 import io.gravitee.repository.management.api.LicenseRepository;
+import io.gravitee.repository.management.api.PlanRepository;
 import io.gravitee.repository.management.api.SubscriptionRepository;
 import io.vertx.ext.web.Router;
 import java.util.List;
@@ -110,6 +117,11 @@ public class RepositorySyncConfiguration {
     @Bean
     public SharedPolicyGroupMapper sharedPolicyGroupMapper(ObjectMapper objectMapper, EnvironmentService environmentService) {
         return new SharedPolicyGroupMapper(objectMapper, environmentService);
+    }
+
+    @Bean
+    public ApiProductMapper apiProductMapper(ObjectMapper objectMapper, EnvironmentService environmentService) {
+        return new ApiProductMapper(objectMapper, environmentService);
     }
 
     @Bean
@@ -309,6 +321,49 @@ public class RepositorySyncConfiguration {
         return new SharedPolicyGroupSynchronizer(
             eventsFetcher,
             sharedPolicyGroupMapper,
+            deployerFactory,
+            syncFetcherExecutor,
+            syncDeployerExecutor
+        );
+    }
+
+    @Bean
+    public ApiProductPlanAppender apiProductPlanAppender(PlanRepository planRepository) {
+        return new ApiProductPlanAppender(planRepository);
+    }
+
+    @Bean
+    public ApiProductSubscriptionRefresher apiProductSubscriptionRefresher(
+        SubscriptionRepository subscriptionRepository,
+        ApiKeyRepository apiKeyRepository,
+        SubscriptionMapper subscriptionMapper,
+        ApiKeyMapper apiKeyMapper,
+        SubscriptionService subscriptionService,
+        ApiKeyService apiKeyService
+    ) {
+        return new ApiProductSubscriptionRefresher(
+            subscriptionRepository,
+            apiKeyRepository,
+            subscriptionMapper,
+            apiKeyMapper,
+            subscriptionService,
+            apiKeyService
+        );
+    }
+
+    @Bean
+    public ApiProductSynchronizer apiProductSynchronizer(
+        LatestEventFetcher eventsFetcher,
+        ApiProductMapper apiProductMapper,
+        ApiProductPlanAppender apiProductPlanAppender,
+        DeployerFactory deployerFactory,
+        @Qualifier("syncFetcherExecutor") ThreadPoolExecutor syncFetcherExecutor,
+        @Qualifier("syncDeployerExecutor") ThreadPoolExecutor syncDeployerExecutor
+    ) {
+        return new ApiProductSynchronizer(
+            eventsFetcher,
+            apiProductMapper,
+            apiProductPlanAppender,
             deployerFactory,
             syncFetcherExecutor,
             syncDeployerExecutor

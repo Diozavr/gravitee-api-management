@@ -66,10 +66,10 @@ describe('EnvApplicationListComponent', () => {
         const table = await loader.getHarness(MatTableHarness.with({ selector: '#applicationsTable' }));
 
         const headerRows = await table.getHeaderRows();
-        const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+        const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
         const rows = await table.getRows();
-        const rowCells = await parallel(() => rows.map((row) => row.getCellTextByIndex()));
+        const rowCells = await parallel(() => rows.map(row => row.getCellTextByIndex()));
 
         expect(headerCells).toEqual([
           {
@@ -80,7 +80,10 @@ describe('EnvApplicationListComponent', () => {
             owner: 'Owner',
           },
         ]);
-        expect(rowCells).toEqual([['There is no application (yet).']]);
+        expect(rowCells).toHaveLength(0);
+
+        const tableElement = await table.host();
+        expect(await tableElement.text()).toContain('There is no application (yet).');
       }));
 
       it('should display table with data', fakeAsync(async () => {
@@ -88,10 +91,10 @@ describe('EnvApplicationListComponent', () => {
 
         const table = await loader.getHarness(MatTableHarness.with({ selector: '#applicationsTable' }));
         const headerRows = await table.getHeaderRows();
-        const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+        const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
         const rows = await table.getRows();
-        const rowCells = await parallel(() => rows.map((row) => row.getCellTextByColumnName()));
+        const rowCells = await parallel(() => rows.map(row => row.getCellTextByColumnName()));
 
         expect(headerCells).toEqual([
           {
@@ -174,10 +177,10 @@ describe('EnvApplicationListComponent', () => {
         const table = await loader.getHarness(MatTableHarness.with({ selector: '#applicationsTable' }));
 
         const headerRows = await table.getHeaderRows();
-        const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+        const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
         const rows = await table.getRows();
-        const rowCells = await parallel(() => rows.map((row) => row.getCellTextByIndex()));
+        const rowCells = await parallel(() => rows.map(row => row.getCellTextByIndex()));
 
         expect(headerCells).toEqual([
           {
@@ -187,7 +190,10 @@ describe('EnvApplicationListComponent', () => {
             updated_at: 'Archived at',
           },
         ]);
-        expect(rowCells).toEqual([['There is no archived application.']]);
+        expect(rowCells).toHaveLength(0);
+
+        const tableElement = await table.host();
+        expect(await tableElement.text()).toContain('There is no archived application.');
       }));
 
       it('should display table with data', fakeAsync(async () => {
@@ -195,10 +201,10 @@ describe('EnvApplicationListComponent', () => {
 
         const table = await loader.getHarness(MatTableHarness.with({ selector: '#applicationsTable' }));
         const headerRows = await table.getHeaderRows();
-        const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+        const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
         const rows = await table.getRows();
-        const rowCells = await parallel(() => rows.map((row) => row.getCellTextByColumnName()));
+        const rowCells = await parallel(() => rows.map(row => row.getCellTextByColumnName()));
 
         expect(headerCells).toEqual([
           {

@@ -37,9 +37,9 @@ import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Response;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 public class PortalMenuLinkResource extends AbstractResource {
 
     @PathParam("portalMenuLinkId")
@@ -66,8 +66,7 @@ public class PortalMenuLinkResource extends AbstractResource {
             new GetPortalMenuLinkUseCase.Input(portalMenuLinkId, executionContext.getEnvironmentId())
         );
 
-        return Response
-            .ok(this.getLocationHeader(output.portalMenuLinkEntity().getId()))
+        return Response.ok(this.getLocationHeader(output.portalMenuLinkEntity().getId()))
             .entity(mapper.map(output.portalMenuLinkEntity()))
             .build();
     }
@@ -83,8 +82,7 @@ public class PortalMenuLinkResource extends AbstractResource {
             new UpdatePortalMenuLinkUseCase.Input(portalMenuLinkId, executionContext.getEnvironmentId(), mapper.map(updatePortalMenuLink))
         );
 
-        return Response
-            .ok(this.getLocationHeader(output.portalMenuLinkEntity().getId()))
+        return Response.ok(this.getLocationHeader(output.portalMenuLinkEntity().getId()))
             .entity(mapper.map(output.portalMenuLinkEntity()))
             .build();
     }

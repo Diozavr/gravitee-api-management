@@ -30,6 +30,7 @@ import io.gravitee.gateway.reactor.ReactableApi;
 import io.gravitee.gateway.services.sync.process.common.mapper.SubscriptionMapper;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.SubscriptionRepository;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.assertj.core.api.Assertions;
@@ -58,28 +59,32 @@ class SubscriptionAppenderTest {
     @Mock
     private SubscriptionRepository subscriptionRepository;
 
+    @Mock
+    private io.gravitee.gateway.handlers.api.registry.ApiProductRegistry apiProductRegistry;
+
     private SubscriptionAppender cut;
 
     @BeforeEach
     public void beforeEach() {
-        SubscriptionMapper subscriptionMapper = new SubscriptionMapper(objectMapper);
-        cut = new SubscriptionAppender(subscriptionRepository, subscriptionMapper);
+        when(apiProductRegistry.getApiProductPlanEntriesForApi(any(), any())).thenReturn(List.of());
+        SubscriptionMapper subscriptionMapper = new SubscriptionMapper(objectMapper, apiProductRegistry);
+        cut = new SubscriptionAppender(subscriptionRepository, subscriptionMapper, apiProductRegistry);
         memoryAppender.reset();
     }
 
     @Test
     void should_do_nothing_when_no_subscriptions_for_given_deployable() {
-        ApiReactorDeployable apiReactorDeployable1 = ApiReactorDeployable
-            .builder()
+        ApiReactorDeployable apiReactorDeployable1 = ApiReactorDeployable.builder()
             .apiId("api1")
             .reactableApi(mock(ReactableApi.class))
-            .subscribablePlans(Set.of("plan1"))
+            .subscribablePlans(new HashSet<>(Set.of("plan1")))
+            .apiKeyPlans(new HashSet<>(Set.of("plan1")))
             .build();
-        ApiReactorDeployable apiReactorDeployable2 = ApiReactorDeployable
-            .builder()
+        ApiReactorDeployable apiReactorDeployable2 = ApiReactorDeployable.builder()
             .apiId("api2")
             .reactableApi(mock(ReactableApi.class))
-            .subscribablePlans(Set.of("plan2"))
+            .subscribablePlans(new HashSet<>(Set.of("plan2")))
+            .apiKeyPlans(new HashSet<>(Set.of("plan2")))
             .build();
         List<ApiReactorDeployable> appends = cut.appends(true, List.of(apiReactorDeployable1, apiReactorDeployable2), Set.of("env"));
         assertThat(appends).hasSize(2);
@@ -89,11 +94,11 @@ class SubscriptionAppenderTest {
 
     @Test
     void should_appends_subscriptions_for_given_deployable() throws TechnicalException {
-        ApiReactorDeployable apiReactorDeployable1 = ApiReactorDeployable
-            .builder()
+        ApiReactorDeployable apiReactorDeployable1 = ApiReactorDeployable.builder()
             .apiId("api1")
             .reactableApi(mock(ReactableApi.class))
-            .subscribablePlans(Set.of("plan1"))
+            .subscribablePlans(new HashSet<>(Set.of("plan1")))
+            .apiKeyPlans(new HashSet<>(Set.of("plan1")))
             .build();
         io.gravitee.repository.management.model.Subscription subscription1 = new io.gravitee.repository.management.model.Subscription();
         subscription1.setId("sub1");
@@ -106,13 +111,12 @@ class SubscriptionAppenderTest {
                 argThat(argument -> argument.getPlans().contains("plan1") && argument.getEnvironments().contains("env")),
                 any()
             )
-        )
-            .thenReturn(List.of(subscription1, subscription2));
-        ApiReactorDeployable apiReactorDeployable2 = ApiReactorDeployable
-            .builder()
+        ).thenReturn(List.of(subscription1, subscription2));
+        ApiReactorDeployable apiReactorDeployable2 = ApiReactorDeployable.builder()
             .apiId("api2")
             .reactableApi(mock(ReactableApi.class))
-            .subscribablePlans(Set.of("nosubscriptionplan"))
+            .subscribablePlans(new HashSet<>(Set.of("nosubscriptionplan")))
+            .apiKeyPlans(new HashSet<>(Set.of("nosubscriptionplan")))
             .build();
         List<ApiReactorDeployable> deployables = cut.appends(true, List.of(apiReactorDeployable1, apiReactorDeployable2), Set.of("env"));
         assertThat(deployables).hasSize(2);
@@ -123,11 +127,11 @@ class SubscriptionAppenderTest {
     @Test
     void should_ignore_and_log_subscriptions_with_missing_deployable() throws TechnicalException {
         configureMemoryAppender();
-        ApiReactorDeployable apiReactorDeployable1 = ApiReactorDeployable
-            .builder()
+        ApiReactorDeployable apiReactorDeployable1 = ApiReactorDeployable.builder()
             .apiId("api1")
             .reactableApi(mock(ReactableApi.class))
-            .subscribablePlans(Set.of("plan1"))
+            .subscribablePlans(new HashSet<>(Set.of("plan1")))
+            .apiKeyPlans(new HashSet<>(Set.of("plan1")))
             .build();
         io.gravitee.repository.management.model.Subscription subscription1 = new io.gravitee.repository.management.model.Subscription();
         subscription1.setId("sub1");
@@ -139,11 +143,11 @@ class SubscriptionAppenderTest {
         subscription3.setId("sub3");
         subscription3.setApi("api3");
         when(subscriptionRepository.search(any(), any())).thenReturn(List.of(subscription1, subscription2, subscription3));
-        ApiReactorDeployable apiReactorDeployable2 = ApiReactorDeployable
-            .builder()
+        ApiReactorDeployable apiReactorDeployable2 = ApiReactorDeployable.builder()
             .apiId("api2")
             .reactableApi(mock(ReactableApi.class))
-            .subscribablePlans(Set.of("nosubscriptionplan"))
+            .subscribablePlans(new HashSet<>(Set.of("nosubscriptionplan")))
+            .apiKeyPlans(new HashSet<>(Set.of("nosubscriptionplan")))
             .build();
         List<ApiReactorDeployable> deployables = cut.appends(true, List.of(apiReactorDeployable1, apiReactorDeployable2), Set.of("env"));
         assertThat(deployables).hasSize(2);

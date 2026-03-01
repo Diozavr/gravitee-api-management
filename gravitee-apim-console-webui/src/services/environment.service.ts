@@ -15,7 +15,6 @@
  */
 
 import { IHttpResponse } from 'angular';
-
 import { forEach } from 'lodash';
 
 import { IdentityProviderActivation } from '../entities/identity-provider';
@@ -32,7 +31,7 @@ class EnvironmentService {
   analytics(request) {
     let url = this.Constants.env.baseURL + '/analytics?';
     const keys = Object.keys(request);
-    forEach(keys, (key) => {
+    forEach(keys, key => {
       const val = request[key];
       if (val !== undefined) {
         url += key + '=' + val + '&';
@@ -75,7 +74,7 @@ class EnvironmentService {
   }
 
   getEnvironmentFromHridOrId(environments, id) {
-    return environments?.find((environment) => environment.id === id || (environment.hrids && environment.hrids.includes(id)));
+    return environments?.find(environment => environment.id === id || (environment.hrids && environment.hrids.includes(id)));
   }
 }
 EnvironmentService.$inject = ['$http', 'Constants'];

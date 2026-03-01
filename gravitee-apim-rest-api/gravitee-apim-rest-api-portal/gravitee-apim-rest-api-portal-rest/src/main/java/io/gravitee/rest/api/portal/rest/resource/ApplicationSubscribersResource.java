@@ -15,12 +15,17 @@
  */
 package io.gravitee.rest.api.portal.rest.resource;
 
+import io.gravitee.common.data.domain.Page;
 import io.gravitee.common.http.MediaType;
+import io.gravitee.repository.management.model.ApplicationStatus;
+import io.gravitee.repository.management.model.SubscriptionReferenceType;
 import io.gravitee.rest.api.model.SubscriptionEntity;
 import io.gravitee.rest.api.model.SubscriptionStatus;
 import io.gravitee.rest.api.model.analytics.TopHitsAnalytics;
 import io.gravitee.rest.api.model.analytics.query.GroupByQuery;
 import io.gravitee.rest.api.model.application.ApplicationListItem;
+import io.gravitee.rest.api.model.application.ApplicationQuery;
+import io.gravitee.rest.api.model.common.PageableImpl;
 import io.gravitee.rest.api.model.subscription.SubscriptionQuery;
 import io.gravitee.rest.api.portal.rest.mapper.ApiMapper;
 import io.gravitee.rest.api.portal.rest.model.Api;
@@ -72,18 +77,29 @@ public class ApplicationSubscribersResource extends AbstractResource {
     ) {
         String currentUser = getAuthenticatedUserOrNull();
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
-        Collection<ApplicationListItem> userApplications = applicationService.findByUser(executionContext, currentUser);
-        Optional<ApplicationListItem> optionalApplication = userApplications
-            .stream()
-            .filter(a -> a.getId().equals(applicationId))
-            .findFirst();
-        if (optionalApplication.isPresent()) {
+        if (currentUser == null) {
+            throw new ApplicationNotFoundException(applicationId);
+        }
+
+        ApplicationQuery applicationQuery = ApplicationQuery.builder()
+            .ids(Collections.singleton(applicationId))
+            .user(currentUser)
+            .status(ApplicationStatus.ACTIVE.name())
+            .build();
+        Page<ApplicationListItem> userApplications = applicationService.search(
+            executionContext,
+            applicationQuery,
+            null,
+            new PageableImpl(1, 1)
+        );
+
+        if (userApplications != null && userApplications.getContent().size() > 0) {
             SubscriptionQuery subscriptionQuery = new SubscriptionQuery();
             subscriptionQuery.setApplication(applicationId);
 
             subscriptionQuery.setStatuses(statuses);
 
-            ApplicationListItem application = optionalApplication.get();
+            ApplicationListItem application = userApplications.getContent().get(0);
             if (!application.getPrimaryOwner().getId().equals(currentUser)) {
                 Set<String> userApis = this.apiAuthorizationService.findAccessibleApiIdsForUser(executionContext, currentUser);
                 if (userApis == null || userApis.isEmpty()) {
@@ -95,11 +111,18 @@ public class ApplicationSubscribersResource extends AbstractResource {
             Map<String, Long> nbHitsByApp = getNbHitsByApplication(applicationId);
 
             Collection<SubscriptionEntity> subscriptions = subscriptionService.search(executionContext, subscriptionQuery);
-            List<Api> subscribersApis = subscriptions
+            // TODO: Include API Product on Portal. Use referenceId with api fallback for legacy/e2e compatibility.
+            List<String> apiIds = subscriptions
                 .stream()
-                .map(SubscriptionEntity::getApi)
+                .filter(sub -> !SubscriptionReferenceType.API_PRODUCT.name().equals(sub.getReferenceType()))
+                .map(sub -> sub.getReferenceId() != null ? sub.getReferenceId() : sub.getApi())
+                .filter(Objects::nonNull)
                 .distinct()
-                .map(api -> apiSearchService.findGenericById(executionContext, api))
+                .toList();
+            List<Api> subscribersApis = apiIds
+                .stream()
+                .map(apiId -> apiSearchService.findGenericById(executionContext, apiId, false, false, true))
+                .filter(Objects::nonNull)
                 .map(api1 -> apiMapper.convert(executionContext, api1))
                 .peek(api -> {
                     String apisURL = PortalApiLinkHelper.apisURL(uriInfo.getBaseUriBuilder(), api.getId());

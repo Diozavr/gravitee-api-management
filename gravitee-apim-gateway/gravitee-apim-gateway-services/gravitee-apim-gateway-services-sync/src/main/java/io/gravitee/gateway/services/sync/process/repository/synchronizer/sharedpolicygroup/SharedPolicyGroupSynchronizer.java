@@ -33,13 +33,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class SharedPolicyGroupSynchronizer implements RepositorySynchronizer {
 
     private static final Set<EventType> INIT_EVENT_TYPES = Set.of(EventType.DEPLOY_SHARED_POLICY_GROUP);
@@ -108,8 +108,7 @@ public class SharedPolicyGroupSynchronizer implements RepositorySynchronizer {
         return eventsFlowable
             // fetch per page
             .flatMap(events ->
-                Flowable
-                    .just(events)
+                Flowable.just(events)
                     .doOnNext(e -> log.debug("New shared policy group events fetch"))
                     .flatMapIterable(e -> e)
                     .groupBy(Event::getType)
@@ -146,8 +145,7 @@ public class SharedPolicyGroupSynchronizer implements RepositorySynchronizer {
         return eventsByType
             .flatMapMaybe(sharedPolicyGroupMapper::to)
             .map(reactableSharedPolicyGroup ->
-                SharedPolicyGroupReactorDeployable
-                    .builder()
+                SharedPolicyGroupReactorDeployable.builder()
                     .sharedPolicyGroupId(reactableSharedPolicyGroup.getId())
                     .syncAction(SyncAction.DEPLOY)
                     .reactableSharedPolicyGroup(reactableSharedPolicyGroup)
@@ -161,8 +159,7 @@ public class SharedPolicyGroupSynchronizer implements RepositorySynchronizer {
         return eventsByType
             .flatMapMaybe(sharedPolicyGroupMapper::toId)
             .map(sharedPolicyGroupId ->
-                SharedPolicyGroupReactorDeployable
-                    .builder()
+                SharedPolicyGroupReactorDeployable.builder()
                     .syncAction(SyncAction.UNDEPLOY)
                     .sharedPolicyGroupId(sharedPolicyGroupId)
                     .build()

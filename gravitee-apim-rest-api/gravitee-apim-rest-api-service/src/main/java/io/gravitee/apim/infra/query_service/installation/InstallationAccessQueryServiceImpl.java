@@ -38,9 +38,9 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.CustomLog;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -51,7 +51,7 @@ import org.springframework.stereotype.Service;
  * @author GraviteeSource Team
  */
 @Service
-@Slf4j
+@CustomLog
 public class InstallationAccessQueryServiceImpl implements InstallationAccessQueryService {
 
     private static final String INSTALLATION_STANDALONE_PROPERTY = "installation." + InstallationType.Labels.STANDALONE + ".";
@@ -266,13 +266,12 @@ public class InstallationAccessQueryServiceImpl implements InstallationAccessQue
     private String getConsoleUrlFromEnv(final String organizationId) {
         String consoleUrl = consoleUrls.get(organizationId);
         if (consoleUrl == null || consoleUrl.equals(DEFAULT_CONSOLE_URL)) {
-            consoleUrl =
-                parameterService.find(
-                    GraviteeContext.getExecutionContext(),
-                    Key.MANAGEMENT_URL,
-                    organizationId,
-                    ParameterReferenceType.ORGANIZATION
-                );
+            consoleUrl = parameterService.find(
+                GraviteeContext.getExecutionContext(),
+                Key.MANAGEMENT_URL,
+                organizationId,
+                ParameterReferenceType.ORGANIZATION
+            );
             if (consoleUrl == null) {
                 consoleUrl = Key.MANAGEMENT_URL.defaultValue();
             }
@@ -334,13 +333,12 @@ public class InstallationAccessQueryServiceImpl implements InstallationAccessQue
     private String getPortalUrlFromEnv(final String environmentId) {
         String portalUrl = portalUrls.get(environmentId);
         if (portalUrl == null || portalUrl.equals(DEFAULT_PORTAL_URL)) {
-            portalUrl =
-                parameterService.find(
-                    GraviteeContext.getExecutionContext(),
-                    Key.PORTAL_URL,
-                    environmentId,
-                    ParameterReferenceType.ENVIRONMENT
-                );
+            portalUrl = parameterService.find(
+                GraviteeContext.getExecutionContext(),
+                Key.PORTAL_URL,
+                environmentId,
+                ParameterReferenceType.ENVIRONMENT
+            );
             if (portalUrl == null) {
                 portalUrl = Key.PORTAL_URL.defaultValue();
             }

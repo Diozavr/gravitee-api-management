@@ -31,8 +31,8 @@ import io.reactivex.rxjava3.core.Single;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,7 +41,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class OrganizationCommandHandler implements CommandHandler<OrganizationCommand, OrganizationReply> {
 
     private final OrganizationService organizationService;
@@ -66,11 +66,10 @@ public class OrganizationCommandHandler implements CommandHandler<OrganizationCo
             log.info("Organization [{}] handled with id [{}].", organization.getName(), organization.getId());
             return Single.just(new OrganizationReply(command.getId()));
         } catch (Exception e) {
-            String errorDetails =
-                "Error occurred when handling organization [%s] with id [%s].".formatted(
-                        organizationPayload.name(),
-                        organizationPayload.id()
-                    );
+            String errorDetails = "Error occurred when handling organization [%s] with id [%s].".formatted(
+                organizationPayload.name(),
+                organizationPayload.id()
+            );
             log.error(errorDetails, e);
             return Single.just(new OrganizationReply(command.getId(), errorDetails));
         }
@@ -79,24 +78,20 @@ public class OrganizationCommandHandler implements CommandHandler<OrganizationCo
     private void handleAccessPoints(OrganizationCommandPayload organizationPayload, OrganizationEntity organization) {
         List<io.gravitee.apim.core.access_point.model.AccessPoint> accessPointsToCreate;
         if (organizationPayload.accessPoints() != null) {
-            accessPointsToCreate =
-                organizationPayload
-                    .accessPoints()
-                    .stream()
-                    .map(cockpitAccessPoint ->
-                        io.gravitee.apim.core.access_point.model.AccessPoint
-                            .builder()
-                            .referenceType(io.gravitee.apim.core.access_point.model.AccessPoint.ReferenceType.ORGANIZATION)
-                            .referenceId(organization.getId())
-                            .target(
-                                io.gravitee.apim.core.access_point.model.AccessPoint.Target.valueOf(cockpitAccessPoint.getTarget().name())
-                            )
-                            .host(cockpitAccessPoint.getHost())
-                            .secured(cockpitAccessPoint.isSecured())
-                            .overriding(cockpitAccessPoint.isOverriding())
-                            .build()
-                    )
-                    .toList();
+            accessPointsToCreate = organizationPayload
+                .accessPoints()
+                .stream()
+                .map(cockpitAccessPoint ->
+                    io.gravitee.apim.core.access_point.model.AccessPoint.builder()
+                        .referenceType(io.gravitee.apim.core.access_point.model.AccessPoint.ReferenceType.ORGANIZATION)
+                        .referenceId(organization.getId())
+                        .target(io.gravitee.apim.core.access_point.model.AccessPoint.Target.valueOf(cockpitAccessPoint.getTarget().name()))
+                        .host(cockpitAccessPoint.getHost())
+                        .secured(cockpitAccessPoint.isSecured())
+                        .overriding(cockpitAccessPoint.isOverriding())
+                        .build()
+                )
+                .toList();
         } else {
             accessPointsToCreate = new ArrayList<>();
         }

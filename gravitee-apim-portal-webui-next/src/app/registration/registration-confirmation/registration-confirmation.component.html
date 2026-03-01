@@ -1,0 +1,130 @@
+<!--
+
+    Copyright (C) 2024 The Gravitee team (http://gravitee.io)
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+
+<mat-card appearance="outlined" class="registration-confirmation registration-confirmation__form__container content">
+  @if (error() === 401) {
+    <mat-card-header class="registration-confirmation__form__header">
+      <mat-card-title class="registration-confirmation__form__title m3-headline-small" i18n="@@registrationConfirmationTokenErrorTitle">
+        Invalid token
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content class="registration-confirmation__form__content">
+      <mat-error i18n="@@registrationConfirmationBadToken">Invalid token value</mat-error>
+    </mat-card-content>
+  } @else if (!submitted() && registrationConfirmationForm) {
+    <mat-card-header class="registration-confirmation__form__header">
+      <mat-card-title class="registration-confirmation__form__title m3-headline-small" i18n="@@registrationConfirmationTitle"
+        >Confirm your registration
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content class="registration-confirmation__form__content">
+      @let user = userFromToken();
+      <form
+        [formGroup]="registrationConfirmationForm"
+        (ngSubmit)="confirmRegistration()"
+        [appIsMobile]="'registrationConfirmation__form__container--mobile'"
+      >
+        <div class="registration-confirmation__form">
+          <div class="registration-confirmation__form__section">
+            <div class="registration-confirmation__form__section-title m3-title-small" i18n="@@registrationConfirmationDetailsTitle">
+              Your details
+            </div>
+            <div class="registration-confirmation__form__details m3-body-medium">
+              <div class="registration-confirmation__form__detail">
+                <span class="registration-confirmation__form__detail-label m3-title-small" i18n="@@registrationConfirmationFirstname">
+                  First name:
+                </span>
+                <span class="registration-confirmation__form__detail-value">{{ user?.firstname }}</span>
+              </div>
+              <div class="registration-confirmation__form__detail">
+                <span class="registration-confirmation__form__detail-label m3-title-small" i18n="@@registrationConfirmationLastname">
+                  Last name:
+                </span>
+                <span class="registration-confirmation__form__detail-value">{{ user?.lastname }}</span>
+              </div>
+              <div class="registration-confirmation__form__detail">
+                <span class="registration-confirmation__form__detail-label m3-title-small" i18n="@@registrationConfirmationEmail">
+                  Email:
+                </span>
+                <span class="registration-confirmation__form__detail-value">{{ user?.email }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="registration-confirmation__form__section">
+            <div class="registration-confirmation__form__section-title m3-title-small" i18n="@@registrationConfirmationPasswordTitle">
+              Create your password
+            </div>
+            <div class="registration-confirmation__form__fields">
+              <mat-form-field appearance="outline" class="registration-confirmation__form__input">
+                <mat-label i18n="@@registrationConfirmationChoosePassword">Password</mat-label>
+                <input type="password" matInput formControlName="password" />
+                @if (registrationConfirmationForm.controls.password.hasError('required')) {
+                  <mat-error i18n="@@registrationConfirmationPasswordErrorRequired">Password is required</mat-error>
+                }
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="registration-confirmation__form__input">
+                <mat-label i18n="@@registrationConfirmationConfirmPassword">Confirm password</mat-label>
+                <input type="password" matInput formControlName="confirmedPassword" />
+                @if (registrationConfirmationForm.controls.confirmedPassword.hasError('required')) {
+                  <mat-error i18n="@@registrationConfirmationPasswordErrorRequired">Password is required</mat-error>
+                }
+              </mat-form-field>
+            </div>
+          </div>
+          @if (error() === 400) {
+            <mat-error i18n="@@registrationConfirmationBadPassword">Invalid password</mat-error>
+          }
+          <div class="registration-confirmation__form__buttons">
+            <button
+              [disabled]="registrationConfirmationForm.invalid"
+              type="submit"
+              mat-flat-button
+              i18n="@@registrationConfirmationAction"
+              class="registration-confirmation__form__submit"
+            >
+              Complete registration
+            </button>
+            <div class="registration-confirmation__form__login m3-label-large">
+              <span i18n="@@registrationConfirmationLoginLabel">Already have an account?</span>
+              <a routerLink="/log-in" class="internal-link" i18n="@@registrationConfirmationLoginAction">Login</a>
+            </div>
+          </div>
+        </div>
+      </form>
+    </mat-card-content>
+  } @else if (submitted()) {
+    <mat-card-header class="registration-confirmation__form__header">
+      <mat-card-title class="registration-confirmation__form__title m3-headline-small" i18n="@@registrationConfirmationSuccessTitle"
+        >Registration confirmed
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content class="registration-confirmation__success__content">
+      <div class="registration-confirmation__success__text m3-body-medium" i18n="@@registrationConfirmationSuccessMessage">
+        Your account has been successfully activated. You can now sign in using your email address and password.
+      </div>
+      <a
+        i18n="@@registrationConfirmationSuccessAction"
+        class="registration-confirmation__success__action internal-link m3-label-large"
+        data-testid="confirm-btn"
+        routerLink="/log-in"
+      >
+        Back to login
+      </a>
+    </mat-card-content>
+  }
+</mat-card>

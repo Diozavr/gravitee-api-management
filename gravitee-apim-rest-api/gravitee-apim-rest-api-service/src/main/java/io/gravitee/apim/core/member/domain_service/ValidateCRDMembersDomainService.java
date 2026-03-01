@@ -33,14 +33,14 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @DomainService
 @RequiredArgsConstructor
 public class ValidateCRDMembersDomainService implements Validator<ValidateCRDMembersDomainService.Input> {
@@ -91,11 +91,10 @@ public class ValidateCRDMembersDomainService implements Validator<ValidateCRDMem
 
     private void validateMemberRole(Input input, Set<MemberCRD> sanitized, ArrayList<Error> errors) {
         for (var member : sanitized) {
-            findRole(input.auditInfo.organizationId(), input.referenceType, member.getRole())
-                .ifPresentOrElse(
-                    role -> log.debug("Role {} found for scope {}", member.getRole(), input.referenceType),
-                    () -> errors.add(Error.warning("member role [%s] doesn't exist", member.getRole()))
-                );
+            findRole(input.auditInfo.organizationId(), input.referenceType, member.getRole()).ifPresentOrElse(
+                role -> log.debug("Role {} found for scope {}", member.getRole(), input.referenceType),
+                () -> errors.add(Error.warning("member role [%s] doesn't exist", member.getRole()))
+            );
         }
     }
 

@@ -1,4 +1,5 @@
 {
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "id": "urn:jsonschema:io:gravitee:apim:plugin:apiservice:dynamicproperties:http:DynamicPropertiesServiceConfiguration",
   "properties": {
@@ -75,14 +76,26 @@
         }
       }
     },
-    "systemProxy": {
-      "title": "Use system proxy",
-      "description": "Use the system proxy configured in APIM installation.",
-      "type": "boolean",
-      "default": false
+    "http": {
+      "$ref": "#/gioExternalDefinitions/httpClientOptions"
+    },
+    "proxy": {
+      "$ref": "#/gioExternalDefinitions/httpProxyOptions"
+    },
+    "ssl": {
+      "$ref": "#/gioExternalDefinitions/sslOptions"
     }
   },
   "required": [
     "url", "method","schedule"
-  ]
+  ],
+  "gioExternalDefinitions": {
+    "maxConcurrentConnections": {
+      "default" : 1,
+      "description": "Hide the field because in the case of Http Dynamic Properties, the number of concurrent connections is fixed to 1.",
+      "x-schema-form": {
+        "type": "hidden"
+      }
+    }
+  }
 }

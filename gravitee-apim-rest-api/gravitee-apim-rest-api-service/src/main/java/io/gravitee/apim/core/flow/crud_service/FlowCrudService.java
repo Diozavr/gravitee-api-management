@@ -18,6 +18,8 @@ package io.gravitee.apim.core.flow.crud_service;
 import io.gravitee.definition.model.v4.flow.Flow;
 import io.gravitee.definition.model.v4.nativeapi.NativeFlow;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public interface FlowCrudService {
     List<Flow> savePlanFlows(String planId, List<Flow> flows);
@@ -32,6 +34,10 @@ public interface FlowCrudService {
 
     List<io.gravitee.definition.model.flow.Flow> getPlanV2Flows(String planId);
 
+    void savePlanFlowsV2(String planId, List<io.gravitee.definition.model.flow.Flow> flows);
+
+    void saveApiFlowsV2(String apiId, List<io.gravitee.definition.model.flow.Flow> flows);
+
     //    Native APIs
     List<NativeFlow> saveNativeApiFlows(String apiId, List<NativeFlow> flows);
 
@@ -40,4 +46,8 @@ public interface FlowCrudService {
     List<NativeFlow> getNativeApiFlows(String apiId);
 
     List<NativeFlow> getNativePlanFlows(String planId);
+
+    Map<String, List<NativeFlow>> getNativePlanFlows(Set<String> planIds);
+
+    Map<String, List<io.gravitee.definition.model.flow.Flow>> getPlanV2Flows(Set<String> planIds);
 }

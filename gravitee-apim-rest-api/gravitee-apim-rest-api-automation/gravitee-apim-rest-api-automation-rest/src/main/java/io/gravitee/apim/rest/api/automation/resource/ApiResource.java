@@ -16,11 +16,12 @@
 package io.gravitee.apim.rest.api.automation.resource;
 
 import io.gravitee.apim.core.api.model.crd.ApiCRDSpec;
-import io.gravitee.apim.core.api.query_service.ApiQueryService;
+import io.gravitee.apim.core.api.model.crd.IDExportStrategy;
 import io.gravitee.apim.core.api.use_case.ExportApiCRDUseCase;
 import io.gravitee.apim.core.audit.model.AuditActor;
 import io.gravitee.apim.core.audit.model.AuditInfo;
 import io.gravitee.apim.rest.api.automation.exception.HRIDNotFoundException;
+import io.gravitee.apim.rest.api.automation.helpers.SharedPolicyGroupIdHelper;
 import io.gravitee.apim.rest.api.automation.mapper.ApiMapper;
 import io.gravitee.apim.rest.api.automation.model.ApiV4Spec;
 import io.gravitee.common.http.MediaType;
@@ -38,15 +39,24 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.ResourceContext;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
+import lombok.CustomLog;
 
 /**
  * @author Kamiel Ahmadpour (kamiel.ahmadpour at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class ApiResource extends AbstractResource {
+
+    @Context
+    private ResourceContext resourceContext;
 
     @Inject
     private ExportApiCRDUseCase exportApiCRDUseCase;
@@ -54,62 +64,68 @@ public class ApiResource extends AbstractResource {
     @Inject
     protected io.gravitee.rest.api.service.v4.ApiService apiServiceV4;
 
-    @PathParam("hrid")
-    private String hrid;
+    @Path("subscriptions")
+    public ApiSubscriptionsResource getSubscriptionsResource() {
+        return resourceContext.getResource(ApiSubscriptionsResource.class);
+    }
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    @Permissions({ @Permission(value = RolePermission.ENVIRONMENT_SHARED_POLICY_GROUP, acls = { RolePermissionAction.CREATE }) })
-    public Response getApiByHRID() {
+    @Permissions({ @Permission(value = RolePermission.API_DEFINITION, acls = { RolePermissionAction.READ }) })
+    public Response getApiByHRID(@PathParam("apiHrid") String apiHrid, @QueryParam("legacy") boolean legacy) {
         var executionContext = GraviteeContext.getExecutionContext();
         var userDetails = getAuthenticatedUserDetails();
 
         var input = new ExportApiCRDUseCase.Input(
-            IdBuilder.builder(executionContext, hrid).buildId(),
+            legacy ? apiHrid : IdBuilder.builder(executionContext, apiHrid).buildId(),
+            IDExportStrategy.ALL,
             buildAuditInfo(executionContext, userDetails)
         );
 
         try {
             ApiCRDSpec apiCRDSpec = exportApiCRDUseCase.execute(input).spec();
             ApiV4Spec apiV4Spec = ApiMapper.INSTANCE.apiCRDSpecToApiV4Spec(ApiCRDMapper.INSTANCE.map(apiCRDSpec));
-            return Response
-                .ok(
-                    ApiMapper.INSTANCE.apiV4SpecToApiV4State(
-                        apiV4Spec,
-                        apiCRDSpec.getId(),
-                        apiCRDSpec.getCrossId(),
-                        executionContext.getOrganizationId(),
-                        executionContext.getEnvironmentId()
-                    )
+            SharedPolicyGroupIdHelper.removeSPGID(apiV4Spec);
+            return Response.ok(
+                ApiMapper.INSTANCE.apiV4SpecToApiV4State(
+                    apiV4Spec,
+                    apiCRDSpec.getId(),
+                    apiCRDSpec.getCrossId(),
+                    executionContext.getOrganizationId(),
+                    executionContext.getEnvironmentId()
                 )
-                .build();
+            ).build();
         } catch (ApiNotFoundException e) {
-            throw new HRIDNotFoundException(hrid);
+            log.warn("API not found for HRID: {}, operation: getApiByHRID", apiHrid, e);
+            throw new HRIDNotFoundException(apiHrid);
         }
     }
 
     @DELETE
     @Permissions({ @Permission(value = RolePermission.API_DEFINITION, acls = RolePermissionAction.DELETE) })
-    public Response deleteApi() {
+    public Response deleteApi(@PathParam("apiHrid") String apiHrid, @QueryParam("legacy") boolean legacy) {
         var executionContext = GraviteeContext.getExecutionContext();
 
         try {
-            apiServiceV4.delete(GraviteeContext.getExecutionContext(), IdBuilder.builder(executionContext, hrid).buildId(), true);
+            apiServiceV4.delete(
+                GraviteeContext.getExecutionContext(),
+                legacy ? apiHrid : IdBuilder.builder(executionContext, apiHrid).buildId(),
+                true
+            );
         } catch (ApiNotFoundException e) {
-            throw new HRIDNotFoundException(hrid);
+            log.warn("API not found for HRID: {}, operation: deleteApi", apiHrid, e);
+            throw new HRIDNotFoundException(apiHrid);
         }
         return Response.noContent().build();
     }
 
     private static AuditInfo buildAuditInfo(ExecutionContext executionContext, UserDetails userDetails) {
-        return AuditInfo
-            .builder()
+        return AuditInfo.builder()
             .organizationId(executionContext.getOrganizationId())
             .environmentId(executionContext.getEnvironmentId())
             .actor(
-                AuditActor
-                    .builder()
+                AuditActor.builder()
                     .userId(userDetails.getUsername())
                     .userSource(userDetails.getSource())
                     .userSourceId(userDetails.getSourceId())

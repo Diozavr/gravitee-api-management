@@ -54,8 +54,7 @@ public class ApiFixtures {
     public static final String MY_API = "my-api";
     public static final String MY_API_NAME = "My Api";
     private static final Supplier<Api.ApiBuilder> BASE = () ->
-        Api
-            .builder()
+        Api.builder()
             .id(MY_API)
             .name(MY_API_NAME)
             .environmentId("environment-id")
@@ -76,14 +75,156 @@ public class ApiFixtures {
             .originContext(new OriginContext.Management())
             .background("api-background");
 
+    public static Api anA2AProxyApiV4() {
+        return BASE.get()
+            .type(ApiType.A2A_PROXY)
+            .definitionVersion(DefinitionVersion.V4)
+            .apiDefinitionValue(
+                io.gravitee.definition.model.v4.Api.builder()
+                    .id(MY_API)
+                    .name(MY_API_NAME)
+                    .apiVersion("1.0.0")
+                    .analytics(Analytics.builder().enabled(false).build())
+                    .failover(Failover.builder().enabled(false).build())
+                    .definitionVersion(DefinitionVersion.V4)
+                    .type(ApiType.A2A_PROXY)
+                    .tags(Set.of("tag1"))
+                    .listeners(
+                        List.of(
+                            HttpListener.builder()
+                                .paths(List.of(Path.builder().path("/a2a_proxy").build()))
+                                .entrypoints(List.of(Entrypoint.builder().type("a2a-proxy").configuration("{}").build()))
+                                .build()
+                        )
+                    )
+                    .endpointGroups(
+                        List.of(
+                            EndpointGroup.builder()
+                                .name("default-group")
+                                .type("a2a-proxy")
+                                .sharedConfiguration("{}")
+                                .endpoints(
+                                    List.of(
+                                        Endpoint.builder()
+                                            .name("default-endpoint")
+                                            .type("a2a-proxy")
+                                            .inheritConfiguration(true)
+                                            .configuration("{\"target\":\"https://api.gravitee.io/echo\"}")
+                                            .build()
+                                    )
+                                )
+                                .build()
+                        )
+                    )
+                    .flows(List.of())
+                    .flowExecution(new FlowExecution())
+                    .build()
+            )
+            .build();
+    }
+
+    public static Api aLLMProxyApiV4() {
+        return BASE.get()
+            .type(ApiType.LLM_PROXY)
+            .definitionVersion(DefinitionVersion.V4)
+            .apiDefinitionValue(
+                io.gravitee.definition.model.v4.Api.builder()
+                    .id(MY_API)
+                    .name(MY_API_NAME)
+                    .apiVersion("1.0.0")
+                    .analytics(Analytics.builder().enabled(false).build())
+                    .failover(Failover.builder().enabled(false).build())
+                    .definitionVersion(DefinitionVersion.V4)
+                    .type(ApiType.LLM_PROXY)
+                    .tags(Set.of("tag1"))
+                    .listeners(
+                        List.of(
+                            HttpListener.builder()
+                                .paths(List.of(Path.builder().path("/llm_proxy").build()))
+                                .entrypoints(List.of(Entrypoint.builder().type("llm-proxy").configuration("{}").build()))
+                                .build()
+                        )
+                    )
+                    .endpointGroups(
+                        List.of(
+                            EndpointGroup.builder()
+                                .name("default-group")
+                                .type("llm-proxy")
+                                .sharedConfiguration("{}")
+                                .endpoints(
+                                    List.of(
+                                        Endpoint.builder()
+                                            .name("default-endpoint")
+                                            .type("llm-proxy")
+                                            .inheritConfiguration(true)
+                                            .configuration("{\"target\":\"https://api.gravitee.io/echo\"}")
+                                            .build()
+                                    )
+                                )
+                                .build()
+                        )
+                    )
+                    .flows(List.of())
+                    .flowExecution(new FlowExecution())
+                    .build()
+            )
+            .build();
+    }
+
+    public static Api aMCPProxyApiV4() {
+        return BASE.get()
+            .type(ApiType.MCP_PROXY)
+            .definitionVersion(DefinitionVersion.V4)
+            .apiDefinitionValue(
+                io.gravitee.definition.model.v4.Api.builder()
+                    .id(MY_API)
+                    .name(MY_API_NAME)
+                    .apiVersion("1.0.0")
+                    .analytics(Analytics.builder().enabled(false).build())
+                    .failover(Failover.builder().enabled(false).build())
+                    .definitionVersion(DefinitionVersion.V4)
+                    .type(ApiType.MCP_PROXY)
+                    .tags(Set.of("tag1"))
+                    .listeners(
+                        List.of(
+                            HttpListener.builder()
+                                .paths(List.of(Path.builder().path("/mcp_proxy").build()))
+                                .entrypoints(List.of(Entrypoint.builder().type("mcp-proxy").configuration("{}").build()))
+                                .build()
+                        )
+                    )
+                    .endpointGroups(
+                        List.of(
+                            EndpointGroup.builder()
+                                .name("default-group")
+                                .type("mcp-proxy")
+                                .sharedConfiguration("{}")
+                                .endpoints(
+                                    List.of(
+                                        Endpoint.builder()
+                                            .name("default-endpoint")
+                                            .type("mcp-proxy")
+                                            .inheritConfiguration(true)
+                                            .configuration("{\"target\":\"https://api.gravitee.io/echo\"}")
+                                            .build()
+                                    )
+                                )
+                                .build()
+                        )
+                    )
+                    .flows(List.of())
+                    .flowExecution(new FlowExecution())
+                    .build()
+            )
+            .build();
+    }
+
     public static Api aProxyApiV4() {
-        return BASE
-            .get()
+        return BASE.get()
             .type(ApiType.PROXY)
             .definitionVersion(DefinitionVersion.V4)
-            .apiDefinitionHttpV4(
-                io.gravitee.definition.model.v4.Api
-                    .builder()
+            .apiDefinitionValue(
+                io.gravitee.definition.model.v4.Api.builder()
                     .id(MY_API)
                     .name(MY_API_NAME)
                     .apiVersion("1.0.0")
@@ -94,8 +235,7 @@ public class ApiFixtures {
                     .tags(Set.of("tag1"))
                     .listeners(
                         List.of(
-                            HttpListener
-                                .builder()
+                            HttpListener.builder()
                                 .paths(List.of(Path.builder().path("/http_proxy").build()))
                                 .entrypoints(List.of(Entrypoint.builder().type("http-proxy").configuration("{}").build()))
                                 .build()
@@ -103,15 +243,13 @@ public class ApiFixtures {
                     )
                     .endpointGroups(
                         List.of(
-                            EndpointGroup
-                                .builder()
+                            EndpointGroup.builder()
                                 .name("default-group")
                                 .type("http-proxy")
                                 .sharedConfiguration("{}")
                                 .endpoints(
                                     List.of(
-                                        Endpoint
-                                            .builder()
+                                        Endpoint.builder()
                                             .name("default-endpoint")
                                             .type("http-proxy")
                                             .inheritConfiguration(true)
@@ -130,13 +268,11 @@ public class ApiFixtures {
     }
 
     public static Api aProxyApiV2() {
-        return BASE
-            .get()
+        return BASE.get()
             .type(ApiType.PROXY)
             .definitionVersion(DefinitionVersion.V2)
-            .apiDefinition(
-                io.gravitee.definition.model.Api
-                    .builder()
+            .apiDefinitionValue(
+                io.gravitee.definition.model.Api.builder()
                     .id(MY_API)
                     .name("api-name")
                     .version("1.0.0")
@@ -145,18 +281,15 @@ public class ApiFixtures {
                     .executionMode(ExecutionMode.V3)
                     .flowMode(FlowMode.DEFAULT)
                     .proxy(
-                        Proxy
-                            .builder()
+                        Proxy.builder()
                             .virtualHosts(List.of(new VirtualHost("/path")))
                             .groups(
                                 Set.of(
-                                    io.gravitee.definition.model.EndpointGroup
-                                        .builder()
+                                    io.gravitee.definition.model.EndpointGroup.builder()
                                         .name("default-group")
                                         .endpoints(
                                             Set.of(
-                                                io.gravitee.definition.model.Endpoint
-                                                    .builder()
+                                                io.gravitee.definition.model.Endpoint.builder()
                                                     .name("default")
                                                     .type("http1")
                                                     .target("https://api.gravitee.io/echo")
@@ -175,13 +308,11 @@ public class ApiFixtures {
     }
 
     public static Api aMessageApiV4() {
-        return BASE
-            .get()
+        return BASE.get()
             .type(ApiType.MESSAGE)
             .definitionVersion(DefinitionVersion.V4)
-            .apiDefinitionHttpV4(
-                io.gravitee.definition.model.v4.Api
-                    .builder()
+            .apiDefinitionValue(
+                io.gravitee.definition.model.v4.Api.builder()
                     .id("my-api")
                     .name("My message Api")
                     .analytics(Analytics.builder().enabled(false).build())
@@ -189,8 +320,7 @@ public class ApiFixtures {
                     .tags(Set.of("tag1"))
                     .listeners(
                         List.of(
-                            HttpListener
-                                .builder()
+                            HttpListener.builder()
                                 .paths(List.of(Path.builder().path("/message").build()))
                                 .entrypoints(List.of(Entrypoint.builder().type("sse").configuration("{}").build()))
                                 .build()
@@ -198,15 +328,13 @@ public class ApiFixtures {
                     )
                     .endpointGroups(
                         List.of(
-                            EndpointGroup
-                                .builder()
+                            EndpointGroup.builder()
                                 .name("default-group")
                                 .type("mock")
                                 .sharedConfiguration("{}")
                                 .endpoints(
                                     List.of(
-                                        Endpoint
-                                            .builder()
+                                        Endpoint.builder()
                                             .name("default-endpoint")
                                             .type("mock")
                                             .inheritConfiguration(true)
@@ -228,13 +356,11 @@ public class ApiFixtures {
     }
 
     public static Api aTcpApiV4(List<String> hosts) {
-        return BASE
-            .get()
+        return BASE.get()
             .type(ApiType.PROXY)
             .definitionVersion(DefinitionVersion.V4)
-            .apiDefinitionHttpV4(
-                io.gravitee.definition.model.v4.Api
-                    .builder()
+            .apiDefinitionValue(
+                io.gravitee.definition.model.v4.Api.builder()
                     .id(MY_API)
                     .name("My Api")
                     .apiVersion("1.0.0")
@@ -244,8 +370,7 @@ public class ApiFixtures {
                     .tags(Set.of("tag1"))
                     .listeners(
                         List.of(
-                            TcpListener
-                                .builder()
+                            TcpListener.builder()
                                 .hosts(null != hosts ? hosts : List.of("foo.example.com", "bar.example.com"))
                                 .entrypoints(List.of(Entrypoint.builder().type("tcp-proxy").configuration("{}").build()))
                                 .type(ListenerType.TCP)
@@ -254,15 +379,13 @@ public class ApiFixtures {
                     )
                     .endpointGroups(
                         List.of(
-                            EndpointGroup
-                                .builder()
+                            EndpointGroup.builder()
                                 .name("default-group")
                                 .type("tcp-proxy")
                                 .sharedConfiguration("{}")
                                 .endpoints(
                                     List.of(
-                                        Endpoint
-                                            .builder()
+                                        Endpoint.builder()
                                             .name("default-endpoint")
                                             .type("tcp-proxy")
                                             .inheritConfiguration(true)
@@ -281,26 +404,20 @@ public class ApiFixtures {
     }
 
     public static Api aFederatedApi() {
-        return BASE
-            .get()
+        return BASE.get()
             .crossId(null)
             .lifecycleState(null)
-            .apiDefinitionHttpV4(null)
-            .apiDefinition(null)
             .originContext(new OriginContext.Integration("integration-id"))
-            .federatedApiDefinition(FederatedApi.builder().id(MY_API).providerId("provider-id").name("My Api").apiVersion("1.0.0").build())
+            .apiDefinitionValue(FederatedApi.builder().id(MY_API).providerId("provider-id").name("My Api").apiVersion("1.0.0").build())
             .build();
     }
 
     public static Api aFederatedAgent() {
-        return BASE
-            .get()
+        return BASE.get()
             .crossId(null)
             .lifecycleState(null)
-            .apiDefinitionHttpV4(null)
-            .apiDefinition(null)
             .originContext(new OriginContext.Integration("integration-id"))
-            .federatedAgent(
+            .apiDefinitionValue(
                 new FederatedAgent(
                     "My agent",
                     "a fake agent",
@@ -321,21 +438,18 @@ public class ApiFixtures {
     }
 
     public static Api aNativeApi() {
-        return BASE
-            .get()
+        return BASE.get()
             .type(ApiType.NATIVE)
             .definitionVersion(DefinitionVersion.V4)
-            .apiDefinitionNativeV4(
-                NativeApi
-                    .builder()
+            .apiDefinitionValue(
+                NativeApi.builder()
                     .id("my-api")
                     .name("My message Api")
                     .type(ApiType.NATIVE)
                     .tags(Set.of("tag1"))
                     .listeners(
                         List.of(
-                            KafkaListener
-                                .builder()
+                            KafkaListener.builder()
                                 .host("native.kafka")
                                 .port(1000)
                                 .entrypoints(List.of(NativeEntrypoint.builder().type("native-type").configuration("{}").build()))
@@ -344,15 +458,13 @@ public class ApiFixtures {
                     )
                     .endpointGroups(
                         List.of(
-                            NativeEndpointGroup
-                                .builder()
+                            NativeEndpointGroup.builder()
                                 .name("default-group")
                                 .type("mock")
                                 .sharedConfiguration("{}")
                                 .endpoints(
                                     List.of(
-                                        NativeEndpoint
-                                            .builder()
+                                        NativeEndpoint.builder()
                                             .name("default-endpoint")
                                             .type("mock")
                                             .inheritConfiguration(true)

@@ -34,6 +34,7 @@ import io.gravitee.rest.api.management.v2.rest.resource.api.ApiResourceTest;
 import io.gravitee.rest.api.model.PluginEntity;
 import io.gravitee.rest.api.model.permissions.RolePermission;
 import io.gravitee.rest.api.model.permissions.RolePermissionAction;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.service.common.GraviteeContext;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.client.Entity;
@@ -95,8 +96,7 @@ class ApiDebugResourceTest extends ApiResourceTest {
                     eq(API),
                     eq(RolePermissionAction.UPDATE)
                 )
-            )
-                .thenReturn(false);
+            ).thenReturn(false);
 
             final Response response = target.request().post(null);
 
@@ -109,8 +109,11 @@ class ApiDebugResourceTest extends ApiResourceTest {
 
         @Test
         public void should_return_debug_event_created() {
+            var plan = fixtures.core.model.PlanFixtures.aPlanHttpV4();
+            plan.setReferenceId(API);
+            plan.setReferenceType(GenericPlanEntity.ReferenceType.API);
             apiCrudService.initWith(List.of(ApiFixtures.aProxyApiV4().setId(API)));
-            planQueryService.initWith(List.of(fixtures.core.model.PlanFixtures.aPlanHttpV4().setApiId(API)));
+            planQueryService.initWith(List.of(plan));
             instanceQueryService.initWith(List.of(validInstance()));
 
             final Response response = target.request().post(Entity.json(new DebugHttpRequest().path("/").method("GET")));
@@ -128,8 +131,7 @@ class ApiDebugResourceTest extends ApiResourceTest {
     }
 
     private static Instance validInstance() {
-        return Instance
-            .builder()
+        return Instance.builder()
             .id("gateway-instance-id")
             .startedAt(new Date())
             .clusterPrimaryNode(true)

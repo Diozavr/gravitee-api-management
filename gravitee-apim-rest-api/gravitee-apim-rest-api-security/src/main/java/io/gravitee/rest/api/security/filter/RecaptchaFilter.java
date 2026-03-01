@@ -31,8 +31,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.GenericFilterBean;
 
@@ -40,9 +39,9 @@ import org.springframework.web.filter.GenericFilterBean;
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class RecaptchaFilter extends GenericFilterBean {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(RecaptchaFilter.class);
     public static final String DEFAULT_RECAPTCHA_HEADER_NAME = "X-Recaptcha-Token";
     public static final Pattern MNG_CHANGE_PASSWORD = Pattern.compile("/users/([^/]+)/changePassword");
     private static final Set<String> RESTRICTED_PATHS = new HashSet<>(
@@ -70,13 +69,11 @@ public class RecaptchaFilter extends GenericFilterBean {
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
         if (
-            RESTRICTED_PATHS
-                .stream()
-                .anyMatch(path ->
-                    httpRequest.getPathInfo().contains(path) || MNG_CHANGE_PASSWORD.matcher(httpRequest.getPathInfo()).matches()
-                )
+            RESTRICTED_PATHS.stream().anyMatch(
+                path -> httpRequest.getPathInfo().contains(path) || MNG_CHANGE_PASSWORD.matcher(httpRequest.getPathInfo()).matches()
+            )
         ) {
-            LOGGER.debug("Checking captcha");
+            log.debug("Checking captcha");
 
             String reCaptchaToken = httpRequest.getHeader(DEFAULT_RECAPTCHA_HEADER_NAME);
 

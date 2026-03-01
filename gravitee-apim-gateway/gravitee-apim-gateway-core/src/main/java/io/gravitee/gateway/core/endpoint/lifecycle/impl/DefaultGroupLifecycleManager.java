@@ -31,16 +31,14 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class DefaultGroupLifecycleManager extends AbstractLifecycleComponent<GroupLifecycleManager> implements GroupLifecycleManager {
-
-    private final Logger logger = LoggerFactory.getLogger(DefaultGroupLifecycleManager.class);
 
     private final Api api;
 
@@ -109,28 +107,26 @@ public class DefaultGroupLifecycleManager extends AbstractLifecycleComponent<Gro
                             EndpointGroupLifecycleManager groupLifecycleManager;
 
                             if (tenant.isPresent()) {
-                                groupLifecycleManager =
-                                    new MultiTenantAwareEndpointLifecycleManager(
-                                        api,
-                                        group,
-                                        endpointFactory,
-                                        referenceRegister,
-                                        connectorRegistry,
-                                        configuration,
-                                        mapper,
-                                        tenant.get()
-                                    );
+                                groupLifecycleManager = new MultiTenantAwareEndpointLifecycleManager(
+                                    api,
+                                    group,
+                                    endpointFactory,
+                                    referenceRegister,
+                                    connectorRegistry,
+                                    configuration,
+                                    mapper,
+                                    tenant.get()
+                                );
                             } else {
-                                groupLifecycleManager =
-                                    new EndpointGroupLifecycleManager(
-                                        api,
-                                        group,
-                                        endpointFactory,
-                                        referenceRegister,
-                                        connectorRegistry,
-                                        configuration,
-                                        mapper
-                                    );
+                                groupLifecycleManager = new EndpointGroupLifecycleManager(
+                                    api,
+                                    group,
+                                    endpointFactory,
+                                    referenceRegister,
+                                    connectorRegistry,
+                                    configuration,
+                                    mapper
+                                );
                             }
 
                             groups.put(group.getName(), groupLifecycleManager);
@@ -152,7 +148,7 @@ public class DefaultGroupLifecycleManager extends AbstractLifecycleComponent<Gro
                                 groupLifecycleManager.start();
                                 referenceRegister.add(new GroupReference(groupLifecycleManager.getLBGroup()));
                             } catch (Exception ex) {
-                                logger.error(
+                                log.error(
                                     "An error occurs while starting a group of endpoints: " + groupLifecycleManager.getGroup().getName(),
                                     ex
                                 );

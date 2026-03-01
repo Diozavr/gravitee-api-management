@@ -16,8 +16,10 @@
 package io.gravitee.rest.api.service.impl;
 
 import static io.gravitee.repository.management.model.Audit.AuditProperties.ENTRYPOINT;
-import static io.gravitee.repository.management.model.Entrypoint.AuditEvent.*;
-import static java.util.Arrays.sort;
+import static io.gravitee.repository.management.model.Entrypoint.AuditEvent.ENTRYPOINT_CREATED;
+import static io.gravitee.repository.management.model.Entrypoint.AuditEvent.ENTRYPOINT_DELETED;
+import static io.gravitee.repository.management.model.Entrypoint.AuditEvent.ENTRYPOINT_UPDATED;
+import static java.util.Collections.singletonMap;
 
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.EntrypointRepository;
@@ -32,10 +34,11 @@ import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.common.UuidString;
 import io.gravitee.rest.api.service.exceptions.EntrypointNotFoundException;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
-import java.util.*;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -44,10 +47,10 @@ import org.springframework.stereotype.Component;
  * @author Azize ELAMRANI (azize at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class EntrypointServiceImpl extends TransactionalService implements EntrypointService {
 
-    private final Logger LOGGER = LoggerFactory.getLogger(EntrypointServiceImpl.class);
     private static final String SEPARATOR = ";";
 
     @Autowired
@@ -60,7 +63,7 @@ public class EntrypointServiceImpl extends TransactionalService implements Entry
     @Override
     public EntrypointEntity findById(final ExecutionContext executionContext, final String entrypointId) {
         try {
-            LOGGER.debug("Find by id {}", entrypointId);
+            log.debug("Find by id {}", entrypointId);
             final Optional<Entrypoint> optionalEntryPoint = entrypointRepository.findByIdAndReference(
                 entrypointId,
                 executionContext.getOrganizationId(),
@@ -71,7 +74,7 @@ public class EntrypointServiceImpl extends TransactionalService implements Entry
             }
             return convert(optionalEntryPoint.get());
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to find all entrypoints", ex);
+            log.error("An error occurs while trying to find all entrypoints", ex);
             throw new TechnicalManagementException("An error occurs while trying to find all entrypoints", ex);
         }
     }
@@ -79,14 +82,14 @@ public class EntrypointServiceImpl extends TransactionalService implements Entry
     @Override
     public List<EntrypointEntity> findAll(final ExecutionContext executionContext) {
         try {
-            LOGGER.debug("Find all APIs");
+            log.debug("Find all APIs");
             return entrypointRepository
                 .findByReference(executionContext.getOrganizationId(), repoEntrypointReferenceType(EntrypointReferenceType.ORGANIZATION))
                 .stream()
                 .map(this::convert)
                 .collect(Collectors.toList());
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to find all entrypoints", ex);
+            log.error("An error occurs while trying to find all entrypoints", ex);
             throw new TechnicalManagementException("An error occurs while trying to find all entrypoints", ex);
         }
     }
@@ -98,16 +101,17 @@ public class EntrypointServiceImpl extends TransactionalService implements Entry
             final EntrypointEntity savedEntryPoint = convert(entrypointRepository.create(entrypoint));
             auditService.createOrganizationAuditLog(
                 executionContext,
-                executionContext.getOrganizationId(),
-                Collections.singletonMap(ENTRYPOINT, entrypoint.getId()),
-                ENTRYPOINT_CREATED,
-                new Date(),
-                null,
-                entrypoint
+                AuditService.AuditLogData.builder()
+                    .properties(singletonMap(ENTRYPOINT, entrypoint.getId()))
+                    .event(ENTRYPOINT_CREATED)
+                    .createdAt(new Date())
+                    .oldValue(null)
+                    .newValue(entrypoint)
+                    .build()
             );
             return savedEntryPoint;
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to create entrypoint {}", entrypointEntity.getValue(), ex);
+            log.error("An error occurs while trying to create entrypoint {}", entrypointEntity.getValue(), ex);
             throw new TechnicalManagementException("An error occurs while trying to create entrypoint " + entrypointEntity.getValue(), ex);
         }
     }
@@ -128,19 +132,20 @@ public class EntrypointServiceImpl extends TransactionalService implements Entry
                 final EntrypointEntity savedEntryPoint = convert(entrypointRepository.update(entrypoint));
                 auditService.createOrganizationAuditLog(
                     executionContext,
-                    executionContext.getOrganizationId(),
-                    Collections.singletonMap(ENTRYPOINT, entrypoint.getId()),
-                    ENTRYPOINT_UPDATED,
-                    new Date(),
-                    entrypointOptional.get(),
-                    entrypoint
+                    AuditService.AuditLogData.builder()
+                        .properties(singletonMap(ENTRYPOINT, entrypoint.getId()))
+                        .event(ENTRYPOINT_UPDATED)
+                        .createdAt(new Date())
+                        .oldValue(entrypointOptional.get())
+                        .newValue(entrypoint)
+                        .build()
                 );
                 return savedEntryPoint;
             } else {
                 throw new EntrypointNotFoundException(entrypointEntity.getId());
             }
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to update entrypoint {}", entrypointEntity.getValue(), ex);
+            log.error("An error occurs while trying to update entrypoint {}", entrypointEntity.getValue(), ex);
             throw new TechnicalManagementException("An error occurs while trying to update entrypoint " + entrypointEntity.getValue(), ex);
         }
     }
@@ -157,18 +162,19 @@ public class EntrypointServiceImpl extends TransactionalService implements Entry
                 entrypointRepository.delete(entrypointId);
                 auditService.createOrganizationAuditLog(
                     executionContext,
-                    executionContext.getOrganizationId(),
-                    Collections.singletonMap(ENTRYPOINT, entrypointId),
-                    ENTRYPOINT_DELETED,
-                    new Date(),
-                    null,
-                    entrypointOptional.get()
+                    AuditService.AuditLogData.builder()
+                        .properties(singletonMap(ENTRYPOINT, entrypointId))
+                        .event(ENTRYPOINT_DELETED)
+                        .createdAt(new Date())
+                        .oldValue(null)
+                        .newValue(entrypointOptional.get())
+                        .build()
                 );
             } else {
                 throw new EntrypointNotFoundException(entrypointId);
             }
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to delete entrypoint {}", entrypointId, ex);
+            log.error("An error occurs while trying to delete entrypoint {}", entrypointId, ex);
             throw new TechnicalManagementException("An error occurs while trying to delete entrypoint " + entrypointId, ex);
         }
     }

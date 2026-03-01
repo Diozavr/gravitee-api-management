@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
@@ -81,23 +82,27 @@ public class HealthCheckServiceImplTest {
 
     @Test
     public void should_throw_analytics_exception_for_getAvailability_metadata() throws Exception {
-        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString())).thenReturn(newApiEntity());
+        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false))).thenReturn(
+            newApiEntity()
+        );
         when(healthCheckRepository.query(any(QueryContext.class), any())).thenThrow(new AnalyticsException());
         ApiMetrics result = cut.getAvailability(EXECUTION_CONTEXT, "test_api", AvailabilityQuery.Field.ENDPOINT.name());
 
         assertNull(result);
-        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString());
+        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false));
         verify(healthCheckRepository, times(1)).query(any(QueryContext.class), any());
     }
 
     @Test
     public void should_get_noResponse_for_getAvailability_metadata() throws AnalyticsException {
-        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString())).thenReturn(new ApiEntity());
+        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false))).thenReturn(
+            new ApiEntity()
+        );
         when(healthCheckRepository.query(any(QueryContext.class), any())).thenReturn(null);
         ApiMetrics result = cut.getAvailability(EXECUTION_CONTEXT, "test_api", AvailabilityQuery.Field.ENDPOINT.name());
 
         assertNull(result);
-        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString());
+        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false));
         verify(healthCheckRepository, times(1)).query(any(QueryContext.class), any());
     }
 
@@ -114,7 +119,9 @@ public class HealthCheckServiceImplTest {
 
         when(healthCheckRepository.query(any(QueryContext.class), any())).thenReturn(availabilityResponse);
 
-        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "apiId")).thenReturn(newApiEntity());
+        when(apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), "apiId", false, false, false)).thenReturn(
+            newApiEntity()
+        );
 
         ApiMetrics apiMetrics = cut.getAvailability(
             GraviteeContext.getExecutionContext(),
@@ -224,23 +231,27 @@ public class HealthCheckServiceImplTest {
 
     @Test
     public void shouldThrowExceptionForGetResponseTime() throws Exception {
-        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString())).thenReturn(newApiEntity());
+        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false))).thenReturn(
+            newApiEntity()
+        );
         when(healthCheckRepository.query(any(QueryContext.class), any())).thenThrow(new AnalyticsException());
         ApiMetrics result = cut.getResponseTime(EXECUTION_CONTEXT, "test_api", AvailabilityQuery.Field.ENDPOINT.name());
 
         assertNull(result);
-        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString());
+        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false));
         verify(healthCheckRepository, times(1)).query(any(QueryContext.class), any());
     }
 
     @Test
     public void shouldFindNoResponseTime() throws AnalyticsException {
-        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString())).thenReturn(new ApiEntity());
+        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false))).thenReturn(
+            new ApiEntity()
+        );
         when(healthCheckRepository.query(any(QueryContext.class), any())).thenReturn(null);
         ApiMetrics result = cut.getResponseTime(EXECUTION_CONTEXT, "test_api", AvailabilityQuery.Field.ENDPOINT.name());
 
         assertNull(result);
-        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString());
+        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false));
         verify(healthCheckRepository, times(1)).query(any(QueryContext.class), any());
     }
 
@@ -254,15 +265,33 @@ public class HealthCheckServiceImplTest {
 
         response.setEndpointResponseTimes(buckets);
 
-        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString())).thenReturn(new ApiEntity());
+        when(apiSearchService.findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false))).thenReturn(
+            new ApiEntity()
+        );
         when(healthCheckRepository.query(any(QueryContext.class), any())).thenReturn(response);
         when(instanceService.findById(any(ExecutionContext.class), anyString())).thenReturn(new InstanceEntity());
         ApiMetrics result = cut.getResponseTime(EXECUTION_CONTEXT, "test_api", AvailabilityQuery.Field.GATEWAY.name());
 
         assertNotNull(result);
-        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString());
+        verify(apiSearchService, times(1)).findGenericById(any(ExecutionContext.class), anyString(), eq(false), eq(false), eq(false));
         verify(healthCheckRepository, times(1)).query(any(QueryContext.class), any());
         verify(instanceService, times(1)).findById(any(ExecutionContext.class), anyString());
+    }
+
+    @Test
+    public void should_getAvailability_metadata_for_V2() throws Exception {
+        FieldBucket fieldBucketEndpoint = new FieldBucket("endpoint");
+        fieldBucketEndpoint.setValues(Collections.emptyList());
+
+        AvailabilityResponse availabilityResponse = new AvailabilityResponse();
+        availabilityResponse.setEndpointAvailabilities(List.of(fieldBucketEndpoint));
+
+        when(healthCheckRepository.query(any(QueryContext.class), any())).thenReturn(availabilityResponse);
+        when(apiSearchService.findGenericById(EXECUTION_CONTEXT, "apiId", false, false, false)).thenReturn(newApiEntityV2());
+
+        ApiMetrics apiMetrics = cut.getAvailability(EXECUTION_CONTEXT, "apiId", AvailabilityQuery.Field.ENDPOINT.name());
+
+        assertEquals(Map.of("target", "http://localhost"), apiMetrics.getMetadata().get("endpoint"));
     }
 
     @NonNull
@@ -295,5 +324,21 @@ public class HealthCheckServiceImplTest {
         log.setSteps(steps);
         log.setApi("test_api");
         return log;
+    }
+
+    private static io.gravitee.rest.api.model.api.ApiEntity newApiEntityV2() {
+        io.gravitee.rest.api.model.api.ApiEntity api = new io.gravitee.rest.api.model.api.ApiEntity();
+        api.setId("apiId");
+        api.setGraviteeDefinitionVersion("2.0.0");
+        io.gravitee.definition.model.Endpoint endpoint = new io.gravitee.definition.model.Endpoint();
+        endpoint.setName("endpoint");
+        endpoint.setTarget("http://localhost");
+        io.gravitee.definition.model.EndpointGroup group = new io.gravitee.definition.model.EndpointGroup();
+        group.setEndpoints(Set.of(endpoint));
+        io.gravitee.definition.model.Proxy proxy = new io.gravitee.definition.model.Proxy();
+        proxy.setGroups(Set.of(group));
+        api.setProxy(proxy);
+
+        return api;
     }
 }

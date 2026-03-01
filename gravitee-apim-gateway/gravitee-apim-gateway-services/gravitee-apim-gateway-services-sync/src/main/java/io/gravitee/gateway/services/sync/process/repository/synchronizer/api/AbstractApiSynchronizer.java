@@ -31,14 +31,14 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadPoolExecutor;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public abstract class AbstractApiSynchronizer {
 
@@ -61,8 +61,7 @@ public abstract class AbstractApiSynchronizer {
         return eventsFlowable
             // fetch per page
             .flatMap(events ->
-                Flowable
-                    .just(events)
+                Flowable.just(events)
                     .doOnNext(e -> log.debug("New api events fetch"))
                     .flatMapIterable(e -> e)
                     .groupBy(Event::getType)
@@ -109,8 +108,7 @@ public abstract class AbstractApiSynchronizer {
                 if (reactableByAction.getKey() == ActionOnApi.DEPLOY) {
                     return reactableByAction
                         .map(reactableApi ->
-                            ApiReactorDeployable
-                                .builder()
+                            ApiReactorDeployable.builder()
                                 .apiId(reactableApi.getId())
                                 .syncAction(SyncAction.DEPLOY)
                                 .reactableApi(reactableApi)

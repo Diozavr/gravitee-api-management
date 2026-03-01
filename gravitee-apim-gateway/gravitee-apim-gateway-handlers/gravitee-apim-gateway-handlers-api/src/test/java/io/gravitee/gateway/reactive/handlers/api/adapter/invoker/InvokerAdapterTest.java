@@ -47,6 +47,7 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.helpers.NOPLogger;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -77,6 +78,7 @@ class InvokerAdapterTest {
 
     @BeforeEach
     public void init() {
+        lenient().when(ctx.withLogger(any())).thenReturn(NOPLogger.NOP_LOGGER);
         cut = new InvokerAdapter(invoker);
     }
 
@@ -96,6 +98,20 @@ class InvokerAdapterTest {
     }
 
     @Test
+    void shouldSetStatusToZeroWhenInvokeIsCalled() {
+        when(ctx.response()).thenReturn(response);
+
+        mockComplete();
+
+        final TestObserver<Void> obs = cut.invoke(ctx).test();
+
+        obs.assertComplete();
+
+        // Verify status is set to 0
+        verify(response).status(0);
+    }
+
+    @Test
     void shouldGetIdFromInvokerClassName() {
         final String id = cut.getId();
 
@@ -106,8 +122,9 @@ class InvokerAdapterTest {
     @Test
     void shouldInterruptWith502WhenExceptionOccurs() {
         when(ctx.response()).thenReturn(response);
-        when(ctx.interruptWith(any(ExecutionFailure.class)))
-            .thenAnswer(i -> Completable.error(new InterruptionFailureException(i.getArgument(0))));
+        when(ctx.interruptWith(any(ExecutionFailure.class))).thenAnswer(i ->
+            Completable.error(new InterruptionFailureException(i.getArgument(0)))
+        );
 
         doThrow(new RuntimeException(MOCK_EXCEPTION_MESSAGE))
             .when(invoker)
@@ -127,8 +144,9 @@ class InvokerAdapterTest {
     @Test
     void shouldInterruptAndPropagateFailureWhenInterruptionFailureExceptionOccurs() {
         when(ctx.response()).thenReturn(response);
-        when(ctx.interruptWith(any(ExecutionFailure.class)))
-            .thenAnswer(i -> Completable.error(new InterruptionFailureException(i.getArgument(0))));
+        when(ctx.interruptWith(any(ExecutionFailure.class))).thenAnswer(i ->
+            Completable.error(new InterruptionFailureException(i.getArgument(0)))
+        );
 
         final String failureContentType = "text/plain";
         final String failureKey = "INTERNAL_ERROR";
@@ -189,13 +207,14 @@ class InvokerAdapterTest {
     }
 
     @Test
-    void shouldRestoreContextWhenInvokerExecutionCancelled() {
+    void shouldRestoreContextAndSetStatus499WhenInvokerExecutionCancelled() {
         final ExecutionContextAdapter adaptedExecutionContext = mock(ExecutionContextAdapter.class);
 
         when(ctx.getInternalAttribute(InternalContextAttributes.ATTR_INTERNAL_ADAPTED_CONTEXT)).thenReturn(adaptedExecutionContext);
         when(adaptedExecutionContext.getDelegate()).thenReturn(ctx);
         when(adaptedExecutionContext.request()).thenReturn(adaptedRequest);
         when(ctx.response()).thenReturn(response);
+        when(response.status()).thenReturn(0);
         when(ctx.metrics()).thenReturn(metrics);
 
         final TestObserver<Void> obs = cut.invoke(ctx).test(true);
@@ -203,6 +222,7 @@ class InvokerAdapterTest {
         obs.assertNotComplete();
 
         verify(adaptedExecutionContext).restore();
+        verify(response).status(499);
         verify(metrics).setErrorKey(CLIENT_ABORTED_DURING_RESPONSE_ERROR);
         verify(metrics).setErrorMessage(CLIENT_ABORTED_DURING_RESPONSE_ERROR_MESSAGE);
     }
@@ -215,8 +235,9 @@ class InvokerAdapterTest {
         when(adaptedExecutionContext.getDelegate()).thenReturn(ctx);
         when(adaptedExecutionContext.request()).thenReturn(adaptedRequest);
         when(ctx.response()).thenReturn(response);
-        when(ctx.interruptWith(any(ExecutionFailure.class)))
-            .thenAnswer(i -> Completable.error(new InterruptionFailureException(i.getArgument(0))));
+        when(ctx.interruptWith(any(ExecutionFailure.class))).thenAnswer(i ->
+            Completable.error(new InterruptionFailureException(i.getArgument(0)))
+        );
 
         doThrow(new RuntimeException(MOCK_EXCEPTION_MESSAGE))
             .when(invoker)
@@ -235,15 +256,15 @@ class InvokerAdapterTest {
 
     private void mockComplete() {
         doAnswer(invocation -> {
-                ConnectionHandlerAdapter connectionHandlerAdapter = invocation.getArgument(2);
-                final Try<Object> nextEmitter = ReflectionUtils.tryToReadFieldValue(
-                    ConnectionHandlerAdapter.class,
-                    "nextEmitter",
-                    connectionHandlerAdapter
-                );
-                ((CompletableEmitter) nextEmitter.get()).onComplete();
-                return null;
-            })
+            ConnectionHandlerAdapter connectionHandlerAdapter = invocation.getArgument(2);
+            final Try<Object> nextEmitter = ReflectionUtils.tryToReadFieldValue(
+                ConnectionHandlerAdapter.class,
+                "nextEmitter",
+                connectionHandlerAdapter
+            );
+            ((CompletableEmitter) nextEmitter.get()).onComplete();
+            return null;
+        })
             .when(invoker)
             .invoke(any(io.gravitee.gateway.api.ExecutionContext.class), any(ReadWriteStream.class), any(Handler.class));
     }

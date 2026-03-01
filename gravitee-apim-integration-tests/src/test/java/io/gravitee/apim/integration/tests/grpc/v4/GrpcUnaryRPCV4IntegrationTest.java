@@ -17,7 +17,7 @@ package io.gravitee.apim.integration.tests.grpc.v4;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
+import static org.awaitility.Awaitility.await;
 
 import io.gravitee.apim.gateway.tests.sdk.annotations.DeployApi;
 import io.gravitee.apim.gateway.tests.sdk.annotations.GatewayTest;
@@ -48,15 +48,13 @@ public class GrpcUnaryRPCV4IntegrationTest extends AbstractGrpcV4GatewayTest {
     void should_request_and_get_response(GatewayDynamicConfig.HttpConfig httpConfig) {
         // create the backend
         GrpcIoServer grpcServer = GrpcIoServer.server(vertx);
-        grpcServer.callHandler(
-            GreeterGrpc.getSayHelloMethod(),
-            request ->
-                request.handler(hello -> {
-                    // just a simple response
-                    GrpcServerResponse<HelloRequest, HelloReply> response = request.response();
-                    HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + hello.getName()).build();
-                    response.end(reply);
-                })
+        grpcServer.callHandler(GreeterGrpc.getSayHelloMethod(), request ->
+            request.handler(hello -> {
+                // just a simple response
+                GrpcServerResponse<HelloRequest, HelloReply> response = request.response();
+                HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + hello.getName()).build();
+                response.end(reply);
+            })
         );
 
         // prep for test

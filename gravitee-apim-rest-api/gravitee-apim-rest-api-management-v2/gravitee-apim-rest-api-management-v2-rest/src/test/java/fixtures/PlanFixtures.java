@@ -29,6 +29,7 @@ import io.gravitee.rest.api.management.v2.rest.model.UpdatePlanFederated;
 import io.gravitee.rest.api.management.v2.rest.model.UpdatePlanV2;
 import io.gravitee.rest.api.management.v2.rest.model.UpdatePlanV4;
 import io.gravitee.rest.api.model.v4.nativeapi.NativePlanEntity;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.model.v4.plan.PlanEntity;
 import java.util.Date;
 import java.util.List;
@@ -163,27 +164,27 @@ public class PlanFixtures {
             .validation(PlanValidation.AUTO)
             .security(BASE_UPDATE_PLAN_SECURITY.get());
 
-    private static final io.gravitee.rest.api.model.PlanEntity.PlanEntityBuilder BASE_PLAN_ENTITY_V2 = io.gravitee.rest.api.model.PlanEntity
-        .builder()
-        .id("my-plan")
-        .api("my-api")
-        .name("My plan")
-        .description("Description")
-        .order(1)
-        .characteristics(List.of("characteristic1", "characteristic2"))
-        .createdAt(new Date())
-        .updatedAt(new Date())
-        .commentMessage("Comment message")
-        .crossId("my-plan-crossId")
-        .generalConditions("General conditions")
-        .tags(Set.of("tag1", "tag2"))
-        .status(io.gravitee.rest.api.model.PlanStatus.PUBLISHED)
-        .security(io.gravitee.rest.api.model.PlanSecurityType.API_KEY)
-        .type(io.gravitee.rest.api.model.PlanType.API)
-        .excludedGroups(List.of("excludedGroup1", "excludedGroup2"))
-        .validation(io.gravitee.rest.api.model.PlanValidationType.AUTO)
-        .selectionRule("{#request.attribute['selectionRule'] != null}")
-        .flows(List.of(FlowFixtures.aModelFlowV2()));
+    private static final io.gravitee.rest.api.model.PlanEntity.PlanEntityBuilder BASE_PLAN_ENTITY_V2 =
+        io.gravitee.rest.api.model.PlanEntity.builder()
+            .id("my-plan")
+            .api("my-api")
+            .name("My plan")
+            .description("Description")
+            .order(1)
+            .characteristics(List.of("characteristic1", "characteristic2"))
+            .createdAt(new Date())
+            .updatedAt(new Date())
+            .commentMessage("Comment message")
+            .crossId("my-plan-crossId")
+            .generalConditions("General conditions")
+            .tags(Set.of("tag1", "tag2"))
+            .status(io.gravitee.rest.api.model.PlanStatus.PUBLISHED)
+            .security(io.gravitee.rest.api.model.PlanSecurityType.API_KEY)
+            .type(io.gravitee.rest.api.model.PlanType.API)
+            .excludedGroups(List.of("excludedGroup1", "excludedGroup2"))
+            .validation(io.gravitee.rest.api.model.PlanValidationType.AUTO)
+            .selectionRule("{#request.attribute['selectionRule'] != null}")
+            .flows(List.of(FlowFixtures.aModelFlowV2()));
 
     public static CreatePlanV4 aCreatePlanHttpV4() {
         return BASE_CREATE_PLAN_HTTP_V4.get();
@@ -226,19 +227,17 @@ public class PlanFixtures {
     }
 
     public static PlanWithFlows aPlanWithHttpFlows() {
-        return PlanWithFlows
-            .builder()
+        return PlanWithFlows.builder()
             .id("id")
             .crossId("my-plan-crossId")
             .name("My plan")
             .description("Description")
             .validation(Plan.PlanValidationType.AUTO)
-            .type(Plan.PlanType.API)
+            .referenceType(GenericPlanEntity.ReferenceType.API)
             .apiType(ApiType.MESSAGE)
             .definitionVersion(DefinitionVersion.V4)
             .planDefinitionHttpV4(
-                fixtures.definition.PlanFixtures.HttpV4Definition
-                    .anApiKeyV4()
+                fixtures.definition.PlanFixtures.HttpV4Definition.anApiKeyV4()
                     .toBuilder()
                     .security(PlanSecurity.builder().type("API_KEY").configuration("{\"nice\": \"config\"}").build())
                     .selectionRule("{#request.attribute['selectionRule'] != null}")
@@ -247,7 +246,7 @@ public class PlanFixtures {
                     .flows(List.of(FlowFixtures.aModelFlowHttpV4()))
                     .build()
             )
-            .apiId("api-id")
+            .referenceId("api-id")
             .order(1)
             .characteristics(List.of("characteristic1", "characteristic2"))
             .excludedGroups(List.of("excludedGroup1", "excludedGroup2"))
@@ -259,19 +258,17 @@ public class PlanFixtures {
     }
 
     public static PlanWithFlows aPlanWithNativeFlows() {
-        return PlanWithFlows
-            .builder()
+        return PlanWithFlows.builder()
             .id("id")
             .crossId("my-plan-crossId")
             .name("My plan")
             .description("Description")
             .validation(Plan.PlanValidationType.AUTO)
-            .type(Plan.PlanType.API)
+            .referenceType(GenericPlanEntity.ReferenceType.API)
             .apiType(ApiType.NATIVE)
             .definitionVersion(DefinitionVersion.V4)
             .planDefinitionNativeV4(
-                fixtures.definition.PlanFixtures.NativeV4Definition
-                    .anApiKeyV4()
+                fixtures.definition.PlanFixtures.NativeV4Definition.anApiKeyV4()
                     .toBuilder()
                     .security(PlanSecurity.builder().type("API_KEY").configuration("{\"nice\": \"config\"}").build())
                     .selectionRule("{#request.attribute['selectionRule'] != null}")
@@ -280,7 +277,7 @@ public class PlanFixtures {
                     .flows(List.of(FlowFixtures.aModelFlowNativeV4()))
                     .build()
             )
-            .apiId("api-id")
+            .referenceId("api-id")
             .order(1)
             .characteristics(List.of("characteristic1", "characteristic2"))
             .excludedGroups(List.of("excludedGroup1", "excludedGroup2"))

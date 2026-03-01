@@ -22,11 +22,11 @@ import io.gravitee.repository.management.model.ScoringFunction;
 import java.sql.Types;
 import java.util.Date;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
-@Slf4j
+@CustomLog
 @Repository
 public class JdbcScoringFunctionRepository
     extends JdbcAbstractCrudRepository<ScoringFunction, String>
@@ -43,8 +43,7 @@ public class JdbcScoringFunctionRepository
 
     @Override
     protected JdbcObjectMapper<ScoringFunction> buildOrm() {
-        return JdbcObjectMapper
-            .builder(ScoringFunction.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(ScoringFunction.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("name", Types.NVARCHAR, String.class)
             .addColumn("payload", Types.NCLOB, String.class)

@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Inject, Input, OnInit } from '@angular/core';
 import { ControlContainer, FormGroup, FormGroupDirective } from '@angular/forms';
 
 import { Rule } from '../../../../../entities/alerts/rule.metrics';
 import { Scope } from '../../../../../entities/alert';
 import { ALERT_SEVERITIES, AlertSeverity, AlertTriggerEntity } from '../../../../../entities/alerts/alertTriggerEntity';
+import { Constants } from '../../../../../entities/Constants';
 
 export type GeneralFormValue = {
   name: string;
@@ -38,14 +39,17 @@ export type GeneralFormValue = {
 export class RuntimeAlertCreateGeneralComponent implements OnInit {
   @Input() public alertToUpdate: AlertTriggerEntity;
   @Input({ required: true }) set referenceType(value: Scope) {
-    this.rules = Rule.findByScope(value);
+    this.rules = Rule.findByScope(value, this.constants?.org?.settings?.cloudHosted?.enabled);
   }
 
   public generalForm: FormGroup;
   public rules: Rule[];
   public alertSeverities = ALERT_SEVERITIES;
 
-  constructor(private readonly formGroupDirective: FormGroupDirective) {}
+  constructor(
+    @Inject(Constants) private readonly constants: Constants,
+    private readonly formGroupDirective: FormGroupDirective,
+  ) {}
 
   ngOnInit() {
     this.generalForm = this.formGroupDirective.form.get('generalForm') as FormGroup;
@@ -53,7 +57,7 @@ export class RuntimeAlertCreateGeneralComponent implements OnInit {
     if (this.alertToUpdate) {
       this.seedForm();
     } else {
-      this.generalForm.controls.rule.valueChanges.subscribe((value) => {
+      this.generalForm.controls.rule.valueChanges.subscribe(value => {
         this.generalForm.patchValue({
           description: value.description,
         });
@@ -65,7 +69,7 @@ export class RuntimeAlertCreateGeneralComponent implements OnInit {
     this.generalForm.patchValue({
       name: this.alertToUpdate.name,
       enabled: this.alertToUpdate.enabled,
-      rule: this.rules.find((rule) => rule.type === this.alertToUpdate.type),
+      rule: this.rules.find(rule => rule.type === this.alertToUpdate.type),
       severity: this.alertToUpdate.severity,
       description: this.alertToUpdate.description,
     });

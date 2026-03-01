@@ -17,6 +17,7 @@ package io.gravitee.rest.api.services.dynamicproperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -114,10 +115,11 @@ public class DynamicPropertiesServiceTest {
         environment.setId(ENVIRONMENT_ID);
         environment.setOrganizationId(ORGANIZATION_ID);
         lenient().when(environmentService.findById(environment.getId())).thenReturn(environment);
-        lenient().doCallRealMethod().when(apiConverter).toApiEntity(any(), any());
+        lenient().doCallRealMethod().when(apiConverter).toApiEntity(any(), any(), eq(false));
         lenient()
             .when(objectMapper.readValue(any(String.class), (Class<Object>) any()))
-            .thenAnswer(i -> graviteeMapper.readValue((String) i.getArgument(0), (Class<io.gravitee.definition.model.Api>) i.getArgument(1))
+            .thenAnswer(i ->
+                graviteeMapper.readValue((String) i.getArgument(0), (Class<io.gravitee.definition.model.Api>) i.getArgument(1))
             );
     }
 
@@ -147,6 +149,31 @@ public class DynamicPropertiesServiceTest {
     }
 
     @Test
+    public void should_start_scheduler_when_dynamic_prop_start_v2_api() throws Exception {
+        // Used by the Serializer when converting the Api to ApiEntity
+        HttpDynamicPropertyProviderConfiguration providerConfiguration = new HttpDynamicPropertyProviderConfiguration();
+        providerConfiguration.setUrl("http://localhost:8080/success");
+        providerConfiguration.setSpecification(IOUtils.toString(read("/jolt/specification-value-as-key.json"), Charset.defaultCharset()));
+        final Api api = createApi(providerConfiguration);
+
+        cut.onEvent(new SimpleEvent<>(ApiEvent.START_DYNAMIC_PROPERTY_V2, api));
+
+        assertThat(cut.schedulers).isNotEmpty();
+    }
+
+    @Test
+    public void should_not_start_scheduler_when_when_dynamic_prop_start_v2_api_stopped_api() {
+        final Api api = createApi(new HttpDynamicPropertyProviderConfiguration());
+        api.setLifecycleState(LifecycleState.STOPPED);
+
+        cut.onEvent(new SimpleEvent<>(ApiEvent.START_DYNAMIC_PROPERTY_V2, api));
+
+        verifyNoInteractions(apiService);
+        verifyNoInteractions(vertx);
+        assertThat(cut.schedulers).isEmpty();
+    }
+
+    @Test
     public void should_stop_scheduler_when_undeploy_api() {
         final Api api = createApi(new HttpDynamicPropertyProviderConfiguration());
         api.setLifecycleState(LifecycleState.STOPPED);
@@ -154,6 +181,19 @@ public class DynamicPropertiesServiceTest {
         when(categoryMapper.toCategoryKey(anyString(), any())).thenReturn(Set.of());
 
         cut.onEvent(new SimpleEvent<>(ApiEvent.UNDEPLOY, api));
+
+        verifyNoInteractions(apiService);
+        verifyNoInteractions(vertx);
+        assertThat(cut.schedulers).isEmpty();
+    }
+
+    @Test
+    public void should_stop_scheduler_when_dynamic_props_stop_v2_api() {
+        final Api api = createApi(new HttpDynamicPropertyProviderConfiguration());
+
+        when(categoryMapper.toCategoryKey(anyString(), any())).thenReturn(Set.of());
+
+        cut.onEvent(new SimpleEvent<>(ApiEvent.STOP_DYNAMIC_PROPERTY_V2, api));
 
         verifyNoInteractions(apiService);
         verifyNoInteractions(vertx);

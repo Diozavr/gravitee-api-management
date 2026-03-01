@@ -35,9 +35,9 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
-            - gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}
-            - gravitee-api-management-v12-<< parameters.jobName >>-master
+            - gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
+            - gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}
+            - gravitee-api-management-v14-<< parameters.jobName >>-master
     description: Restore Maven cache for a dedicated job
   cmd-save-maven-job-cache:
     parameters:
@@ -50,7 +50,7 @@ commands:
           name: Exclude all APIM artefacts from cache.
           command: rm -rf ~/.m2/repository/io/gravitee/apim
       - save_cache:
-          key: gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
+          key: gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
           paths:
             - ~/.m2
           when: always
@@ -68,8 +68,25 @@ commands:
   cmd-install-yarn:
     steps:
       - run:
-          name: Yarn Set Version Stable
-          command: yarn set version 4.1.1
+          name: Enable Corepack and Set Yarn Version
+          command: |-
+            corepack enable || sudo corepack enable
+                    yarn set version 4.1.1
+  cmd-workspace-install:
+    steps:
+      - restore_cache:
+          name: Restore Yarn workspace cache
+          keys:
+            - gravitee-api-management-v14-workspace-{{ .Branch }}-{{ checksum "yarn.lock" }}
+            - gravitee-api-management-v14-workspace-{{ .Branch }}
+      - run:
+          name: Install workspace dependencies
+          command: yarn install --frozen-lockfile
+      - save_cache:
+          name: Save Yarn workspace cache
+          key: gravitee-api-management-v14-workspace-{{ .Branch }}-{{ checksum "yarn.lock" }}
+          paths:
+            - ./node_modules
   cmd-webui-install:
     parameters:
       apim-ui-project:
@@ -144,7 +161,7 @@ jobs:
           jobName: job-build
       - run:
           name: Build project
-          command: mvn -s .gravitee.settings.xml clean install --no-transfer-progress --update-snapshots -DskipTests -Dskip.validation=true -T 2C -Dbundle=dev -P all-modules,integration-tests-modules -DwithJavadoc
+          command: mvn -s .gravitee.settings.xml clean install --no-transfer-progress --update-snapshots -DskipTests -Dskip.validation=true -Dgravitee.archrules.skip=false -T 2C -Dbundle=dev -P all-modules,integration-tests-modules -DwithJavadoc
           environment:
             BUILD_ID: "1234"
             BUILD_NUMBER: "1234"
@@ -153,7 +170,7 @@ jobs:
       - save_cache:
           paths:
             - ~/.m2/repository/io/gravitee/apim
-          key: gravitee-api-management-v12-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+          key: gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
           when: on_success
       - cmd-save-maven-job-cache:
           jobName: job-build
@@ -165,7 +182,7 @@ jobs:
             - ./gravitee-apim-gateway/gravitee-apim-gateway-standalone/gravitee-apim-gateway-standalone-distribution/target/distribution
   job-console-webui-build:
     docker:
-      - image: cimg/node:20.11.1
+      - image: cimg/node:22.12.0
     resource_class: large
     steps:
       - checkout
@@ -174,17 +191,13 @@ jobs:
       - setup_remote_docker:
           version: default
       - cmd-install-yarn
-      - cmd-webui-install:
-          apim-ui-project: gravitee-apim-console-webui
+      - cmd-workspace-install
       - run:
           name: Update Build version
           command: "sed -i 's/\"version\": \".*\"/\"version\": \"4.2.0\"/' gravitee-apim-console-webui/build.json"
       - run:
-          name: Build
-          command: yarn build:prod
-          environment:
-            NODE_OPTIONS: --max_old_space_size=4086
-          working_directory: gravitee-apim-console-webui
+          name: Build Console
+          command: NODE_OPTIONS=--max_old_space_size=4086 yarn console:build:prod
       - cmd-notify-on-failure
       - persist_to_workspace:
           root: .
@@ -192,7 +205,7 @@ jobs:
             - gravitee-apim-console-webui/dist
   job-portal-webui-build:
     docker:
-      - image: cimg/node:20.11.1
+      - image: cimg/node:22.12.0
     resource_class: large
     steps:
       - checkout
@@ -212,17 +225,13 @@ jobs:
           environment:
             NODE_OPTIONS: --max_old_space_size=4086
           working_directory: gravitee-apim-portal-webui
-      - cmd-webui-install:
-          apim-ui-project: gravitee-apim-portal-webui-next
+      - cmd-workspace-install
       - run:
           name: Update Build version
           command: "sed -i 's/\"version\": \".*\"/\"version\": \"4.2.0\"/' gravitee-apim-portal-webui-next/build.json"
       - run:
-          name: Build
-          command: yarn build:prod
-          environment:
-            NODE_OPTIONS: --max_old_space_size=4086
-          working_directory: gravitee-apim-portal-webui-next
+          name: Build Portal Next
+          command: NODE_OPTIONS=--max_old_space_size=4086 yarn portal-next:build:prod
       - cmd-notify-on-failure
       - persist_to_workspace:
           root: .
@@ -257,7 +266,7 @@ jobs:
           name: Build docker image for << parameters.apim-project >>
           command: |-
             docker buildx build --push --platform=linux/arm64,linux/amd64 -f docker/Dockerfile \
-            -t graviteeio.azurecr.io/<< parameters.docker-image-name >>:apim-xxx-test-latest \
+            -t graviteeio.azurecr.io/<< parameters.docker-image-name >>:apim-xxx-test-784ff35 \
             << parameters.docker-context >>
           working_directory: << parameters.apim-project >>
       - cmd-docker-logout
@@ -310,14 +319,14 @@ jobs:
           name: Build docker image for << parameters.apim-project >>-alpine
           command: |-
             docker buildx build --push --platform=linux/arm64,linux/amd64 -f docker/Dockerfile \
-            -t graviteeio.azurecr.io/<< parameters.docker-image-name >>:apim-xxx-test-latest \
+            -t graviteeio.azurecr.io/<< parameters.docker-image-name >>:apim-xxx-test-784ff35 \
             << parameters.docker-context >>
           working_directory: << parameters.apim-project >>
       - run:
           name: Build docker image for << parameters.apim-project >>-debian
           command: |-
             docker buildx build --push --platform=linux/arm64,linux/amd64 -f docker/Dockerfile.debian \
-            -t graviteeio.azurecr.io/<< parameters.docker-image-name >>:apim-xxx-test-latest-debian \
+            -t graviteeio.azurecr.io/<< parameters.docker-image-name >>:apim-xxx-test-784ff35-debian \
             << parameters.docker-context >>
           working_directory: << parameters.apim-project >>
       - cmd-docker-logout
@@ -348,7 +357,7 @@ jobs:
             - gravitee-apim-e2e/lib/portal-webclient-sdk
   job-e2e-lint-build:
     docker:
-      - image: cimg/node:20.11.1
+      - image: cimg/node:22.12.0
     resource_class: small
     steps:
       - checkout
@@ -408,16 +417,16 @@ jobs:
               export V4_EMULATION_ENGINE_DEFAULT=no
             fi
             if [ -z "<< parameters.apim_client_tag >>" ]; then
-              APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=apim-xxx-test-latest APIM_CLIENT_REGISTRY=graviteeio.azurecr.io APIM_CLIENT_TAG=apim-xxx-test-latest yarn test:api:<< parameters.database >>
+              APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=apim-xxx-test-784ff35 APIM_CLIENT_REGISTRY=graviteeio.azurecr.io APIM_CLIENT_TAG=apim-xxx-test-784ff35 yarn test:api:<< parameters.database >>
             else 
               if [[ "<< parameters.apim_client_tag >>" == *"@"* ]]; then
                 echo "Using custom registry for client"
                 CLIENT_REGISTRY=$(echo "<< parameters.apim_client_tag >>" | cut -f1 -d@)
                 CLIENT_TAG=$(echo "<< parameters.apim_client_tag >>" | cut -f2 -d@)
-                APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=apim-xxx-test-latest APIM_CLIENT_REGISTRY=${CLIENT_REGISTRY} APIM_CLIENT_TAG=${CLIENT_TAG} yarn test:api:<< parameters.database >>
+                APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=apim-xxx-test-784ff35 APIM_CLIENT_REGISTRY=${CLIENT_REGISTRY} APIM_CLIENT_TAG=${CLIENT_TAG} yarn test:api:<< parameters.database >>
               else
                 echo "Using ACR registry for client"
-                APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=apim-xxx-test-latest APIM_CLIENT_REGISTRY=graviteeio.azurecr.io APIM_CLIENT_TAG=<< parameters.apim_client_tag >> yarn test:api:<< parameters.database >>
+                APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=apim-xxx-test-784ff35 APIM_CLIENT_REGISTRY=graviteeio.azurecr.io APIM_CLIENT_TAG=<< parameters.apim_client_tag >> yarn test:api:<< parameters.database >>
               fi
             fi
       - cmd-docker-logout
@@ -446,7 +455,7 @@ jobs:
           name: Running UI tests
           command: |-
             cd gravitee-apim-e2e
-            APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=apim-xxx-test-latest yarn test:ui
+            APIM_REGISTRY=graviteeio.azurecr.io APIM_TAG=apim-xxx-test-784ff35 yarn test:ui
       - cmd-docker-logout
       - cmd-notify-on-failure
       - store_artifacts:

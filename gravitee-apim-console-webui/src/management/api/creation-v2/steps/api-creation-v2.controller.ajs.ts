@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 import { IPromise } from 'angular';
-
 import { ActivatedRoute, Router } from '@angular/router';
 import { forEach, remove, some } from 'lodash';
+import { SimpleChange } from '@angular/core';
 
 import { ApiService } from '../../../../services/api.service';
 import NotificationService from '../../../../services/notification.service';
@@ -24,6 +24,7 @@ import UserService from '../../../../services/user.service';
 import { PlanSecurityType } from '../../../../entities/plan';
 import { IfMatchEtagInterceptor } from '../../../../shared/interceptors/if-match-etag.interceptor';
 import { ApiV2Service } from '../../../../services-ngx/api-v2.service';
+import GroupService from '../../../../services/group.service';
 
 interface Page {
   fileName: string;
@@ -89,6 +90,13 @@ class ApiCreationV2ControllerAjs {
   private tags: any[];
   private tenants: any[];
   private groups: any[];
+  public hasMoreGroups = true;
+
+  pageSize = 50;
+  currentPage = 1;
+  loadedGroups: any[] = [];
+  isFetchingGroups = false;
+  totalPages: any;
 
   constructor(
     private $scope,
@@ -103,6 +111,7 @@ class ApiCreationV2ControllerAjs {
     private $rootScope,
     private readonly ngIfMatchEtagInterceptor: IfMatchEtagInterceptor,
     private readonly ngRouter: Router,
+    private readonly groupService: GroupService,
   ) {
     this.api = {
       gravitee: '2.0.0',
@@ -158,11 +167,48 @@ class ApiCreationV2ControllerAjs {
   }
 
   $onInit = () => {
-    this.attachableGroups = this.groups.filter((group) => group.apiPrimaryOwner == null);
+    const groups = this.groups || [];
+    this.syncGroupData(groups);
+  };
+
+  loadMoreGroups = () => {
+    if (this.isFetchingGroups || !this.hasMoreGroups) return;
+    this.isFetchingGroups = true;
+
+    this.groupService.listPaginated(this.currentPage, this.pageSize).then(response => {
+      const pageMeta = response.data.page;
+      const data = response.data.data;
+      this.totalPages = pageMeta.total_pages;
+
+      this.loadedGroups = [...this.loadedGroups, ...data];
+
+      if (pageMeta.current >= this.totalPages) this.hasMoreGroups = false;
+      else this.currentPage++;
+
+      this.$onChanges({
+        groups: new SimpleChange(null, this.loadedGroups, false),
+      });
+
+      this.isFetchingGroups = false;
+    });
+  };
+
+  syncGroupData = groups => {
     const currentUserGroups = this.UserService.getCurrentUserGroups();
-    this.poGroups = this.groups.filter(
-      (group) => group.apiPrimaryOwner != null && currentUserGroups.some((userGroup) => userGroup === group.name),
-    );
+    this.attachableGroups = groups.filter(group => group.apiPrimaryOwner == null);
+    this.poGroups = groups.filter(group => group.apiPrimaryOwner != null && currentUserGroups.includes(group.name));
+  };
+
+  $onChanges = changes => {
+    if (changes.groups && changes.groups.currentValue) {
+      const groups = changes.groups.currentValue;
+      this.groups = groups;
+      this.syncGroupData(groups);
+    }
+
+    if (changes.hasMoreGroups) {
+      this.hasMoreGroups = changes.hasMoreGroups.currentValue;
+    }
   };
 
   /*
@@ -238,7 +284,7 @@ class ApiCreationV2ControllerAjs {
     if (!this.isCreating) {
       this.isCreating = true;
       // clear API pages json format
-      forEach(this.api.pages, (page) => {
+      forEach(this.api.pages, page => {
         if (!page.name) {
           page.name = page.fileName;
         }
@@ -248,12 +294,12 @@ class ApiCreationV2ControllerAjs {
       });
 
       // handle plan publish state
-      forEach(this.api.plans, (plan) => {
+      forEach(this.api.plans, plan => {
         plan.status = deployAndStart ? 'PUBLISHED' : 'STAGING';
       });
 
       if (this.api.groups != null) {
-        this.api.groups = this.api.groups.map((group) => group.name);
+        this.api.groups = this.api.groups.map(group => group.name);
       }
 
       // create API
@@ -262,11 +308,11 @@ class ApiCreationV2ControllerAjs {
       }
 
       this.ApiService.import(null, this.api, this.api.gravitee, false)
-        .then((api) => {
+        .then(api => {
           this.vm.showBusyText = false;
           return api;
         })
-        .then((api) => {
+        .then(api => {
           if (readyForReview) {
             this.ApiService.askForReview(api.data).then(() => {
               api.data.workflow_state = 'IN_REVIEW';
@@ -275,7 +321,7 @@ class ApiCreationV2ControllerAjs {
           }
           return api;
         })
-        .then((api) => {
+        .then(api => {
           if (deployAndStart) {
             this.ApiService.deploy(api.data.id).then(() => {
               this.ApiService.start(api.data).then(() => {
@@ -290,7 +336,7 @@ class ApiCreationV2ControllerAjs {
 
           return api;
         })
-        .then((api) => this.ngApiV2Service.get(api.data.id).toPromise())
+        .then(api => this.ngApiV2Service.get(api.data.id).toPromise())
         .catch(() => {
           this.vm.showBusyText = false;
           this.isCreating = false;
@@ -305,7 +351,7 @@ class ApiCreationV2ControllerAjs {
     if (this.contextPathInvalid) {
       const pathToVerify = [{ path: this.api.proxy.context_path }];
       this.ngApiV2Service.verifyPath(null, pathToVerify).subscribe(
-        (res) => {
+        res => {
           this.contextPathInvalid = !res.ok;
           if (this.contextPathInvalid) {
             this.NotificationService.show(`Invalid context path ${res.reason}`);
@@ -452,7 +498,7 @@ class ApiCreationV2ControllerAjs {
    API documentation
    */
   initDocumentationSettings() {
-    this.$scope.$watch('newApiPageFile.content', (data) => {
+    this.$scope.$watch('newApiPageFile.content', data => {
       if (data) {
         const file = {
           name: this.$scope.newApiPageFile.name,
@@ -524,7 +570,7 @@ class ApiCreationV2ControllerAjs {
         },
       })
       .then(() => {
-        this.api.pages = this.api.pages.filter((page) => page.fileName !== pageToRemove.fileName);
+        this.api.pages = this.api.pages.filter(page => page.fileName !== pageToRemove.fileName);
       });
   }
 
@@ -546,6 +592,7 @@ ApiCreationV2ControllerAjs.$inject = [
   '$rootScope',
   'ngIfMatchEtagInterceptor',
   'ngRouter',
+  'GroupService',
 ];
 
 export default ApiCreationV2ControllerAjs;

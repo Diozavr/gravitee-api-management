@@ -44,18 +44,17 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import javax.inject.Singleton;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+@CustomLog
 @Singleton
 @Path("/auth/external")
 public class ExternalAuthenticationResource extends AbstractAuthenticationResource {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ExternalAuthenticationResource.class);
     protected static final String ORG_CLAIM = "org";
     protected static final String ENVIRONMENT_CLAIM = "env";
     private boolean enabled;
@@ -106,24 +105,21 @@ public class ExternalAuthenticationResource extends AbstractAuthenticationResour
                     keyProcessor.setJwkSourceResolver(new RemoteJWKSourceResolver<>(publicKeyResolver));
                 } else {
                     switch (algorithm) {
-                        case RS256, RS384, RS512:
-                            {
-                                keyProcessor = new RSAECKeyProcessor<>(claimsVerifier);
-                                keyProcessor.setJwkSourceResolver(new RSAJWKSourceResolver<>(publicKeyResolver));
-                                break;
-                            }
-                        case HS256, HS384, HS512:
-                            {
-                                keyProcessor = new HMACKeyProcessor<>(claimsVerifier);
-                                keyProcessor.setJwkSourceResolver(new MACJWKSourceResolver<>(publicKeyResolver));
-                                break;
-                            }
-                        case ES256, ES384, ES512:
-                            {
-                                keyProcessor = new RSAECKeyProcessor<>(claimsVerifier);
-                                keyProcessor.setJwkSourceResolver(new ECJWKSourceResolver<>(publicKeyResolver));
-                                break;
-                            }
+                        case RS256, RS384, RS512: {
+                            keyProcessor = new RSAECKeyProcessor<>(claimsVerifier);
+                            keyProcessor.setJwkSourceResolver(new RSAJWKSourceResolver<>(publicKeyResolver));
+                            break;
+                        }
+                        case HS256, HS384, HS512: {
+                            keyProcessor = new HMACKeyProcessor<>(claimsVerifier);
+                            keyProcessor.setJwkSourceResolver(new MACJWKSourceResolver<>(publicKeyResolver));
+                            break;
+                        }
+                        case ES256, ES384, ES512: {
+                            keyProcessor = new RSAECKeyProcessor<>(claimsVerifier);
+                            keyProcessor.setJwkSourceResolver(new ECJWKSourceResolver<>(publicKeyResolver));
+                            break;
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -178,10 +174,10 @@ public class ExternalAuthenticationResource extends AbstractAuthenticationResour
             // Redirect the user.
             return Response.temporaryRedirect(new URI(url)).build();
         } catch (InvalidTokenException | UserNotFoundException e) {
-            LOGGER.error("Authentication failed", e);
+            log.error("Authentication failed", e);
             return Response.status(Response.Status.FORBIDDEN).build();
         } catch (Exception e) {
-            LOGGER.error("Error occurred when trying to log user using external authentication provider.", e);
+            log.error("Error occurred when trying to log user using external authentication provider.", e);
             return Response.serverError().build();
         } finally {
             GraviteeContext.cleanContext();

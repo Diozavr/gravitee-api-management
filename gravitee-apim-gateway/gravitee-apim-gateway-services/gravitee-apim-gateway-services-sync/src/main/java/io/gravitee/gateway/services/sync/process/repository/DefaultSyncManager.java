@@ -39,13 +39,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class DefaultSyncManager extends AbstractService<SyncManager> implements SyncManager {
 
     private static final String PATH = "/sync";
@@ -122,20 +122,18 @@ public class DefaultSyncManager extends AbstractService<SyncManager> implements 
             .andThen(
                 Completable.fromRunnable(() -> {
                     log.info("Sync service has been scheduled with delay [{} {}]", delay, unit.name());
-                    refreshDisposable =
-                        Flowable
-                            .<Long, Long>generate(
-                                () -> 0L,
-                                (state, emitter) -> {
-                                    emitter.onNext(state);
-                                    return state + 1;
-                                }
-                            )
-                            .delay(delay, unit)
-                            .rebatchRequests(1)
-                            .concatMapCompletable(interval -> synchronize())
-                            .retry()
-                            .subscribe();
+                    refreshDisposable = Flowable.<Long, Long>generate(
+                        () -> 0L,
+                        (state, emitter) -> {
+                            emitter.onNext(state);
+                            return state + 1;
+                        }
+                    )
+                        .delay(delay, unit)
+                        .rebatchRequests(1)
+                        .concatMapCompletable(interval -> synchronize())
+                        .retry()
+                        .subscribe();
                 })
             )
             .subscribe();
@@ -154,11 +152,10 @@ public class DefaultSyncManager extends AbstractService<SyncManager> implements 
     }
 
     private Completable synchronize() {
-        return Completable
-            .defer(() -> {
-                log.debug("Running synchronization process...");
-                return distributedSyncService.ready();
-            })
+        return Completable.defer(() -> {
+            log.debug("Running synchronization process...");
+            return distributedSyncService.ready();
+        })
             .andThen(
                 Single.defer(() -> {
                     if (
@@ -189,26 +186,20 @@ public class DefaultSyncManager extends AbstractService<SyncManager> implements 
                 if (distributedSyncService.isEnabled() && !distributedSyncService.isPrimaryNode()) {
                     log.debug("Distributed synchronizers will be used as distributed sync is enabled, and current node is secondary.");
                     if (distributedSynchronizers != null) {
-                        synchronizationCompletable =
-                            Flowable
-                                .fromIterable(distributedSynchronizers)
-                                .concatMapCompletable(synchronizer ->
-                                    synchronizer
-                                        .synchronize(nextFromTime, nextToTime)
-                                        .compose(upstream -> retrySynchronizer(upstream, synchronizer.getClass().getSimpleName()))
-                                );
+                        synchronizationCompletable = Flowable.fromIterable(distributedSynchronizers).concatMapCompletable(synchronizer ->
+                            synchronizer
+                                .synchronize(nextFromTime, nextToTime)
+                                .compose(upstream -> retrySynchronizer(upstream, synchronizer.getClass().getSimpleName()))
+                        );
                     } else {
                         synchronizationCompletable = Completable.complete();
                     }
                 } else {
-                    synchronizationCompletable =
-                        Flowable
-                            .fromIterable(synchronizers)
-                            .concatMapCompletable(synchronizer ->
-                                synchronizer
-                                    .synchronize(nextFromTime, nextToTime, (Set<String>) node.metadata().get(Node.META_ENVIRONMENTS))
-                                    .compose(upstream -> retrySynchronizer(upstream, synchronizer.getClass().getSimpleName()))
-                            );
+                    synchronizationCompletable = Flowable.fromIterable(synchronizers).concatMapCompletable(synchronizer ->
+                        synchronizer
+                            .synchronize(nextFromTime, nextToTime, (Set<String>) node.metadata().get(Node.META_ENVIRONMENTS))
+                            .compose(upstream -> retrySynchronizer(upstream, synchronizer.getClass().getSimpleName()))
+                    );
                 }
                 return synchronizationCompletable
                     .andThen(distributedSyncService.storeState(nextFromTime, nextToTime))

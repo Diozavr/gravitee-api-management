@@ -53,7 +53,7 @@ public class GroupByQueryCommand extends AbstractElasticsearchQueryCommand<Group
             SearchResponse searchResponse = execute(queryContext, groupByQuery, Type.REQUEST, sQuery).blockingGet();
             return this.toGroupByResponse(searchResponse);
         } catch (Exception eex) {
-            logger.error("Impossible to perform GroupByQuery", eex);
+            log.error("Impossible to perform GroupByQuery", eex);
             throw new AnalyticsException("Impossible to perform GroupByQuery", eex);
         }
     }
@@ -101,7 +101,7 @@ public class GroupByQueryCommand extends AbstractElasticsearchQueryCommand<Group
     }
 
     private JsonNode getFirstSubAggregation(JsonNode bucket) {
-        for (final Iterator<String> it = bucket.fieldNames(); it.hasNext();) {
+        for (final Iterator<String> it = bucket.fieldNames(); it.hasNext(); ) {
             final String fieldName = it.next();
             final JsonNode subAggregation = bucket.get(fieldName);
             if (

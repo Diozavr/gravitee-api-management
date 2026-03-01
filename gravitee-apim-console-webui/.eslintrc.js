@@ -7,15 +7,18 @@ module.exports = {
   parser: '@typescript-eslint/parser',
   parserOptions: {
     project: './tsconfig.json',
+    tsconfigRootDir: __dirname,
     sourceType: 'module',
   },
   settings: {
     'import/resolver': {
-      typescript: {},
+      typescript: {
+        project: [__dirname + '/tsconfig.json'],
+      },
     },
   },
-  ignorePatterns: ['**/*.js', '**/*.json', '**/*.html'],
-  plugins: ['@typescript-eslint', 'eslint-plugin-import', 'rxjs'],
+  ignorePatterns: ['dist', 'coverage', 'storybook-static', '**/*.js', '**/*.json', '**/*.html'],
+  plugins: ['@typescript-eslint', 'eslint-plugin-import', 'rxjs', 'unused-imports'],
   extends: [
     'angular',
     'eslint:recommended',
@@ -51,13 +54,18 @@ module.exports = {
     'no-useless-escape': 'error',
     'no-prototype-builtins': 'warn',
     'no-cond-assign': 'warn',
+    '@angular-eslint/prefer-inject': 'off', // TODO: enable this rule when all constructor injections are replaced by Angular injection
     '@typescript-eslint/ban-types': 'error',
-    '@typescript-eslint/no-unused-vars': [
+    '@typescript-eslint/no-unused-vars': 'off',
+    'unused-imports/no-unused-imports': 'error',
+    'unused-imports/no-unused-vars': [
       'error',
       {
+        vars: 'all',
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
         caughtErrorsIgnorePattern: '^_',
+        args: 'after-used',
       },
     ],
     '@typescript-eslint/ban-ts-comment': 'warn',

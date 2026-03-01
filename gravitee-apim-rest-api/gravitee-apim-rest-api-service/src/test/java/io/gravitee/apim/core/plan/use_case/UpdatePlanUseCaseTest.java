@@ -38,6 +38,8 @@ import io.gravitee.apim.core.audit.domain_service.AuditDomainService;
 import io.gravitee.apim.core.audit.model.AuditActor;
 import io.gravitee.apim.core.audit.model.AuditInfo;
 import io.gravitee.apim.core.documentation.model.Page;
+import io.gravitee.apim.core.event.crud_service.EventCrudService;
+import io.gravitee.apim.core.event.crud_service.EventLatestCrudService;
 import io.gravitee.apim.core.exception.ValidationDomainException;
 import io.gravitee.apim.core.flow.domain_service.FlowValidationDomainService;
 import io.gravitee.apim.core.json.JsonDiffProcessor;
@@ -54,6 +56,7 @@ import io.gravitee.definition.model.v4.plan.PlanMode;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
 import io.gravitee.repository.management.model.Parameter;
 import io.gravitee.rest.api.model.parameters.Key;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.service.exceptions.InvalidDataException;
 import io.gravitee.rest.api.service.processor.SynchronizationService;
 import java.util.Collections;
@@ -107,6 +110,8 @@ class UpdatePlanUseCaseTest {
     JsonDiffProcessor jsonDiffProcessor = new JacksonJsonDiffProcessor();
     AuditDomainService auditDomainService = new AuditDomainService(auditCrudService, userCrudService, jsonDiffProcessor);
     ReorderPlanDomainService reorderPlanDomainService = new ReorderPlanDomainService(planQueryService, planCrudService);
+    EventCrudService eventCrudService = mock(EventCrudService.class);
+    EventLatestCrudService eventLatestCrudService = mock(EventLatestCrudService.class);
     UpdatePlanDomainService updatePlanDomainService = new UpdatePlanDomainService(
         planQueryService,
         planCrudService,
@@ -123,14 +128,56 @@ class UpdatePlanUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        var plan = PlanFixtures.aPlanHttpV4().toBuilder().id(PLAN_ID).apiId(API_ID).order(1).build();
-        var anotherPlan = PlanFixtures.aPlanHttpV4().toBuilder().id("another-plan-id").apiId(API_ID).order(2).build();
-        var deprecatedPlan = PlanFixtures.aPlanHttpV4().toBuilder().id(DEPRECATED_PLAN_ID).apiId(DEPRECATED_PLAN_API_ID).order(1).build();
+        var plan = PlanFixtures.aPlanHttpV4()
+            .toBuilder()
+            .id(PLAN_ID)
+            .apiId(API_ID)
+            .referenceId(API_ID)
+            .referenceType(GenericPlanEntity.ReferenceType.API)
+            .order(1)
+            .build();
+        var anotherPlan = PlanFixtures.aPlanHttpV4()
+            .toBuilder()
+            .id("another-plan-id")
+            .apiId(API_ID)
+            .referenceId(API_ID)
+            .referenceType(GenericPlanEntity.ReferenceType.API)
+            .order(2)
+            .build();
+        var deprecatedPlan = PlanFixtures.aPlanHttpV4()
+            .toBuilder()
+            .id(DEPRECATED_PLAN_ID)
+            .apiId(DEPRECATED_PLAN_API_ID)
+            .referenceId(DEPRECATED_PLAN_API_ID)
+            .referenceType(GenericPlanEntity.ReferenceType.API)
+            .order(1)
+            .build();
         deprecatedPlan.getPlanDefinitionV4().setStatus(PlanStatus.DEPRECATED);
-        var stagingPlan = PlanFixtures.aPlanHttpV4().toBuilder().id(STAGING_PLAN_ID).apiId(STAGING_PLAN_API_ID).order(1).build();
+        var stagingPlan = PlanFixtures.aPlanHttpV4()
+            .toBuilder()
+            .id(STAGING_PLAN_ID)
+            .apiId(STAGING_PLAN_API_ID)
+            .referenceId(STAGING_PLAN_API_ID)
+            .referenceType(GenericPlanEntity.ReferenceType.API)
+            .order(1)
+            .build();
         stagingPlan.getPlanDefinitionV4().setStatus(PlanStatus.STAGING);
-        var nativePlan = PlanFixtures.aPlanNativeV4().toBuilder().id(NATIVE_PLAN_ID).apiId(NATIVE_API_ID).order(3).build();
-        var newTestPlan = PlanFixtures.aPlanHttpV4().toBuilder().id(NEW_TEST_PLAN_ID).apiId(NEW_TEST_PLAN_API_ID).order(2).build();
+        var nativePlan = PlanFixtures.aPlanNativeV4()
+            .toBuilder()
+            .id(NATIVE_PLAN_ID)
+            .apiId(NATIVE_API_ID)
+            .referenceId(NATIVE_API_ID)
+            .referenceType(GenericPlanEntity.ReferenceType.API)
+            .order(3)
+            .build();
+        var newTestPlan = PlanFixtures.aPlanHttpV4()
+            .toBuilder()
+            .id(NEW_TEST_PLAN_ID)
+            .apiId(NEW_TEST_PLAN_API_ID)
+            .referenceId(NEW_TEST_PLAN_API_ID)
+            .referenceType(GenericPlanEntity.ReferenceType.API)
+            .order(2)
+            .build();
         newTestPlan.getPlanDefinitionV4().setSecurity(null);
         newTestPlan.setPlanMode(PlanMode.PUSH);
         List<Plan> allPlans = List.of(plan, anotherPlan, deprecatedPlan, stagingPlan, nativePlan, newTestPlan);
@@ -313,9 +360,8 @@ class UpdatePlanUseCaseTest {
         );
 
         // When
-        var exception = org.junit.jupiter.api.Assertions.assertThrows(
-            ValidationDomainException.class,
-            () -> updatePlanUseCase.execute(input)
+        var exception = org.junit.jupiter.api.Assertions.assertThrows(ValidationDomainException.class, () ->
+            updatePlanUseCase.execute(input)
         );
 
         // Then
@@ -325,8 +371,9 @@ class UpdatePlanUseCaseTest {
     @Test
     void should_reject_with_invalid_security() {
         // Given
-        when(policyValidationDomainService.validateAndSanitizeConfiguration(any(), any()))
-            .thenThrow(new InvalidDataException("Invalid configuration for policy " + "api-key"));
+        when(policyValidationDomainService.validateAndSanitizeConfiguration(any(), any())).thenThrow(
+            new InvalidDataException("Invalid configuration for policy " + "api-key")
+        );
         var input = new UpdatePlanUseCase.Input(
             planMinimal().toBuilder().securityConfiguration("anything").build(),
             _api -> Collections.singletonList(FlowFixtures.aProxyFlowV4()),
@@ -406,9 +453,8 @@ class UpdatePlanUseCaseTest {
             );
 
             // When
-            var exception = org.junit.jupiter.api.Assertions.assertThrows(
-                ValidationDomainException.class,
-                () -> updatePlanUseCase.execute(input)
+            var exception = org.junit.jupiter.api.Assertions.assertThrows(ValidationDomainException.class, () ->
+                updatePlanUseCase.execute(input)
             );
 
             // Then
@@ -429,9 +475,8 @@ class UpdatePlanUseCaseTest {
             );
 
             // When
-            var exception = org.junit.jupiter.api.Assertions.assertThrows(
-                ValidationDomainException.class,
-                () -> updatePlanUseCase.execute(input)
+            var exception = org.junit.jupiter.api.Assertions.assertThrows(ValidationDomainException.class, () ->
+                updatePlanUseCase.execute(input)
             );
 
             // Then
@@ -445,8 +490,9 @@ class UpdatePlanUseCaseTest {
         @Test
         void should_update_with_flow() {
             // Given
-            when(policyValidationDomainService.validateAndSanitizeConfiguration(any(), any()))
-                .thenAnswer(invocation -> invocation.getArgument(1));
+            when(policyValidationDomainService.validateAndSanitizeConfiguration(any(), any())).thenAnswer(invocation ->
+                invocation.getArgument(1)
+            );
             var input = new UpdatePlanUseCase.Input(
                 planMinimal(),
                 _api -> Collections.singletonList(FlowFixtures.aProxyFlowV4()),
@@ -510,13 +556,43 @@ class UpdatePlanUseCaseTest {
     }
 
     private static @NotNull PlanUpdates planMinimal() {
-        return PlanUpdates
-            .builder()
+        return PlanUpdates.builder()
             .id(PLAN_ID)
             .crossId("my-plan-crossId")
             .name("plan-name-changed")
             .description("plan-description-changed")
             .order(2)
             .build();
+    }
+
+    @Test
+    void should_use_existing_validation_when_null_is_passed() {
+        var existingPlan = PlanFixtures.aPlanHttpV4()
+            .toBuilder()
+            .id(PLAN_ID)
+            .apiId(API_ID)
+            .referenceId(API_ID)
+            .referenceType(GenericPlanEntity.ReferenceType.API)
+            .validation(Plan.PlanValidationType.AUTO)
+            .build();
+        planCrudService.initWith(List.of(existingPlan));
+
+        var updatePlan = planMinimal()
+            .toBuilder()
+            .validation(null) // <- null validation in update request
+            .build();
+
+        var input = new UpdatePlanUseCase.Input(
+            updatePlan,
+            _api -> Collections.singletonList(FlowFixtures.aProxyFlowV4()),
+            API_ID,
+            new AuditInfo("user-id", "user-name", AuditActor.builder().build())
+        );
+        var output = updatePlanUseCase.execute(input);
+        assertThat(output)
+            .isNotNull()
+            .extracting(UpdatePlanUseCase.Output::updated)
+            .extracting(PlanWithFlows::getValidation)
+            .isEqualTo(Plan.PlanValidationType.AUTO);
     }
 }

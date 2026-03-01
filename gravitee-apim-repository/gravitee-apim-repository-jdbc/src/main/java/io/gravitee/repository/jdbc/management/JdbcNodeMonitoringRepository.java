@@ -31,8 +31,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -42,10 +41,9 @@ import org.springframework.stereotype.Repository;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Repository
 public class JdbcNodeMonitoringRepository extends JdbcAbstractRepository<Monitoring> implements NodeMonitoringRepository {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcNodeMonitoringRepository.class);
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -56,8 +54,7 @@ public class JdbcNodeMonitoringRepository extends JdbcAbstractRepository<Monitor
 
     @Override
     protected JdbcObjectMapper<Monitoring> buildOrm() {
-        return JdbcObjectMapper
-            .builder(Monitoring.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(Monitoring.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("node_id", Types.NVARCHAR, String.class)
             .addColumn("type", Types.NVARCHAR, String.class)
@@ -70,90 +67,77 @@ public class JdbcNodeMonitoringRepository extends JdbcAbstractRepository<Monitor
 
     @Override
     public Maybe<Monitoring> findByNodeIdAndType(String nodeId, String type) {
-        LOGGER.debug("JdbcNodeMonitoringRepository.findByNodeIdAndType({}, {})", nodeId, type);
-        return Maybe
-            .<Monitoring>create(emitter -> {
-                try {
-                    List<Monitoring> monitoringEvents = jdbcTemplate.query(
-                        getOrm().getSelectAllSql() + " where node_id = ? and type = ?",
-                        getOrm().getRowMapper(),
-                        nodeId,
-                        type
-                    );
+        log.debug("JdbcNodeMonitoringRepository.findByNodeIdAndType({}, {})", nodeId, type);
+        return Maybe.<Monitoring>create(emitter -> {
+            try {
+                List<Monitoring> monitoringEvents = jdbcTemplate.query(
+                    getOrm().getSelectAllSql() + " where node_id = ? and type = ?",
+                    getOrm().getRowMapper(),
+                    nodeId,
+                    type
+                );
 
-                    if (monitoringEvents.isEmpty()) {
-                        emitter.onComplete();
-                    } else {
-                        emitter.onSuccess(monitoringEvents.get(0));
-                    }
-                } catch (final Exception ex) {
-                    LOGGER.error("Failed to find node monitoring by node_id and type:", ex);
-                    emitter.onError(new TechnicalException("Failed to find node monitoring by node_id and type", ex));
+                if (monitoringEvents.isEmpty()) {
+                    emitter.onComplete();
+                } else {
+                    emitter.onSuccess(monitoringEvents.get(0));
                 }
-            })
-            .subscribeOn(Schedulers.io());
+            } catch (final Exception ex) {
+                log.error("Failed to find node monitoring by node_id and type:", ex);
+                emitter.onError(new TechnicalException("Failed to find node monitoring by node_id and type", ex));
+            }
+        }).subscribeOn(Schedulers.io());
     }
 
     @Override
     public Single<Monitoring> create(Monitoring monitoring) {
-        LOGGER.debug("JdbcNodeMonitoringRepository.create({})", monitoring);
-        return Single
-            .<Monitoring>create(emitter -> {
-                try {
-                    jdbcTemplate.update(getOrm().buildInsertPreparedStatementCreator(monitoring));
+        log.debug("JdbcNodeMonitoringRepository.create({})", monitoring);
+        return Single.<Monitoring>create(emitter -> {
+            try {
+                jdbcTemplate.update(getOrm().buildInsertPreparedStatementCreator(monitoring));
 
-                    findById(monitoring.getId())
-                        .ifPresentOrElse(
-                            emitter::onSuccess,
-                            () -> emitter.onError(new TechnicalException("Failed to create node monitoring"))
-                        );
-                } catch (final Exception ex) {
-                    LOGGER.error("Failed to create node monitoring:", ex);
-                    emitter.onError(new TechnicalException("Failed to create node monitoring", ex));
-                }
-            })
-            .subscribeOn(Schedulers.io());
+                findById(monitoring.getId()).ifPresentOrElse(emitter::onSuccess, () ->
+                    emitter.onError(new TechnicalException("Failed to create node monitoring"))
+                );
+            } catch (final Exception ex) {
+                log.error("Failed to create node monitoring:", ex);
+                emitter.onError(new TechnicalException("Failed to create node monitoring", ex));
+            }
+        }).subscribeOn(Schedulers.io());
     }
 
     public Optional<Monitoring> findById(String id) throws TechnicalException {
-        LOGGER.debug("JdbcNodeMonitoringRepository<{}>.findById({})", getOrm().getTableName(), id);
+        log.debug("JdbcNodeMonitoringRepository<{}>.findById({})", getOrm().getTableName(), id);
         try {
             List<Monitoring> items = jdbcTemplate.query(getOrm().getSelectByIdSql(), getRowMapper(), id);
             return items.stream().findFirst();
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find {} items by id:", getOrm().getTableName(), ex);
+            log.error("Failed to find {} items by id:", getOrm().getTableName(), ex);
             throw new TechnicalException("Failed to find " + getOrm().getTableName() + " items by id", ex);
         }
     }
 
     @Override
     public Single<Monitoring> update(Monitoring monitoring) {
-        LOGGER.debug("JdbcNodeMonitoringRepository.update({})", monitoring);
-        return Single
-            .<Monitoring>create(emitter -> {
-                try {
-                    jdbcTemplate.update(getOrm().buildUpdatePreparedStatementCreator(monitoring, monitoring.getId()));
+        log.debug("JdbcNodeMonitoringRepository.update({})", monitoring);
+        return Single.<Monitoring>create(emitter -> {
+            try {
+                jdbcTemplate.update(getOrm().buildUpdatePreparedStatementCreator(monitoring, monitoring.getId()));
 
-                    findById(monitoring.getId())
-                        .ifPresentOrElse(
-                            emitter::onSuccess,
-                            () ->
-                                emitter.onError(
-                                    new IllegalStateException(String.format("No node monitoring found with id [%s]", monitoring.getId()))
-                                )
-                        );
-                } catch (final Exception ex) {
-                    LOGGER.error("Failed to update node monitoring:", ex);
-                    emitter.onError(new TechnicalException("Failed to update node monitoring", ex));
-                }
-            })
-            .subscribeOn(Schedulers.io());
+                findById(monitoring.getId()).ifPresentOrElse(emitter::onSuccess, () ->
+                    emitter.onError(new IllegalStateException(String.format("No node monitoring found with id [%s]", monitoring.getId())))
+                );
+            } catch (final Exception ex) {
+                log.error("Failed to update node monitoring:", ex);
+                emitter.onError(new TechnicalException("Failed to update node monitoring", ex));
+            }
+        }).subscribeOn(Schedulers.io());
     }
 
     @Override
     public Flowable<Monitoring> findByTypeAndTimeFrame(String type, long from, long to) {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("JdbcNodeMonitoringRepository.findByTypeAndTimeFrame({}, {}, {})", type, from, to);
+        if (log.isDebugEnabled()) {
+            log.debug("JdbcNodeMonitoringRepository.findByTypeAndTimeFrame({}, {}, {})", type, from, to);
         }
 
         final List<Object> args = new ArrayList<>();
@@ -167,25 +151,23 @@ public class JdbcNodeMonitoringRepository extends JdbcAbstractRepository<Monitor
             args.add(new Date(to));
         }
 
-        return Flowable
-            .fromIterable(
-                jdbcTemplate.query(
-                    (Connection cnctn) -> {
-                        PreparedStatement stmt = cnctn.prepareStatement(builder.toString());
-                        int idx = 1;
-                        for (final Object arg : args) {
-                            if (arg instanceof Date) {
-                                final Date date = (Date) arg;
-                                stmt.setTimestamp(idx++, new Timestamp(date.getTime()));
-                            } else {
-                                stmt.setObject(idx++, arg);
-                            }
+        return Flowable.fromIterable(
+            jdbcTemplate.query(
+                (Connection cnctn) -> {
+                    PreparedStatement stmt = cnctn.prepareStatement(builder.toString());
+                    int idx = 1;
+                    for (final Object arg : args) {
+                        if (arg instanceof Date) {
+                            final Date date = (Date) arg;
+                            stmt.setTimestamp(idx++, new Timestamp(date.getTime()));
+                        } else {
+                            stmt.setObject(idx++, arg);
                         }
-                        return stmt;
-                    },
-                    getRowMapper()
-                )
+                    }
+                    return stmt;
+                },
+                getRowMapper()
             )
-            .subscribeOn(Schedulers.io());
+        ).subscribeOn(Schedulers.io());
     }
 }

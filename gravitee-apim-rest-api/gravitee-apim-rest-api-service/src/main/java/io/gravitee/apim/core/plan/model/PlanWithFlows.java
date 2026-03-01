@@ -37,6 +37,7 @@ public class PlanWithFlows extends Plan {
             plan.getId(),
             plan.getDefinitionVersion(),
             plan.getCrossId(),
+            plan.getHrid(),
             plan.getName(),
             plan.getDescription(),
             plan.getCreatedAt(),
@@ -54,11 +55,14 @@ public class PlanWithFlows extends Plan {
             plan.isCommentRequired(),
             plan.getCommentMessage(),
             plan.getGeneralConditions(),
+            plan.getGeneralConditionsHrid(),
             plan.getPlanDefinitionHttpV4(),
             plan.getPlanDefinitionNativeV4(),
             plan.getPlanDefinitionV2(),
             plan.getFederatedPlanDefinition(),
-            plan.getApiType()
+            plan.getApiType(),
+            plan.getReferenceId(),
+            plan.getReferenceType()
         );
         this.flows = flows;
     }

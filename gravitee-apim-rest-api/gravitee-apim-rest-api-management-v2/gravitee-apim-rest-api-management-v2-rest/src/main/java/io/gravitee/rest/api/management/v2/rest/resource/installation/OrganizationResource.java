@@ -23,11 +23,13 @@ import io.gravitee.rest.api.management.v2.rest.mapper.OrganizationMapper;
 import io.gravitee.rest.api.management.v2.rest.model.GraviteeLicense;
 import io.gravitee.rest.api.management.v2.rest.model.Organization;
 import io.gravitee.rest.api.management.v2.rest.resource.AbstractResource;
+import io.gravitee.rest.api.management.v2.rest.resource.analytics.dashboards.DashboardsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.plugin.ApiServicesResource;
 import io.gravitee.rest.api.management.v2.rest.resource.plugin.EndpointsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.plugin.EntrypointsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.plugin.PoliciesResource;
 import io.gravitee.rest.api.management.v2.rest.resource.plugin.ResourcesResource;
+import io.gravitee.rest.api.management.v2.rest.resource.promotions.PromotionsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.ui.ManagementUIResource;
 import io.gravitee.rest.api.model.v4.license.GraviteeLicenseEntity;
 import io.gravitee.rest.api.service.OrganizationService;
@@ -35,7 +37,6 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.container.ResourceContext;
 import jakarta.ws.rs.core.Context;
-import java.util.Objects;
 
 /**
  * @author Florent CHAMFROY (florent.chamfroy at graviteesource.com)
@@ -71,8 +72,7 @@ public class OrganizationResource extends AbstractResource {
         final License license = licenseManager.getOrganizationLicenseOrPlatform(orgId);
 
         return GraviteeLicenseMapper.INSTANCE.map(
-            GraviteeLicenseEntity
-                .builder()
+            GraviteeLicenseEntity.builder()
                 .tier(license.getTier())
                 .packs(license.getPacks())
                 .features(license.getFeatures())
@@ -116,5 +116,15 @@ public class OrganizationResource extends AbstractResource {
     @Path("ui")
     public ManagementUIResource getManagementUIResource() {
         return resourceContext.getResource(ManagementUIResource.class);
+    }
+
+    @Path("promotions")
+    public PromotionsResource getOrganizationPromotionsResource() {
+        return resourceContext.getResource(PromotionsResource.class);
+    }
+
+    @Path("analytics/dashboards")
+    public DashboardsResource getDashboardsResource() {
+        return resourceContext.getResource(DashboardsResource.class);
     }
 }

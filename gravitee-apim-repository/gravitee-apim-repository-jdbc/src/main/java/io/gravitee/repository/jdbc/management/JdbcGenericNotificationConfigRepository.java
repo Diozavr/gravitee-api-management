@@ -27,12 +27,13 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.stereotype.Repository;
@@ -41,12 +42,12 @@ import org.springframework.stereotype.Repository;
  *
  * @author njt
  */
+@CustomLog
 @Repository
 public class JdbcGenericNotificationConfigRepository
     extends JdbcAbstractCrudRepository<GenericNotificationConfig, String>
     implements GenericNotificationConfigRepository {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcGenericNotificationConfigRepository.class);
     private final String GENERIC_NOTIFICATION_CONFIG_HOOKS;
 
     JdbcGenericNotificationConfigRepository(@Value("${management.jdbc.prefix:}") String tablePrefix) {
@@ -56,8 +57,7 @@ public class JdbcGenericNotificationConfigRepository
 
     @Override
     protected JdbcObjectMapper<GenericNotificationConfig> buildOrm() {
-        return JdbcObjectMapper
-            .builder(GenericNotificationConfig.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(GenericNotificationConfig.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("name", Types.NVARCHAR, String.class)
             .addColumn("notifier", Types.NVARCHAR, String.class)
@@ -99,11 +99,11 @@ public class JdbcGenericNotificationConfigRepository
 
     @Override
     public void deleteByConfig(String config) throws TechnicalException {
-        LOGGER.debug("JdbcGenericNotificationConfigRepository.deleteByConfig({})", config);
+        log.debug("JdbcGenericNotificationConfigRepository.deleteByConfig({})", config);
         try {
             jdbcTemplate.update("delete from " + this.tableName + " where config = ?", config);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to delete JdbcGenericNotificationConfigRepository", ex);
+            log.error("Failed to delete JdbcGenericNotificationConfigRepository", ex);
             throw new TechnicalException("Failed to delete JdbcGenericNotificationConfigRepository", ex);
         }
     }
@@ -111,7 +111,7 @@ public class JdbcGenericNotificationConfigRepository
     @Override
     public List<String> deleteByReferenceIdAndReferenceType(String referenceId, NotificationReferenceType referenceType)
         throws TechnicalException {
-        LOGGER.debug("JdbcGenericNotificationConfigRepository.deleteByReferenceIdAndReferenceType({}/{})", referenceType, referenceId);
+        log.debug("JdbcGenericNotificationConfigRepository.deleteByReferenceIdAndReferenceType({}/{})", referenceType, referenceId);
         try {
             final var notificationConfigIds = jdbcTemplate.queryForList(
                 "select id from " + tableName + " where reference_type = ? and reference_id = ?",
@@ -123,10 +123,10 @@ public class JdbcGenericNotificationConfigRepository
             if (!notificationConfigIds.isEmpty()) {
                 jdbcTemplate.update(
                     "delete from " +
-                    GENERIC_NOTIFICATION_CONFIG_HOOKS +
-                    " where id IN (" +
-                    getOrm().buildInClause(notificationConfigIds) +
-                    ")",
+                        GENERIC_NOTIFICATION_CONFIG_HOOKS +
+                        " where id IN (" +
+                        getOrm().buildInClause(notificationConfigIds) +
+                        ")",
                     notificationConfigIds.toArray()
                 );
 
@@ -137,14 +137,14 @@ public class JdbcGenericNotificationConfigRepository
                 );
             }
 
-            LOGGER.debug(
+            log.debug(
                 "JdbcGenericNotificationConfigRepository.deleteByReferenceIdAndReferenceType({}/{}) - Done",
                 referenceType,
                 referenceId
             );
             return notificationConfigIds;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to delete generic notification config for refId: {}/{}", referenceId, referenceType, ex);
+            log.error("Failed to delete generic notification config for refId: {}/{}", referenceId, referenceType, ex);
             throw new TechnicalException("Failed to delete generic notification config by reference", ex);
         }
     }
@@ -200,7 +200,7 @@ public class JdbcGenericNotificationConfigRepository
     @Override
     public List<GenericNotificationConfig> findByReference(NotificationReferenceType referenceType, String referenceId)
         throws TechnicalException {
-        LOGGER.debug("JdbcGenericNotificationConfigRepository.findByUser({}, {})", referenceType, referenceId);
+        log.debug("JdbcGenericNotificationConfigRepository.findByUser({}, {})", referenceType, referenceId);
         try {
             List<GenericNotificationConfig> items = jdbcTemplate.query(
                 getOrm().getSelectAllSql() + " where reference_type = ?" + " and reference_id = ?",
@@ -212,7 +212,7 @@ public class JdbcGenericNotificationConfigRepository
             return items;
         } catch (final Exception ex) {
             final String message = "Failed to find notifications by user";
-            LOGGER.error(message, ex);
+            log.error(message, ex);
             throw new TechnicalException(message, ex);
         }
     }
@@ -256,6 +256,34 @@ public class JdbcGenericNotificationConfigRepository
                     }
                 }
             );
+        }
+    }
+
+    @Override
+    public Set<GenericNotificationConfig> findAll() throws TechnicalException {
+        log.debug("JdbcGenericNotificationConfigRepository.findAll()");
+        try {
+            List<GenericNotificationConfig> configs = jdbcTemplate.query(getOrm().getSelectAllSql(), getOrm().getRowMapper());
+
+            Map<String, GenericNotificationConfig> map = new HashMap<>();
+            for (GenericNotificationConfig cfg : configs) {
+                map.put(cfg.getId(), cfg);
+                cfg.setHooks(new ArrayList<>());
+            }
+
+            jdbcTemplate.query("SELECT id, hook FROM " + GENERIC_NOTIFICATION_CONFIG_HOOKS, rs -> {
+                String id = rs.getString(1);
+                GenericNotificationConfig cfg = map.get(id);
+                if (cfg != null) {
+                    cfg.getHooks().add(rs.getString(2));
+                }
+            });
+
+            log.debug("JdbcGenericNotificationConfigRepository.findAll() - Done and found {} configs", configs.size());
+            return new HashSet<>(configs);
+        } catch (Exception ex) {
+            log.error("Failed to load all GenericNotificationConfigs", ex);
+            throw new TechnicalException("Failed to load all GenericNotificationConfigs", ex);
         }
     }
 }

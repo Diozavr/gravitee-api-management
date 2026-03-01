@@ -197,8 +197,8 @@ public interface MembershipService {
     void transferApiOwnership(
         ExecutionContext executionContext,
         String apiId,
-        MembershipMember member,
-        List<RoleEntity> newPrimaryOwnerRoles
+        MembershipMember newApiOwnerMember,
+        List<RoleEntity> previousApiOwnerNewRoles
     );
 
     void transferApplicationOwnership(
@@ -207,6 +207,16 @@ public interface MembershipService {
         MembershipMember member,
         List<RoleEntity> newPrimaryOwnerRoles
     );
+
+    void transferOwnership(
+        ExecutionContext executionContext,
+        MembershipReferenceType membershipReferenceType,
+        RoleScope roleScope,
+        String itemId,
+        MembershipMember member,
+        List<RoleEntity> newPrimaryOwnerRoles
+    );
+
     MemberEntity updateRoleToMemberOnReference(
         ExecutionContext executionContext,
         MembershipReference reference,
@@ -229,9 +239,10 @@ public interface MembershipService {
         String source
     );
 
-    MemberEntity createNewMembershipForApi(
+    MemberEntity createNewMembership(
         ExecutionContext executionContext,
-        String apiId,
+        MembershipReferenceType referenceType,
+        String referenceId,
         String userId,
         String externalReference,
         String roleName
@@ -254,6 +265,33 @@ public interface MembershipService {
     MemberEntity updateMembershipForIntegration(ExecutionContext executionContext, String integrationId, String memberId, String roleName);
 
     void deleteMemberForIntegration(ExecutionContext executionContext, String integrationId, String memberId);
+
+    void invalidateRoleCacheAndSendCommand(
+        String referenceType,
+        String referenceId,
+        String memberType,
+        String memberId,
+        ExecutionContext executionContext
+    );
+
+    /**
+     * Invalidates the cached permissions for a specific member.
+     * This should be called when a member's permissions are updated.
+     *
+     * @param referenceType the type of the reference (e.g., "API", "APPLICATION")
+     * @param referenceId the ID of the reference
+     * @param memberType the type of the member (e.g., "USER", "GROUP")
+     * @param memberId the ID of the member
+     */
+    void invalidateRoleCache(String referenceType, String referenceId, String memberType, String memberId);
+
+    /**
+     * Invalidates the cached permissions for all members with the given role.
+     * This should be called when a role's permissions are updated.
+     *
+     * @param roleId the ID of the role whose cache entries should be invalidated
+     */
+    void invalidateCacheForRole(String roleId);
 
     class MembershipReference {
 

@@ -3,6 +3,27 @@
 
 This file documents all notable changes to [Gravitee.io API Management 3.x](https://github.com/gravitee-io/helm-charts/tree/master/apim/3.x) Helm Chart. The release numbering uses [semantic versioning](http://semver.org).
 
+### 4.10.0
+- Allow to configure Expression Language whitelist.
+- Improve redis rate limit configuration to allow username for acl configuration [issues/10966](https://github.com/gravitee-io/issues/issues/10966).
+- allow configuration of httpClient proxy excludes [issues/10855](https://github.com/gravitee-io/issues/issues/10855).
+- Kafka Console:
+    - allow to define volumes & volume mounts
+    - allow to define a custom mAPI base URL instead of relying on `organization` and `environment` fields
+    - allow to use secrets from jwt.secret and apim.security.token
+
+### 4.9.0
+
+- Allow customization on federation ingress. BREAKING CHANGE: now the federation ingress will not inherit anymore some management-api ingress definition (annotation, hosts, and tls)
+- Make embedded MongoDB and Elastic database deployable on OpenShift cluster. BREAKING CHANGE: as we upgrade to newer release of mongo and elastic dependencies
+- Add ability to activate newtai
+- BREAKING CHANGE: Disable `logging.file.enabled` by default for OpenShift compatibility
+- BREAKING CHANGE: fix(scraping): Introduce modular utilities for performance and concurrency
+    - Adds a new concurrent rate limiter utility, with a default limit of 3 (configurable).
+    - Offloads scrape() operations to a worker thread pool to protect the Vert.x event loop.
+    - Implements backpressure handling for slow scrapes using `writeQueueFull()` and `drainHandler()`.
+    - Wraps writers with `BufferedWriter` for improved I/O performance.
+    - All enhancements are provided as separate utilities for modularity.
 
 ### 4.8.0
 

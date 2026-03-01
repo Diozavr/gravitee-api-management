@@ -19,6 +19,7 @@ import static io.gravitee.rest.api.portal.rest.resource.ApplicationsOrderParam.A
 import static io.gravitee.rest.api.portal.rest.resource.ApplicationsOrderParam.ApplicationsOrder.NB_SUBSCRIPTIONS_DESC;
 import static java.util.stream.Collectors.groupingBy;
 
+import io.gravitee.common.data.domain.Page;
 import io.gravitee.common.http.MediaType;
 import io.gravitee.repository.management.api.search.Order;
 import io.gravitee.repository.management.model.ApplicationStatus;
@@ -27,13 +28,16 @@ import io.gravitee.rest.api.model.ApplicationEntity;
 import io.gravitee.rest.api.model.NewApplicationEntity;
 import io.gravitee.rest.api.model.SubscriptionStatus;
 import io.gravitee.rest.api.model.application.ApplicationListItem;
+import io.gravitee.rest.api.model.application.ApplicationQuery;
 import io.gravitee.rest.api.model.application.ApplicationSettings;
 import io.gravitee.rest.api.model.application.OAuthClientSettings;
 import io.gravitee.rest.api.model.application.SimpleApplicationSettings;
 import io.gravitee.rest.api.model.application.TlsSettings;
+import io.gravitee.rest.api.model.common.PageableImpl;
 import io.gravitee.rest.api.model.permissions.RolePermission;
 import io.gravitee.rest.api.model.permissions.RolePermissionAction;
 import io.gravitee.rest.api.model.subscription.SubscriptionQuery;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.portal.rest.mapper.ApplicationMapper;
 import io.gravitee.rest.api.portal.rest.mapper.SubscriptionMapper;
 import io.gravitee.rest.api.portal.rest.model.Application;
@@ -117,6 +121,7 @@ public class ApplicationsResource extends AbstractResource<Application, String> 
                 ocs.setApplicationType(oauthAppInput.getApplicationType());
                 ocs.setGrantTypes(oauthAppInput.getGrantTypes());
                 ocs.setRedirectUris(oauthAppInput.getRedirectUris());
+                ocs.setAdditionalClientMetadata(oauthAppInput.getAdditionalClientMetadata());
                 newApplicationEntitySettings.setOauth(ocs);
             }
 
@@ -139,8 +144,7 @@ public class ApplicationsResource extends AbstractResource<Application, String> 
             getAuthenticatedUser()
         );
 
-        return Response
-            .created(this.getLocationHeader(createdApplicationEntity.getId()))
+        return Response.created(this.getLocationHeader(createdApplicationEntity.getId()))
             .entity(applicationMapper.convert(executionContext, createdApplicationEntity, uriInfo))
             .build();
     }
@@ -154,62 +158,64 @@ public class ApplicationsResource extends AbstractResource<Application, String> 
         @QueryParam("order") @DefaultValue("name") final ApplicationsOrderParam applicationsOrderParam
     ) {
         if (!paginationParam.hasPagination()) {
-            return getAllApplications(forSubscription, applicationsOrderParam);
+            return getAllApplications(applicationsOrderParam);
         }
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         Collection<String> applicationIds;
+        Map<String, Map<String, Object>> resPageMetaData = new HashMap<>();
+
         if (forSubscription) {
-            applicationIds =
-                applicationService.findIdsByUserAndPermission(
-                    executionContext,
-                    getAuthenticatedUser(),
-                    applicationsOrderParam.toSortable(),
-                    RolePermission.APPLICATION_SUBSCRIPTION,
-                    RolePermissionAction.CREATE
-                );
+            applicationIds = applicationService.findIdsByUserAndPermission(
+                executionContext,
+                getAuthenticatedUser(),
+                applicationsOrderParam.toSortable(),
+                RolePermission.APPLICATION_SUBSCRIPTION,
+                RolePermissionAction.CREATE
+            );
         } else {
-            applicationIds =
-                applicationService.findIdsByUser(executionContext, getAuthenticatedUser(), applicationsOrderParam.toSortable());
+            ApplicationQuery applicationQuery = ApplicationQuery.builder()
+                .user(getAuthenticatedUser())
+                .status(ApplicationStatus.ACTIVE.name())
+                .build();
+            Page<ApplicationListItem> applicationPage = applicationService.search(
+                executionContext,
+                applicationQuery,
+                applicationsOrderParam.toSortable(),
+                new PageableImpl(paginationParam.getPage(), paginationParam.getSize())
+            );
+
+            applicationIds = applicationPage.getContent().stream().map(ApplicationListItem::getId).collect(Collectors.toList());
+
+            Map<String, Object> totalOnly = new HashMap<>();
+            totalOnly.put("totalElements", applicationPage.getTotalElements());
+            resPageMetaData.put("paginateMetaData", totalOnly);
         }
 
         if (NB_SUBSCRIPTIONS_DESC.equals(applicationsOrderParam.getValue()) || NB_SUBSCRIPTIONS.equals(applicationsOrderParam.getValue())) {
-            applicationIds =
-                filteringService.getApplicationsOrderByNumberOfSubscriptions(
-                    applicationIds,
-                    applicationsOrderParam.getValue().isAsc ? Order.ASC : Order.DESC
-                );
+            applicationIds = filteringService.getApplicationsOrderByNumberOfSubscriptions(
+                applicationIds,
+                applicationsOrderParam.getValue().isAsc ? Order.ASC : Order.DESC
+            );
         }
 
-        return createListResponse(executionContext, applicationIds, paginationParam);
+        return createListResponse(executionContext, applicationIds, paginationParam, resPageMetaData);
     }
 
-    private Response getAllApplications(boolean forSubscription, ApplicationsOrderParam applicationsOrderParam) {
+    private Response getAllApplications(ApplicationsOrderParam applicationsOrderParam) {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
-        Collection<ApplicationListItem> applications;
-        if (forSubscription) {
-            applications =
-                applicationService.findByUserAndPermission(
-                    executionContext,
-                    getAuthenticatedUser(),
-                    applicationsOrderParam.toSortable(),
-                    RolePermission.APPLICATION_SUBSCRIPTION,
-                    RolePermissionAction.CREATE
-                );
-        } else {
-            applications = applicationService.findByUser(executionContext, getAuthenticatedUser(), applicationsOrderParam.toSortable());
-        }
+        Collection<ApplicationListItem> applications = applicationService.findByUser(
+            executionContext,
+            getAuthenticatedUser(),
+            applicationsOrderParam.toSortable()
+        );
         List<Application> applicationList = applications
             .stream()
             .map(applicationListItem -> applicationMapper.convert(executionContext, applicationListItem, uriInfo, false))
             .collect(Collectors.toList());
 
-        return Response
-            .ok(
-                new DataResponse()
-                    .data(applicationList)
-                    .links(this.computePaginatedLinks(1, applicationList.size(), applicationList.size()))
-            )
-            .build();
+        return Response.ok(
+            new DataResponse().data(applicationList).links(this.computePaginatedLinks(1, applicationList.size(), applicationList.size()))
+        ).build();
     }
 
     @Override
@@ -229,6 +235,8 @@ public class ApplicationsResource extends AbstractResource<Application, String> 
         SubscriptionQuery query = new SubscriptionQuery();
         query.setApplications(subscriptionApplicationIds);
         query.setStatuses(Arrays.asList(SubscriptionStatus.ACCEPTED));
+        //TODO: API Product subscriptions should be included in the subscriber count on list
+        query.setReferenceType(GenericPlanEntity.ReferenceType.API);
 
         final Map<String, List<Subscription>> subscriptions = subscriptionService
             .search(executionContext, query)

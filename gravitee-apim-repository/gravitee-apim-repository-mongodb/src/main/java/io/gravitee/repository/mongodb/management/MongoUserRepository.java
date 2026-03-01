@@ -30,8 +30,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -40,10 +39,10 @@ import org.springframework.stereotype.Component;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class MongoUserRepository implements UserRepository {
 
-    private final Logger logger = LoggerFactory.getLogger(getClass());
     private final Pattern escaper = Pattern.compile("([^a-zA-Z0-9])");
 
     private final UserMongoRepository internalUserRepo;
@@ -59,7 +58,7 @@ public class MongoUserRepository implements UserRepository {
 
     @Override
     public Optional<User> findBySource(String source, String sourceId, String organizationId) {
-        logger.debug("Find user by name source[{}] user[{}]", source, sourceId);
+        log.debug("Find user by name source[{}] user[{}]", source, sourceId);
 
         if (sourceId == null) {
             return Optional.empty();
@@ -79,7 +78,7 @@ public class MongoUserRepository implements UserRepository {
 
     @Override
     public List<User> findByEmail(String email, String organizationId) {
-        logger.debug("Find user by email [{}]", email);
+        log.debug("Find user by email [{}]", email);
 
         if (email == null) {
             return List.of();
@@ -97,71 +96,75 @@ public class MongoUserRepository implements UserRepository {
 
     @Override
     public Set<User> findByIds(Collection<String> ids) {
-        logger.debug("Find user by identifiers user [{}]", ids);
+        log.debug("Find user by identifiers user [{}]", ids);
 
         Set<UserMongo> usersMongo = internalUserRepo.findByIds(ids);
         Set<User> users = mapper.mapUsers(usersMongo);
 
-        logger.debug("Find user by identifiers user [{}] - Done", ids);
+        log.debug("Find user by identifiers user [{}] - Done", ids);
         return users;
     }
 
     @Override
     public Page<User> search(UserCriteria criteria, Pageable pageable) throws TechnicalException {
-        logger.debug("search users");
+        log.debug("search users");
 
         var users = internalUserRepo.search(criteria, pageable).map(mapper::map);
 
-        logger.debug("search users - Done");
+        log.debug("search users - Done");
         return users;
     }
 
     @Override
     public List<String> deleteByOrganizationId(String organizationId) throws TechnicalException {
-        logger.debug("Delete users by organizationId: {}", organizationId);
+        log.debug("Delete users by organizationId: {}", organizationId);
         try {
             final var users = internalUserRepo.deleteByOrganizationId(organizationId).stream().map(UserMongo::getId).toList();
-            logger.debug("Delete users by organizationId: {} - Done", organizationId);
+            log.debug("Delete users by organizationId: {} - Done", organizationId);
             return users;
         } catch (Exception ex) {
-            logger.error("Failed to delete users by organizationId: {}", organizationId, ex);
+            log.error("Failed to delete users by organizationId: {}", organizationId, ex);
             throw new TechnicalException("Failed to delete users by organizationId");
         }
     }
 
     @Override
     public Optional<User> findById(String id) throws TechnicalException {
-        logger.debug("Find user by ID [{}]", id);
+        log.debug("Find user by ID [{}]", id);
 
         UserMongo user = internalUserRepo.findById(id).orElse(null);
         User res = mapper.map(user);
 
-        logger.debug("Find user by ID [{}] - Done", id);
+        log.debug("Find user by ID [{}] - Done", id);
         return Optional.ofNullable(res);
     }
 
     @Override
     public User create(User user) throws TechnicalException {
-        logger.debug("Create user [{}]", user.getId());
+        log.debug("Create user [{}]", user.getId());
+        try {
+            UserMongo userMongo = mapper.map(user);
 
-        UserMongo userMongo = mapper.map(user);
+            if (isEncryptionEnabled) {
+                if (userMongo.getSourceId() != null) {
+                    userMongo.setSourceId(userMongo.getSourceId().toLowerCase());
+                }
+                if (userMongo.getEmail() != null) {
+                    userMongo.setEmail(userMongo.getEmail().toLowerCase());
+                }
+            }
 
-        if (isEncryptionEnabled) {
-            if (userMongo.getSourceId() != null) {
-                userMongo.setSourceId(userMongo.getSourceId().toLowerCase());
-            }
-            if (userMongo.getEmail() != null) {
-                userMongo.setEmail(userMongo.getEmail().toLowerCase());
-            }
+            UserMongo createdUserMongo = internalUserRepo.insert(userMongo);
+
+            User res = mapper.map(createdUserMongo);
+
+            log.debug("Create user [{}] - Done", user.getId());
+
+            return res;
+        } catch (Exception ex) {
+            log.error("Failed to create user with id: {}", user.getId(), ex);
+            throw new TechnicalException("Failed to create user");
         }
-
-        UserMongo createdUserMongo = internalUserRepo.insert(userMongo);
-
-        User res = mapper.map(createdUserMongo);
-
-        logger.debug("Create user [{}] - Done", user.getId());
-
-        return res;
     }
 
     @Override
@@ -199,12 +202,16 @@ public class MongoUserRepository implements UserRepository {
 
     @Override
     public void delete(String id) throws TechnicalException {
-        logger.debug("Delete user [{}]", id);
+        log.debug("Delete user [{}]", id);
         internalUserRepo.deleteById(id);
     }
 
     @Override
     public Set<User> findAll() throws TechnicalException {
-        return internalUserRepo.findAll().stream().map(userMongo -> mapper.map(userMongo)).collect(Collectors.toSet());
+        return internalUserRepo
+            .findAll()
+            .stream()
+            .map(userMongo -> mapper.map(userMongo))
+            .collect(Collectors.toSet());
     }
 }

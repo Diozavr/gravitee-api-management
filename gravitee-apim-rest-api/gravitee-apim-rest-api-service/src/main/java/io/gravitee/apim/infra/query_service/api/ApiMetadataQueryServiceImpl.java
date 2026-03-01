@@ -28,11 +28,11 @@ import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import java.util.*;
 import java.util.function.Function;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
-@Slf4j
+@CustomLog
 @Service
 public class ApiMetadataQueryServiceImpl implements ApiMetadataQueryService {
 
@@ -49,8 +49,7 @@ public class ApiMetadataQueryServiceImpl implements ApiMetadataQueryService {
                 .findByReferenceTypeAndReferenceId(MetadataReferenceType.ENVIRONMENT, environmentId)
                 .stream()
                 .map(m ->
-                    ApiMetadata
-                        .builder()
+                    ApiMetadata.builder()
                         .key(m.getKey())
                         .defaultValue(m.getValue())
                         .name(m.getName())
@@ -62,22 +61,18 @@ public class ApiMetadataQueryServiceImpl implements ApiMetadataQueryService {
             metadataRepository
                 .findByReferenceTypeAndReferenceId(MetadataReferenceType.API, apiId)
                 .forEach(m ->
-                    apiMetadata.compute(
-                        m.getKey(),
-                        (key, existing) ->
-                            Optional
-                                .ofNullable(existing)
-                                .map(value -> value.toBuilder().apiId(apiId).name(m.getName()).value(m.getValue()).build())
-                                .orElse(
-                                    ApiMetadata
-                                        .builder()
-                                        .apiId(m.getReferenceId())
-                                        .key(m.getKey())
-                                        .value(m.getValue())
-                                        .name(m.getName())
-                                        .format(Metadata.MetadataFormat.valueOf(m.getFormat().name()))
-                                        .build()
-                                )
+                    apiMetadata.compute(m.getKey(), (key, existing) ->
+                        Optional.ofNullable(existing)
+                            .map(value -> value.toBuilder().apiId(apiId).name(m.getName()).value(m.getValue()).build())
+                            .orElse(
+                                ApiMetadata.builder()
+                                    .apiId(m.getReferenceId())
+                                    .key(m.getKey())
+                                    .value(m.getValue())
+                                    .name(m.getName())
+                                    .format(Metadata.MetadataFormat.valueOf(m.getFormat().name()))
+                                    .build()
+                            )
                     )
                 );
 

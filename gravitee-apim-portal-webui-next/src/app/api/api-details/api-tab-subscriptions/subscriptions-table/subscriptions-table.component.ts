@@ -25,6 +25,7 @@ import { catchError, map, Observable, startWith, switchMap } from 'rxjs';
 import { of } from 'rxjs/internal/observable/of';
 
 import { LoaderComponent } from '../../../../../components/loader/loader.component';
+import { MobileClassDirective } from '../../../../../directives/mobile-class.directive';
 import { Subscription, SubscriptionStatusEnum } from '../../../../../entities/subscription/subscription';
 import { SubscriptionMetadata } from '../../../../../entities/subscription/subscriptions-response';
 import { CapitalizeFirstPipe } from '../../../../../pipe/capitalize-first.pipe';
@@ -44,6 +45,7 @@ import { SubscriptionService } from '../../../../../services/subscription.servic
     MatOption,
     RouterLink,
     LoaderComponent,
+    MobileClassDirective,
   ],
   providers: [CapitalizeFirstPipe],
   styleUrl: './subscriptions-table.component.scss',
@@ -75,7 +77,7 @@ export class SubscriptionsTableComponent implements OnInit {
   private loadSubscriptions$(): Observable<Subscription[]> {
     return this.subscriptionsStatus.valueChanges.pipe(
       startWith(this.subscriptionsStatus.value),
-      switchMap(status => this.subscriptionService.list({ apiId: this.apiId, statuses: status, size: -1 })),
+      switchMap(status => this.subscriptionService.list({ apiIds: [this.apiId], statuses: status, size: -1 })),
       map(response => {
         if (this.subscriptionsStatus.value?.length === 0 && response.data.length) {
           this.subscriptionsExist = true;

@@ -15,6 +15,7 @@
  */
 package io.gravitee.rest.api.service.impl.configuration.dictionary;
 
+import static io.gravitee.repository.management.model.Dictionary.AuditEvent.DICTIONARY_UPDATED;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.any;
@@ -78,30 +79,27 @@ public class DictionaryServiceImpl_StartTest {
             dictionaryRepository.update(
                 argThat(arg -> arg.getId().equals(dictionaryInDb.getId()) && arg.getState().equals(updatedDictionary.getState()))
             )
-        )
-            .thenReturn(updatedDictionary);
+        ).thenReturn(updatedDictionary);
 
         DictionaryEntity dictionaryEntityStarted = dictionaryService.start(GraviteeContext.getExecutionContext(), dictionaryInDb.getId());
         assertNotNull(dictionaryEntityStarted);
 
         verify(dictionaryRepository, times(1)).update(any(Dictionary.class));
-        verify(eventService, times(1))
-            .createDynamicDictionaryEvent(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(Collections.singleton(ENVIRONMENT_ID)),
-                eq(ORGANIZATION_ID),
-                eq(EventType.START_DICTIONARY),
-                eq("dictionaryId")
-            );
-        verify(auditService, times(1))
-            .createAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                any(),
-                eq(Dictionary.AuditEvent.DICTIONARY_UPDATED),
-                eq(updatedDictionary.getUpdatedAt()),
-                any(),
-                any()
-            );
+        verify(eventService, times(1)).createDynamicDictionaryEvent(
+            eq(GraviteeContext.getExecutionContext()),
+            eq(Collections.singleton(ENVIRONMENT_ID)),
+            eq(ORGANIZATION_ID),
+            eq(EventType.START_DICTIONARY),
+            eq("dictionaryId")
+        );
+        verify(auditService, times(1)).createAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getEvent().equals(DICTIONARY_UPDATED) &&
+                    auditLogData.getCreatedAt().equals(updatedDictionary.getUpdatedAt())
+            )
+        );
     }
 
     @Test(expected = DictionaryNotFoundException.class)
@@ -117,23 +115,17 @@ public class DictionaryServiceImpl_StartTest {
         dictionaryService.start(GraviteeContext.getExecutionContext(), dictionaryInDb.getId());
 
         verify(dictionaryRepository, never()).update(any(Dictionary.class));
-        verify(eventService, never())
-            .createDynamicDictionaryEvent(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(Collections.singleton(ENVIRONMENT_ID)),
-                eq(ORGANIZATION_ID),
-                eq(EventType.START_DICTIONARY),
-                eq("dictionaryId")
-            );
-        verify(auditService, never())
-            .createAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                any(),
-                eq(Dictionary.AuditEvent.DICTIONARY_UPDATED),
-                any(),
-                any(),
-                any()
-            );
+        verify(eventService, never()).createDynamicDictionaryEvent(
+            eq(GraviteeContext.getExecutionContext()),
+            eq(Collections.singleton(ENVIRONMENT_ID)),
+            eq(ORGANIZATION_ID),
+            eq(EventType.START_DICTIONARY),
+            eq("dictionaryId")
+        );
+        verify(auditService, never()).createAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getEvent().equals(DICTIONARY_UPDATED))
+        );
     }
 
     @Test(expected = DictionaryNotFoundException.class)

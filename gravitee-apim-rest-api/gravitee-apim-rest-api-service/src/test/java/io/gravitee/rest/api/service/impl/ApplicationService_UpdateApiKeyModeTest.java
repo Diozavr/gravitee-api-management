@@ -89,6 +89,9 @@ public class ApplicationService_UpdateApiKeyModeTest {
     @Mock
     private ParameterService parameterService;
 
+    @Mock
+    private io.gravitee.apim.core.application_certificate.crud_service.ClientCertificateCrudService clientCertificateCrudService;
+
     @Test
     public void shouldUpdate() throws TechnicalException {
         // 'Shared API KEY' setting is enabled, allows to update to SHARED mode
@@ -98,8 +101,7 @@ public class ApplicationService_UpdateApiKeyModeTest {
                 Key.PLAN_SECURITY_APIKEY_SHARED_ALLOWED,
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         Application applicationToUpdate = new Application();
         applicationToUpdate.setId(APPLICATION_ID);
@@ -128,7 +130,11 @@ public class ApplicationService_UpdateApiKeyModeTest {
         );
 
         verify(applicationRepository).update(argThat(application -> application.getApiKeyMode() == ApiKeyMode.SHARED));
-        verify(auditService).createApplicationAuditLog(any(), eq(APPLICATION_ID), any(), eq(APPLICATION_UPDATED), any(), any(), any());
+        verify(auditService).createApplicationAuditLog(
+            any(),
+            argThat(auditLogData -> auditLogData.getEvent().equals(APPLICATION_UPDATED)),
+            eq(APPLICATION_ID)
+        );
 
         assertNotNull(applicationEntity);
         assertEquals(APPLICATION_NAME, applicationEntity.getName());
@@ -168,8 +174,7 @@ public class ApplicationService_UpdateApiKeyModeTest {
                 Key.PLAN_SECURITY_APIKEY_SHARED_ALLOWED,
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(false);
+        ).thenReturn(false);
 
         // existing application has a UNSPECIFIED api key mode
         when(existingApplication.getApiKeyMode()).thenReturn(ApiKeyMode.UNSPECIFIED);

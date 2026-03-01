@@ -16,6 +16,7 @@
 package io.gravitee.rest.api.service.v4.impl;
 
 import static io.gravitee.repository.management.model.Api.AuditEvent.API_UPDATED;
+import static java.util.Collections.emptyMap;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.gravitee.definition.model.DefinitionVersion;
@@ -29,8 +30,7 @@ import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import io.gravitee.rest.api.service.v4.ApiNotificationService;
 import io.gravitee.rest.api.service.v4.ApiTagService;
-import java.util.Collections;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -39,7 +39,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class ApiTagServiceImpl implements ApiTagService {
 
     private final ApiRepository apiRepository;
@@ -79,14 +79,25 @@ public class ApiTagServiceImpl implements ApiTagService {
     }
 
     private void removeTag(ExecutionContext executionContext, Api api, String tagId) throws TechnicalManagementException {
+        // Skip if API is federated or has origin Kubernetes
+        if (
+            api.getDefinitionVersion() == DefinitionVersion.FEDERATED ||
+            api.getDefinitionVersion() == DefinitionVersion.FEDERATED_AGENT ||
+            Api.ORIGIN_KUBERNETES.equals(api.getOrigin())
+        ) {
+            log.debug("Skipping tag removal for API: {}", api.getId());
+            return;
+        }
+        log.debug(
+            "Starting tag removal process for API: {}, tag: '{}', definition version: {}",
+            api.getId(),
+            tagId,
+            api.getDefinitionVersion()
+        );
         try {
             Api previousApi = new Api(api);
             Api updated = null;
-            if (
-                api.getDefinitionVersion() != DefinitionVersion.V4 &&
-                api.getDefinitionVersion() != DefinitionVersion.FEDERATED &&
-                api.getDefinitionVersion() != DefinitionVersion.FEDERATED_AGENT
-            ) {
+            if (api.getDefinitionVersion() != DefinitionVersion.V4) {
                 final io.gravitee.definition.model.Api apiDefinition = objectMapper.readValue(
                     api.getDefinition(),
                     io.gravitee.definition.model.Api.class
@@ -96,26 +107,30 @@ public class ApiTagServiceImpl implements ApiTagService {
                     updated = apiRepository.update(api);
                 }
             } else {
-                final io.gravitee.definition.model.v4.Api apiDefinition = objectMapper.readValue(
+                final io.gravitee.definition.model.v4.AbstractApi apiDefinition = objectMapper.readValue(
                     api.getDefinition(),
-                    io.gravitee.definition.model.v4.Api.class
+                    io.gravitee.definition.model.v4.AbstractApi.class
                 );
                 if (apiDefinition.getTags().remove(tagId)) {
                     api.setDefinition(objectMapper.writeValueAsString(apiDefinition));
                     updated = apiRepository.update(api);
+                    log.debug("API '{}' updated successfully after removing tag '{}'", api.getId(), tagId);
                 }
             }
             if (updated != null) {
                 apiNotificationService.triggerUpdateNotification(executionContext, api);
                 auditService.createApiAuditLog(
                     executionContext,
-                    api.getId(),
-                    Collections.emptyMap(),
-                    API_UPDATED,
-                    api.getUpdatedAt(),
-                    previousApi,
-                    updated
+                    AuditService.AuditLogData.builder()
+                        .properties(emptyMap())
+                        .event(API_UPDATED)
+                        .createdAt(api.getUpdatedAt())
+                        .oldValue(previousApi)
+                        .newValue(updated)
+                        .build(),
+                    api.getId()
                 );
+                log.debug("API update notification and audit log triggered for API: {}", api.getId());
             }
         } catch (Exception ex) {
             throw new TechnicalManagementException("An error occurs while removing tag from API: " + api.getId(), ex);

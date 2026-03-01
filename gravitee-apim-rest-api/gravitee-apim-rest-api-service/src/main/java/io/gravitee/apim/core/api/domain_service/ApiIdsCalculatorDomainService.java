@@ -35,9 +35,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 @DomainService
 public class ApiIdsCalculatorDomainService {
 
@@ -58,16 +58,15 @@ public class ApiIdsCalculatorDomainService {
     public ImportDefinition recalculateApiDefinitionIds(String environmentId, ImportDefinition toRecalculate) {
         Objects.requireNonNull(toRecalculate.getApiExport(), "Api is mandatory");
         if (toRecalculate.getApiExport().getId() == null || toRecalculate.getApiExport().getId().isEmpty()) {
-            findApiByEnvironmentAndCrossId(environmentId, toRecalculate.getApiExport().getCrossId())
-                .ifPresentOrElse(
-                    api -> recalculateIdsFromCrossId(environmentId, toRecalculate, api),
-                    () -> recalculateIdsFromDefinitionIds(environmentId, toRecalculate)
-                );
+            findApiByEnvironmentAndCrossId(environmentId, toRecalculate.getApiExport().getCrossId()).ifPresentOrElse(
+                api -> recalculateIdsFromCrossId(toRecalculate, api),
+                () -> recalculateIdsFromDefinitionIds(environmentId, toRecalculate)
+            );
         }
         return generateEmptyIdsForPlansAndPages(toRecalculate);
     }
 
-    private void recalculateIdsFromCrossId(String environmentId, ImportDefinition toRecalculate, Api api) {
+    private void recalculateIdsFromCrossId(ImportDefinition toRecalculate, Api api) {
         log.debug("Recalculating page and plans ids from cross id {} for api {}", api.getCrossId(), api.getId());
         toRecalculate.getApiExport().setId(api.getId());
         Map<String, String> newPageIdsByOldPageIds = recalculatePageIdsFromCrossIds(api, toRecalculate.getPages());
@@ -123,7 +122,10 @@ public class ApiIdsCalculatorDomainService {
     }
 
     private void updatePagesHierarchy(List<Page> pages, String parentId, String newParentId) {
-        pages.stream().filter(page -> isChildPageOf(page, parentId)).forEach(child -> child.setParentId(newParentId));
+        pages
+            .stream()
+            .filter(page -> isChildPageOf(page, parentId))
+            .forEach(child -> child.setParentId(newParentId));
     }
 
     private boolean isChildPageOf(Page page, String parentPageId) {

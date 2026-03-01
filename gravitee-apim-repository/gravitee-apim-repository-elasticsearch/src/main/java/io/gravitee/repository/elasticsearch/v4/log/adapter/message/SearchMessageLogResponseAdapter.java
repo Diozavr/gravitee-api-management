@@ -26,9 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 public class SearchMessageLogResponseAdapter {
 
     private SearchMessageLogResponseAdapter() {}
@@ -78,8 +78,7 @@ public class SearchMessageLogResponseAdapter {
     }
 
     private static AggregatedMessageLog aggregateFromEntrypointOnly(JsonNode entrypoint) {
-        return AggregatedMessageLog
-            .builder()
+        return AggregatedMessageLog.builder()
             .apiId(asTextOrNull(entrypoint.get("api-id")))
             .requestId(asTextOrNull(entrypoint.get("request-id")))
             .timestamp(asTextOrNull(entrypoint.get("@timestamp")))
@@ -91,8 +90,7 @@ public class SearchMessageLogResponseAdapter {
     }
 
     private static AggregatedMessageLog aggregateFromEndpointOnly(JsonNode endpoint) {
-        return AggregatedMessageLog
-            .builder()
+        return AggregatedMessageLog.builder()
             .apiId(asTextOrNull(endpoint.get("api-id")))
             .requestId(asTextOrNull(endpoint.get("request-id")))
             .timestamp(asTextOrNull(endpoint.get("@timestamp")))
@@ -110,8 +108,7 @@ public class SearchMessageLogResponseAdapter {
             timestamp = asTextOrNull(endpoint.get("@timestamp"));
         }
 
-        return AggregatedMessageLog
-            .builder()
+        return AggregatedMessageLog.builder()
             .apiId(asTextOrNull(entrypoint.get("api-id")))
             .requestId(asTextOrNull(entrypoint.get("request-id")))
             .timestamp(timestamp)
@@ -123,36 +120,41 @@ public class SearchMessageLogResponseAdapter {
             .build();
     }
 
-    private static AggregatedMessageLog.Message adaptMessage(JsonNode json) {
+    static AggregatedMessageLog.Message adaptMessage(JsonNode json) {
         var messageJson = json.get("message");
-        var isError = messageJson.get("isError") != null && messageJson.get("isError").asBoolean();
-        var headersJson = messageJson.get("headers");
-        var messageHeaders = null != headersJson
-            ? headersJson
-                .properties()
-                .stream()
-                .collect(
-                    Collectors.toMap(
-                        Map.Entry::getKey,
-                        entry -> StreamSupport.stream(entry.getValue().spliterator(), false).map(JsonNodeUtils::asTextOrNull).toList()
+
+        if (messageJson != null) {
+            var isError = messageJson.get("isError") != null && messageJson.get("isError").asBoolean();
+            var headersJson = messageJson.get("headers");
+            var messageHeaders = null != headersJson
+                ? headersJson
+                    .properties()
+                    .stream()
+                    .collect(
+                        Collectors.toMap(Map.Entry::getKey, entry ->
+                            StreamSupport.stream(entry.getValue().spliterator(), false).map(JsonNodeUtils::asTextOrNull).toList()
+                        )
                     )
-                )
-            : null;
+                : null;
 
-        var metadataJson = messageJson.get("metadata");
-        var messageMetadata = null != metadataJson
-            ? metadataJson.properties().stream().collect(Collectors.toMap(Map.Entry::getKey, value -> asTextOrNull(value.getValue())))
-            : null;
+            var metadataJson = messageJson.get("metadata");
+            var messageMetadata = null != metadataJson
+                ? metadataJson.properties().stream().collect(Collectors.toMap(Map.Entry::getKey, value -> asTextOrNull(value.getValue())))
+                : null;
+            return AggregatedMessageLog.Message.builder()
+                .connectorId(asTextOrNull(json.get("connector-id")))
+                .timestamp(asTextOrNull(json.get("@timestamp")))
+                .id(asTextOrNull(messageJson.get("id")))
+                .isError(isError)
+                .payload(asTextOrNull(messageJson.get("payload")))
+                .headers(messageHeaders)
+                .metadata(messageMetadata)
+                .build();
+        }
 
-        return AggregatedMessageLog.Message
-            .builder()
+        return AggregatedMessageLog.Message.builder()
             .connectorId(asTextOrNull(json.get("connector-id")))
             .timestamp(asTextOrNull(json.get("@timestamp")))
-            .id(asTextOrNull(messageJson.get("id")))
-            .isError(isError)
-            .payload(asTextOrNull(messageJson.get("payload")))
-            .headers(messageHeaders)
-            .metadata(messageMetadata)
             .build();
     }
 }

@@ -57,7 +57,10 @@ public class PolicyValidationDomainServiceLegacyWrapper implements PolicyValidat
                 if (apiType.equals(ApiType.PROXY)) {
                     if (
                         policy.getFlowPhaseCompatibility(ApiProtocolType.HTTP_PROXY) == null ||
-                        policy.getFlowPhaseCompatibility(ApiProtocolType.HTTP_PROXY).stream().noneMatch(p -> p.name().equals(phase.name()))
+                        policy
+                            .getFlowPhaseCompatibility(ApiProtocolType.HTTP_PROXY)
+                            .stream()
+                            .noneMatch(p -> p.name().equals(phase.name()))
                     ) {
                         policyNamesUnexpected.add(policy.getName());
                     }
@@ -67,6 +70,17 @@ public class PolicyValidationDomainServiceLegacyWrapper implements PolicyValidat
                         policy.getFlowPhaseCompatibility(ApiProtocolType.HTTP_MESSAGE) == null ||
                         policy
                             .getFlowPhaseCompatibility(ApiProtocolType.HTTP_MESSAGE)
+                            .stream()
+                            .noneMatch(p -> p.name().equals(phase.name()))
+                    ) {
+                        policyNamesUnexpected.add(policy.getName());
+                    }
+                }
+                if (apiType.equals(ApiType.NATIVE)) {
+                    if (
+                        policy.getFlowPhaseCompatibility(ApiProtocolType.NATIVE_KAFKA) == null ||
+                        policy
+                            .getFlowPhaseCompatibility(ApiProtocolType.NATIVE_KAFKA)
                             .stream()
                             .noneMatch(p -> p.name().equals(phase.name()))
                     ) {

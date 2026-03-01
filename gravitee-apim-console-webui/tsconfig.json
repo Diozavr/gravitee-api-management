@@ -1,12 +1,21 @@
 {
+  "extends": "../tsconfig.base.json",
   "compileOnSave": false,
   "compilerOptions": {
     "baseUrl": "./",
     "paths": {
-      "path": ["./node_modules/path-browserify"]
+      /* Gravitee libraries */
+      "@gravitee/gravitee-markdown": ["../gravitee-apim-webui-libs/gravitee-markdown/src/public-api.ts"],
+      "@gravitee/gravitee-dashboard": ["../gravitee-apim-webui-libs/gravitee-dashboard/src/public-api.ts"],
+      "@gravitee/gravitee-kafka-explorer": ["../gravitee-apim-webui-libs/gravitee-kafka-explorer/src/public-api.ts"],
+      "@gravitee/gravitee-kafka-explorer/testing": ["../gravitee-apim-webui-libs/gravitee-kafka-explorer/src/testing-public-api.ts"],
+      /* Used in v2 API markdown editor */
+      "@toast-ui/editor": ["../node_modules/@toast-ui/editor/types/index.d.ts"],
+      "@toast-ui/editor/types/ui": ["../node_modules/@toast-ui/editor/types/ui.d.ts"],
+
+      "path": ["../node_modules/path-browserify"],
+      "url": ["../node_modules/url"]
     },
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
     "downlevelIteration": true,
     "forceConsistentCasingInFileNames": true,
     "incremental": true,
@@ -15,23 +24,21 @@
     "noImplicitOverride": true,
     "outDir": "dist-tsc",
     "removeComments": false,
-    "skipLibCheck": true,
-    "sourceMap": true,
-    "target": "ES2022",
     "types": ["jest", "angular-mocks", "node"],
     "resolveJsonModule": true,
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "allowJs": true,
     "checkJs": false,
     "module": "es2020",
-    "importHelpers": true,
     "useDefineForClassFields": false
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,
     "strictInputAccessModifiers": true,
-    "strictTemplates": true
-  }
+    "strictTemplates": true,
+    "preserveSymlinks": true
+  },
+  "include": ["src/**/*"]
 }

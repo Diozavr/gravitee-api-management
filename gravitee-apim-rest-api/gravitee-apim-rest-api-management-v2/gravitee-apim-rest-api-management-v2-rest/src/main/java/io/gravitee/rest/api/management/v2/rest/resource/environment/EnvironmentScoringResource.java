@@ -36,9 +36,9 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.container.ResourceContext;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.UriInfo;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 public class EnvironmentScoringResource extends AbstractResource {
 
     @Context
@@ -71,7 +71,13 @@ public class EnvironmentScoringResource extends AbstractResource {
         var page = result.reports();
         var totalElements = page.getTotalElements();
         return new EnvironmentApisScoringResponse()
-            .data(page.getContent().stream().map(r -> ScoringReportMapper.INSTANCE.map(r, uriInfo)).toList())
+            .data(
+                page
+                    .getContent()
+                    .stream()
+                    .map(r -> ScoringReportMapper.INSTANCE.map(r, uriInfo))
+                    .toList()
+            )
             .pagination(PaginationInfo.computePaginationInfo(totalElements, Math.toIntExact(page.getPageElements()), paginationParam))
             .links(computePaginationLinks(totalElements, paginationParam));
     }

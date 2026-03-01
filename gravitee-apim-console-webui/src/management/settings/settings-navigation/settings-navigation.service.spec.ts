@@ -65,7 +65,7 @@ describe('SettingsNavigationService', () => {
           'User Fields',
           'Groups',
           'Notification settings',
-        ].map((name) =>
+        ].map(name =>
           expect.objectContaining({
             name,
             routerLink: expect.not.stringContaining('./') && expect.stringContaining(`${envId}/settings`),
@@ -81,5 +81,43 @@ describe('SettingsNavigationService', () => {
     const menuSearchItems = service.getSettingsNavigationSearchItems(envId);
 
     expect(menuSearchItems).toStrictEqual([]);
+  });
+
+  it('should include Documentation when permission is granted', () => {
+    init();
+    const menuSearchItems = service.getSettingsNavigationSearchItems(envId);
+    const documentationItem = menuSearchItems.find(i => i.name === 'Documentation');
+    expect(documentationItem).toBeDefined();
+    expect(documentationItem?.routerLink).toContain(`${envId}/settings/documentation`);
+  });
+
+  it('should exclude Documentation when permission is not granted', () => {
+    init(false);
+    const menuSearchItems = service.getSettingsNavigationSearchItems(envId);
+    const documentationItem = menuSearchItems.find(i => i.name === 'Documentation');
+    expect(documentationItem).toBeUndefined();
+  });
+
+  it('should exclude Documentation when permission is not granted', () => {
+    // Mock hasAnyMatching to deny only "environment-documentation-r"
+    TestBed.configureTestingModule({
+      imports: [GioTestingModule],
+      providers: [
+        {
+          provide: GioPermissionService,
+          useValue: {
+            hasAnyMatching: (permissions: string[]) => !permissions.includes('environment-documentation-r'),
+          },
+        },
+      ],
+    });
+    service = TestBed.inject(SettingsNavigationService);
+    const menuSearchItems = service.getSettingsNavigationSearchItems(envId);
+    // Documentation should NOT exist
+    const documentationItem = menuSearchItems.find(i => i.name === 'Documentation');
+    expect(documentationItem).toBeUndefined();
+    // Now we expect 16 items (17-1)
+    expect(menuSearchItems).toHaveLength(16);
+    expect(menuSearchItems.some(i => i.routerLink.includes('/documentation'))).toBe(false);
   });
 });

@@ -22,8 +22,10 @@ import io.gravitee.gateway.dictionary.DictionaryManager;
 import io.gravitee.gateway.env.GatewayConfiguration;
 import io.gravitee.gateway.env.RequestTimeoutConfiguration;
 import io.gravitee.gateway.handlers.accesspoint.manager.AccessPointManager;
+import io.gravitee.gateway.handlers.api.registry.ApiProductRegistry;
 import io.gravitee.gateway.opentelemetry.TracingContext;
 import io.gravitee.gateway.platform.organization.manager.OrganizationManager;
+import io.gravitee.gateway.reactive.core.connection.ConnectionDrainManager;
 import io.gravitee.gateway.reactive.core.context.DefaultDeploymentContext;
 import io.gravitee.gateway.reactive.core.v4.endpoint.DefaultEndpointManager;
 import io.gravitee.gateway.reactive.debug.handlers.api.DebugV4ApiReactor;
@@ -31,6 +33,7 @@ import io.gravitee.gateway.reactive.debug.policy.DebugPolicyChainFactory;
 import io.gravitee.gateway.reactive.debug.policy.DebugV4PolicyChainFactory;
 import io.gravitee.gateway.reactive.handlers.api.flow.FlowChainFactory;
 import io.gravitee.gateway.reactive.handlers.api.v4.Api;
+import io.gravitee.gateway.reactive.handlers.api.v4.ApiProductPlanPolicyManagerFactory;
 import io.gravitee.gateway.reactive.handlers.api.v4.DefaultApiReactorFactory;
 import io.gravitee.gateway.reactive.platform.organization.policy.OrganizationPolicyChainFactoryManager;
 import io.gravitee.gateway.reactive.policy.HttpPolicyChainFactory;
@@ -39,6 +42,7 @@ import io.gravitee.gateway.reactive.policy.PolicyManager;
 import io.gravitee.gateway.reactive.reactor.ApiReactor;
 import io.gravitee.gateway.reactor.handler.HttpAcceptorFactory;
 import io.gravitee.gateway.report.ReporterService;
+import io.gravitee.gateway.report.guard.LogGuardService;
 import io.gravitee.gateway.resource.ResourceLifecycleManager;
 import io.gravitee.node.api.Node;
 import io.gravitee.node.api.configuration.Configuration;
@@ -50,6 +54,8 @@ import java.util.List;
 import org.springframework.context.ApplicationContext;
 
 public class DebugV4ApiReactorHandlerFactory extends DefaultApiReactorFactory {
+
+    private final ApiProductRegistry apiProductRegistry;
 
     public DebugV4ApiReactorHandlerFactory(
         final ApplicationContext applicationContext,
@@ -68,7 +74,9 @@ public class DebugV4ApiReactorHandlerFactory extends DefaultApiReactorFactory {
         final EventManager eventManager,
         final HttpAcceptorFactory httpAcceptorFactory,
         final GatewayConfiguration gatewayConfiguration,
-        final DictionaryManager dictionaryManager
+        final DictionaryManager dictionaryManager,
+        final ConnectionDrainManager connectionDrainManager,
+        final ApiProductRegistry apiProductRegistry
     ) {
         super(
             applicationContext,
@@ -90,8 +98,11 @@ public class DebugV4ApiReactorHandlerFactory extends DefaultApiReactorFactory {
             null,
             null,
             gatewayConfiguration,
-            dictionaryManager
+            dictionaryManager,
+            null,
+            connectionDrainManager
         );
+        this.apiProductRegistry = apiProductRegistry;
     }
 
     @Override
@@ -104,6 +115,7 @@ public class DebugV4ApiReactorHandlerFactory extends DefaultApiReactorFactory {
         return new DebugV4PolicyChainFactory(api.getId(), policyManager, false);
     }
 
+    @Override
     protected ApiReactor<Api> buildApiReactor(
         Api api,
         DefaultDeploymentContext deploymentContext,
@@ -113,8 +125,14 @@ public class DebugV4ApiReactorHandlerFactory extends DefaultApiReactorFactory {
         DefaultEndpointManager endpointManager,
         ResourceLifecycleManager resourceLifecycleManager,
         FlowChainFactory flowChainFactory,
-        io.gravitee.gateway.reactive.handlers.api.v4.flow.FlowChainFactory v4FlowChainFactory
+        io.gravitee.gateway.reactive.handlers.api.v4.flow.FlowChainFactory v4FlowChainFactory,
+        LogGuardService logGuardService,
+        ConnectionDrainManager connectionDrainManager
     ) {
+        ApiProductPlanPolicyManagerFactory apiProductPlanPolicyManagerFactory = null;
+        if (apiProductRegistry != null) {
+            apiProductPlanPolicyManagerFactory = createApiProductPlanPolicyManagerFactory(componentProvider, apiProductRegistry);
+        }
         return new DebugV4ApiReactor(
             api,
             deploymentContext,
@@ -135,7 +153,10 @@ public class DebugV4ApiReactorHandlerFactory extends DefaultApiReactorFactory {
             accessPointManager,
             eventManager,
             httpAcceptorFactory,
-            TracingContext.noop()
+            TracingContext.noop(),
+            logGuardService,
+            apiProductRegistry,
+            apiProductPlanPolicyManagerFactory
         );
     }
 }

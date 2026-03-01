@@ -18,17 +18,24 @@ package io.gravitee.apim.core.documentation.use_case;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import fixtures.core.model.PlanFixtures;
 import inmemory.ApiCrudServiceInMemory;
 import inmemory.PageCrudServiceInMemory;
 import inmemory.PageQueryServiceInMemory;
+import inmemory.PageSourceDomainServiceInMemory;
 import inmemory.PlanQueryServiceInMemory;
 import io.gravitee.apim.core.api.exception.ApiNotFoundException;
 import io.gravitee.apim.core.api.model.Api;
 import io.gravitee.apim.core.documentation.domain_service.ApiDocumentationDomainService;
 import io.gravitee.apim.core.documentation.model.Page;
+import io.gravitee.apim.core.documentation.model.PageSource;
 import io.gravitee.apim.core.exception.ValidationDomainException;
+import io.gravitee.apim.infra.domain_service.documentation.PageSourceDomainServiceImpl;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.service.exceptions.PageNotFoundException;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -41,6 +48,7 @@ class ApiGetDocumentationPageUseCaseTest {
     private final PageQueryServiceInMemory pageQueryService = new PageQueryServiceInMemory();
     private final ApiCrudServiceInMemory apiCrudService = new ApiCrudServiceInMemory();
     private final PlanQueryServiceInMemory planQueryService = new PlanQueryServiceInMemory();
+    private final PageSourceDomainServiceInMemory pageSourceDomainService = new PageSourceDomainServiceInMemory();
     private ApiGetDocumentationPageUseCase useCase;
     private static final String API_ID = "api-id";
     private static final String PAGE_ID = "page-id";
@@ -48,7 +56,12 @@ class ApiGetDocumentationPageUseCaseTest {
     @BeforeEach
     void setUp() {
         ApiDocumentationDomainService apiDocumentationDomainService = new ApiDocumentationDomainService(pageQueryService, planQueryService);
-        useCase = new ApiGetDocumentationPageUseCase(apiDocumentationDomainService, apiCrudService, pageCrudService);
+        useCase = new ApiGetDocumentationPageUseCase(
+            apiDocumentationDomainService,
+            pageSourceDomainService,
+            apiCrudService,
+            pageCrudService
+        );
     }
 
     @AfterEach
@@ -82,11 +95,11 @@ class ApiGetDocumentationPageUseCaseTest {
 
         planQueryService.initWith(
             List.of(
-                PlanFixtures
-                    .aPlanHttpV4()
+                PlanFixtures.aPlanHttpV4()
                     .toBuilder()
                     .id("plan-1")
-                    .apiId(API_ID)
+                    .referenceId(API_ID)
+                    .referenceType(GenericPlanEntity.ReferenceType.API)
                     .generalConditions(PAGE_ID)
                     .build()
                     .setPlanStatus(PlanStatus.PUBLISHED)
@@ -146,8 +159,9 @@ class ApiGetDocumentationPageUseCaseTest {
         initPageServices(
             List.of(Page.builder().id("page#1").referenceType(Page.ReferenceType.API).referenceId(API_ID).type(Page.Type.MARKDOWN).build())
         );
-        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, PAGE_ID)))
-            .isInstanceOf(ApiNotFoundException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, PAGE_ID))).isInstanceOf(
+            ApiNotFoundException.class
+        );
     }
 
     @Test
@@ -155,8 +169,7 @@ class ApiGetDocumentationPageUseCaseTest {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id(PAGE_ID)
                     .referenceType(Page.ReferenceType.API)
                     .referenceId(API_ID + "-bad")
@@ -164,8 +177,9 @@ class ApiGetDocumentationPageUseCaseTest {
                     .build()
             )
         );
-        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, PAGE_ID)))
-            .isInstanceOf(ValidationDomainException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, PAGE_ID))).isInstanceOf(
+            ValidationDomainException.class
+        );
     }
 
     @Test
@@ -173,8 +187,7 @@ class ApiGetDocumentationPageUseCaseTest {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id(PAGE_ID)
                     .referenceType(Page.ReferenceType.ENVIRONMENT)
                     .referenceId(API_ID)
@@ -182,23 +195,40 @@ class ApiGetDocumentationPageUseCaseTest {
                     .build()
             )
         );
-        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, PAGE_ID)))
-            .isInstanceOf(ValidationDomainException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, PAGE_ID))).isInstanceOf(
+            ValidationDomainException.class
+        );
     }
 
     @Test
     void should_throw_error_if_page_does_not_exist() {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(List.of());
-        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, PAGE_ID)))
-            .isInstanceOf(PageNotFoundException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, PAGE_ID))).isInstanceOf(
+            PageNotFoundException.class
+        );
     }
 
     @Test
     void should_throw_error_if_page_id_is_root() {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
-        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, "ROOT")))
-            .isInstanceOf(PageNotFoundException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, "ROOT"))).isInstanceOf(
+            PageNotFoundException.class
+        );
+    }
+
+    @Test
+    void should_return_fetched_page_without_sensitive_data() throws JsonProcessingException {
+        initApiServices(List.of(Api.builder().id(API_ID).build()));
+        initPageServices(
+            List.of(Page.builder().id(PAGE_ID).referenceType(Page.ReferenceType.API).referenceId(API_ID).source(githubSource()).build())
+        );
+        var res = useCase.execute(new ApiGetDocumentationPageUseCase.Input(API_ID, PAGE_ID)).page();
+        String configuration = res.getSource().getConfiguration();
+        JsonNode jsonConfiguration = new ObjectMapper().readTree(configuration);
+        assertThat(jsonConfiguration.get("personalAccessToken").textValue()).isEqualTo(
+            PageSourceDomainServiceImpl.SENSITIVE_DATA_REPLACEMENT
+        );
     }
 
     private void initPageServices(List<Page> pages) {
@@ -208,5 +238,18 @@ class ApiGetDocumentationPageUseCaseTest {
 
     private void initApiServices(List<Api> apis) {
         apiCrudService.initWith(apis);
+    }
+
+    private static PageSource githubSource() {
+        return PageSource.builder()
+            .type("github-fetcher")
+            .configuration(
+                """
+                {
+                   "personalAccessToken" : I'm a sensitive data
+                }
+                """
+            )
+            .build();
     }
 }

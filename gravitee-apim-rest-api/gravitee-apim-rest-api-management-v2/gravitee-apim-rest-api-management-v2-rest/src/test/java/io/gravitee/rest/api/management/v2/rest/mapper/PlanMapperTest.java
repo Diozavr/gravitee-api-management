@@ -50,7 +50,7 @@ public class PlanMapperTest {
         final var plan = planMapper.map(planEntity);
 
         assertEquals(planEntity.getId(), plan.getId());
-        assertEquals(planEntity.getApiId(), plan.getApiId());
+        assertEquals(planEntity.getReferenceId(), plan.getApiId());
         assertEquals(planEntity.getName(), plan.getName());
         assertEquals(planEntity.getDescription(), plan.getDescription());
         assertEquals(planEntity.getOrder(), (int) plan.getOrder());
@@ -77,7 +77,7 @@ public class PlanMapperTest {
         final var plan = planMapper.map(planEntity);
 
         assertEquals(planEntity.getId(), plan.getId());
-        assertEquals(planEntity.getApiId(), plan.getApiId());
+        assertEquals(planEntity.getReferenceId(), plan.getApiId());
         assertEquals(planEntity.getName(), plan.getName());
         assertEquals(planEntity.getDescription(), plan.getDescription());
         assertEquals(planEntity.getOrder(), (int) plan.getOrder());
@@ -210,8 +210,9 @@ public class PlanMapperTest {
         final var createPlanV2 = PlanFixtures.aCreatePlanV2();
         // PlanSecurityType is a common enum containing MTLS plan. Such security type is not supported by V2, so it is ignored during mapping
         createPlanV2.security(
-            new io.gravitee.rest.api.management.v2.rest.model.PlanSecurity()
-                .type(io.gravitee.rest.api.management.v2.rest.model.PlanSecurityType.MTLS)
+            new io.gravitee.rest.api.management.v2.rest.model.PlanSecurity().type(
+                io.gravitee.rest.api.management.v2.rest.model.PlanSecurityType.MTLS
+            )
         );
         final var createPlanEntity = planMapper.map(createPlanV2);
 
@@ -307,8 +308,7 @@ public class PlanMapperTest {
             soft
                 .assertThat(target.getFederatedPlanDefinition())
                 .isEqualTo(
-                    FederatedPlan
-                        .builder()
+                    FederatedPlan.builder()
                         .status(PlanStatus.PUBLISHED)
                         .mode(PlanMode.STANDARD)
                         .security(PlanSecurity.builder().configuration("{\"nice\": \"config\"}").build())
@@ -401,8 +401,7 @@ public class PlanMapperTest {
 
             assertEquals(definitionJsonNode, otherJsonNode);
         } catch (Exception e) {
-            AssertionFailureBuilder
-                .assertionFailure()
+            AssertionFailureBuilder.assertionFailure()
                 .message("Definitions are not equals")
                 .expected(String.valueOf(definition))
                 .actual(String.valueOf(other))

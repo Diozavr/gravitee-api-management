@@ -23,10 +23,14 @@ import io.gravitee.gateway.dictionary.DictionaryManager;
 import io.gravitee.gateway.env.GatewayConfiguration;
 import io.gravitee.gateway.handlers.accesspoint.manager.AccessPointManager;
 import io.gravitee.gateway.handlers.api.manager.ApiManager;
+import io.gravitee.gateway.handlers.api.manager.ApiProductManager;
+import io.gravitee.gateway.handlers.api.registry.ApiProductPlanDefinitionCache;
+import io.gravitee.gateway.handlers.api.registry.ApiProductRegistry;
 import io.gravitee.gateway.handlers.sharedpolicygroup.manager.SharedPolicyGroupManager;
 import io.gravitee.gateway.platform.organization.manager.OrganizationManager;
 import io.gravitee.gateway.reactive.reactor.v4.subscription.SubscriptionDispatcher;
 import io.gravitee.gateway.services.sync.healthcheck.SyncProcessProbe;
+import io.gravitee.gateway.services.sync.process.common.deployer.ApiProductSubscriptionRefresher;
 import io.gravitee.gateway.services.sync.process.common.deployer.DeployerFactory;
 import io.gravitee.gateway.services.sync.process.common.mapper.SubscriptionMapper;
 import io.gravitee.gateway.services.sync.process.deployer.NoOpSubscriptionDispatcher;
@@ -57,6 +61,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
@@ -127,8 +132,8 @@ public class SyncConfiguration {
     }
 
     @Bean
-    public SubscriptionMapper subscriptionMapper(ObjectMapper objectMapper) {
-        return new SubscriptionMapper(objectMapper);
+    public SubscriptionMapper subscriptionMapper(ObjectMapper objectMapper, ApiProductRegistry apiProductRegistry) {
+        return new SubscriptionMapper(objectMapper, apiProductRegistry);
     }
 
     @Bean
@@ -150,13 +155,22 @@ public class SyncConfiguration {
     }
 
     @Bean
-    public PlanAppender planAppender(ObjectMapper objectMapper, PlanRepository planRepository, GatewayConfiguration gatewayConfiguration) {
-        return new PlanAppender(objectMapper, planRepository, gatewayConfiguration);
+    public PlanAppender planAppender(
+        ObjectMapper objectMapper,
+        PlanRepository planRepository,
+        GatewayConfiguration gatewayConfiguration,
+        @Autowired(required = false) ApiProductRegistry apiProductRegistry
+    ) {
+        return new PlanAppender(objectMapper, planRepository, gatewayConfiguration, apiProductRegistry);
     }
 
     @Bean
-    public SubscriptionAppender subscriptionAppender(SubscriptionRepository subscriptionRepository, SubscriptionMapper subscriptionMapper) {
-        return new SubscriptionAppender(subscriptionRepository, subscriptionMapper);
+    public SubscriptionAppender subscriptionAppender(
+        SubscriptionRepository subscriptionRepository,
+        SubscriptionMapper subscriptionMapper,
+        ApiProductRegistry apiProductRegistry
+    ) {
+        return new SubscriptionAppender(subscriptionRepository, subscriptionMapper, apiProductRegistry);
     }
 
     @Bean
@@ -188,7 +202,10 @@ public class SyncConfiguration {
         LicenseFactory licenseFactory,
         AccessPointManager accessPointManager,
         SharedPolicyGroupManager sharedPolicyGroupManager,
-        DistributedSyncService distributedSyncService
+        DistributedSyncService distributedSyncService,
+        ApiProductManager apiProductManager,
+        @Autowired(required = false) ApiProductPlanDefinitionCache apiProductPlanDefinitionCache,
+        @Autowired(required = false) ApiProductSubscriptionRefresher apiProductSubscriptionRefresher
     ) {
         Supplier<SubscriptionDispatcher> subscriptionDispatcherSupplier = provideSubscriptionDispatcher(subscriptionDispatcher);
         return new DeployerFactory(
@@ -208,7 +225,10 @@ public class SyncConfiguration {
             licenseFactory,
             accessPointManager,
             sharedPolicyGroupManager,
-            distributedSyncService
+            distributedSyncService,
+            apiProductManager,
+            apiProductPlanDefinitionCache,
+            apiProductSubscriptionRefresher
         );
     }
 

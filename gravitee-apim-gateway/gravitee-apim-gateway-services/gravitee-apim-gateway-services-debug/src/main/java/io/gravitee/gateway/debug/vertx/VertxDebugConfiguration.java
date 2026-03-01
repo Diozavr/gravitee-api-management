@@ -17,6 +17,7 @@ package io.gravitee.gateway.debug.vertx;
 
 import io.gravitee.gateway.reactive.debug.vertx.DebugHttpProtocolVerticle;
 import io.gravitee.gateway.reactive.reactor.HttpRequestDispatcher;
+import io.gravitee.node.api.certificate.CRLLoaderFactoryRegistry;
 import io.gravitee.node.api.certificate.KeyStoreLoaderFactoryRegistry;
 import io.gravitee.node.api.certificate.KeyStoreLoaderOptions;
 import io.gravitee.node.api.certificate.TrustStoreLoaderOptions;
@@ -41,8 +42,7 @@ public class VertxDebugConfiguration {
         Environment environment
     ) {
         final VertxHttpServerOptions options = debugServer.options();
-        return VertxDebugHttpClientConfiguration
-            .builder()
+        return VertxDebugHttpClientConfiguration.builder()
             .port(options.getPort())
             .host(options.getHost())
             .secured(options.isSecured())
@@ -58,9 +58,10 @@ public class VertxDebugConfiguration {
     public VertxHttpServerFactory debugHttpServerFactory(
         Vertx vertx,
         KeyStoreLoaderFactoryRegistry<KeyStoreLoaderOptions> keyStoreLoaderFactoryRegistry,
-        KeyStoreLoaderFactoryRegistry<TrustStoreLoaderOptions> truststoreLoaderFactoryRegistry
+        KeyStoreLoaderFactoryRegistry<TrustStoreLoaderOptions> truststoreLoaderFactoryRegistry,
+        CRLLoaderFactoryRegistry crlLoaderFactoryRegistry
     ) {
-        return new VertxHttpServerFactory(vertx, keyStoreLoaderFactoryRegistry, truststoreLoaderFactoryRegistry);
+        return new VertxHttpServerFactory(vertx, keyStoreLoaderFactoryRegistry, truststoreLoaderFactoryRegistry, crlLoaderFactoryRegistry);
     }
 
     @Bean("debugServer")

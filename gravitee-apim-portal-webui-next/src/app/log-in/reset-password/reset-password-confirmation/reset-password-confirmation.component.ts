@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 The Gravitee team (http://gravitee.io)
+ * Copyright (C) 2024 The Gravitee team (http://gravitee.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
+import { MobileClassDirective } from '../../../../directives/mobile-class.directive';
 import { ResetPasswordService } from '../../../../services/reset-password.service';
 import { TokenService } from '../../../../services/token.service';
 import { passwordMatchValidator } from '../../../validators/password-match.validator';
@@ -52,6 +53,7 @@ export interface UserFromToken {
     MatButton,
     RouterLink,
     MatAnchor,
+    MobileClassDirective,
   ],
   templateUrl: './reset-password-confirmation.component.html',
   styleUrl: './reset-password-confirmation.component.scss',
@@ -72,7 +74,7 @@ export class ResetPasswordConfirmationComponent implements OnInit {
     { validators: passwordMatchValidator('password', 'confirmedPassword') },
   );
   error = signal(200);
-  private destroyRef = inject(DestroyRef);
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor(
     private route: ActivatedRoute,

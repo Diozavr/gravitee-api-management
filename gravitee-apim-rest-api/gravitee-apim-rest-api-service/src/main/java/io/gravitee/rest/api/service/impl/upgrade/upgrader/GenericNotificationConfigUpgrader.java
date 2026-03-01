@@ -36,12 +36,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class GenericNotificationConfigUpgrader implements Upgrader {
 
     EnvironmentRepository environmentRepository;
@@ -67,9 +67,10 @@ public class GenericNotificationConfigUpgrader implements Upgrader {
         List<GenericNotificationConfig> genericNotificationConfigs = genericNotificationConfigRepository
             .findAll()
             .stream()
-            .filter(genericNotificationConfig ->
-                genericNotificationConfig.getReferenceType().equals(NotificationReferenceType.PORTAL) &&
-                genericNotificationConfig.getReferenceId().equals("DEFAULT")
+            .filter(
+                genericNotificationConfig ->
+                    genericNotificationConfig.getReferenceType().equals(NotificationReferenceType.PORTAL) &&
+                    genericNotificationConfig.getReferenceId().equals("DEFAULT")
             )
             .flatMap(
                 (Function<GenericNotificationConfig, Stream<GenericNotificationConfig>>) genericNotificationConfig ->
@@ -106,8 +107,7 @@ public class GenericNotificationConfigUpgrader implements Upgrader {
     }
 
     private GenericNotificationConfig duplicate(Environment environment, GenericNotificationConfig genericNotificationConfig) {
-        return GenericNotificationConfig
-            .builder()
+        return GenericNotificationConfig.builder()
             .id(UuidString.generateRandom())
             .config(genericNotificationConfig.getConfig())
             .notifier(genericNotificationConfig.getNotifier())

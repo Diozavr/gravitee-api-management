@@ -33,7 +33,7 @@ public class ResponseTimeRangeQueryAdapter {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static final List<String> FILTERED_ENTRYPOINT_TYPES = List.of("http-post", "http-get", "http-proxy");
+    private static final List<String> FILTERED_ENTRYPOINT_TYPES = List.of("http-post", "http-get", "http-proxy", "llm-proxy");
     private static final String TIME_FIELD = "@timestamp";
     private static final String RESPONSE_TIME_FIELD = "gateway-response-time-ms";
     private static final String REDUCE_OPERATION = "avg";
@@ -59,14 +59,16 @@ public class ResponseTimeRangeQueryAdapter {
             .map(json ->
                 Map.of(json.get("key_as_string").asText(), json.get(REDUCE_OPERATION + "_" + RESPONSE_TIME_FIELD).get("value").asDouble())
             )
-            .reduce(
-                new LinkedHashMap<>(),
-                (acc, b) -> {
-                    acc.putAll(b);
-                    return acc;
-                }
-            );
-        double avg = averageConnectionDuration.values().stream().mapToDouble(e -> e).average().orElse(0);
+            .reduce(new LinkedHashMap<>(), (acc, b) -> {
+                acc.putAll(b);
+                return acc;
+            });
+        double avg = averageConnectionDuration
+            .values()
+            .stream()
+            .mapToDouble(e -> e)
+            .average()
+            .orElse(0);
 
         return Maybe.just(buildFromSource(averageConnectionDuration, avg));
     }
@@ -91,11 +93,7 @@ public class ResponseTimeRangeQueryAdapter {
         var from = query.from().minus(query.interval());
         var to = query.to().plus(query.interval());
 
-        ObjectNode timestamp = json()
-            .put("from", from.toEpochMilli())
-            .put("to", to.toEpochMilli())
-            .put("include_lower", true)
-            .put("include_upper", true);
+        ObjectNode timestamp = json().put("gte", from.toEpochMilli()).put("lte", to.toEpochMilli());
         JsonNode rangeFilter = json().set("range", json().set(TIME_FIELD, timestamp));
 
         var bool = json().set("filter", array().add(filterQuery).add(rangeFilter));
@@ -117,11 +115,10 @@ public class ResponseTimeRangeQueryAdapter {
             );
         String script =
             "if (doc.containsKey('gateway-response-time-ms')) { return doc.get('gateway-response-time-ms').value; } else if (doc.containsKey('response-time')) { return doc.get('response-time').value; }";
-        ObjectNode agg = json()
-            .set(
-                REDUCE_OPERATION + "_" + RESPONSE_TIME_FIELD,
-                json().set(REDUCE_OPERATION, json().set("script", json().put("lang", "painless").put("source", script)))
-            );
+        ObjectNode agg = json().set(
+            REDUCE_OPERATION + "_" + RESPONSE_TIME_FIELD,
+            json().set(REDUCE_OPERATION, json().set("script", json().put("lang", "painless").put("source", script)))
+        );
 
         return json().set(HISTOGRAM, json().<ObjectNode>set("date_histogram", histogram).set("aggregations", agg));
     }

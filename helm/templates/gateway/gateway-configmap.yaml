@@ -24,6 +24,89 @@ metadata:
 data:
   {{- if not (include "gateway.externalConfig" .)}}
   gravitee.yml: |
+    # Distributed Sync Setup
+    {{- if .Values.gateway.cluster }}
+    cluster:
+      type: {{ .Values.gateway.cluster.type }}
+      {{- if eq .Values.gateway.cluster.type "hazelcast" }}
+      hazelcast:
+        config-path: {{ .Values.gateway.cluster.hazelcast.configPath }}
+      {{- end }}
+    {{- end }}
+
+    {{- if .Values.gateway.distributedSync }}
+    distributed-sync:
+      type: {{ .Values.gateway.distributedSync.type }}
+      {{- if eq .Values.gateway.distributedSync.type "redis" }}
+      redis:
+        host: {{ .Values.gateway.distributedSync.redis.host }}
+        port: {{ .Values.gateway.distributedSync.redis.port }}
+        {{- if .Values.gateway.distributedSync.redis.username }}
+        username: {{ .Values.gateway.distributedSync.redis.username }}
+        {{- end }}
+        {{- if .Values.gateway.distributedSync.redis.password }}
+        password: {{ .Values.gateway.distributedSync.redis.password }}
+        {{- end }}
+        {{- if .Values.gateway.distributedSync.redis.ssl }}
+        ssl: {{ .Values.gateway.distributedSync.redis.ssl }}
+        hostnameVerificationAlgorithm: {{ .Values.gateway.distributedSync.redis.hostnameVerificationAlgorithm | default "NONE" }}
+        trustAll: {{ if hasKey .Values.gateway.distributedSync.redis "trustAll" }}{{ .Values.gateway.distributedSync.redis.trustAll }}{{else}}true{{end}}
+        tlsProtocols: {{ .Values.gateway.distributedSync.redis.tlsProtocols | default "TLSv1.2" }}
+        {{- if .Values.gateway.distributedSync.redis.tlsCiphers }}
+        tlsCiphers: {{ .Values.gateway.distributedSync.redis.tlsCiphers | quote }}
+        {{- end }}
+        alpn: {{ .Values.gateway.distributedSync.redis.alpn | default false }}
+        openssl: {{ .Values.gateway.distributedSync.redis.openssl | default false }}
+        {{- end }}
+        {{- if .Values.gateway.distributedSync.redis.keystore }}
+        keystore:
+          type: {{ .Values.gateway.distributedSync.redis.keystore.type | default "pem" }}
+          path: {{ .Values.gateway.distributedSync.redis.keystore.path | default "${gravitee.home}/security/redis-keystore.jks" }}
+          password: {{ required "The password required to access the keystore must be provided (i.e.kubernetes://{{NAMESPACE}}/secrets/{{SECRET_NAME}}/{{KEY_NAME}})" .Values.gateway.distributedSync.redis.keystore.password }}
+          {{- if .Values.gateway.distributedSync.redis.keystore.keyPassword }}
+          keyPassword: {{ .Values.gateway.distributedSync.redis.keystore.keyPassword | quote }}
+          {{- end }}
+          {{- if .Values.gateway.distributedSync.redis.keystore.alias }}
+          alias: {{ .Values.gateway.distributedSync.redis.keystore.alias }}
+          {{- end }}
+          {{- if and ( eq .Values.gateway.distributedSync.redis.keystore.type "pem" ) ( empty .Values.gateway.distributedSync.redis.keystore.certificates ) }}
+            {{ fail "When configuring Gravitee to use a keystore for mTLS, your certificates must be provided!" }}
+          {{- end }}
+          certificates:
+            {{- range .Values.gateway.distributedSync.redis.keystore.certificates }}
+            - cert: {{ .cert }}
+              key: {{ .key }}
+            {{- end }}
+        {{- end}}
+        {{- if .Values.gateway.distributedSync.redis.truststore }}
+        truststore:
+          type: {{ .Values.gateway.distributedSync.redis.truststore.type | default "pem" }}
+          path: {{ .Values.gateway.distributedSync.redis.truststore.path | default "${gravitee.home}/security/redis-truststore.jks" }}
+          password: {{ required "The password required to access the truststore must be provided! (i.e.kubernetes://{{NAMESPACE}}/secrets/{{SECRET_NAME}}/{{KEY_NAME}})" .Values.gateway.distributedSync.redis.truststore.password }}
+          {{- if .Values.gateway.distributedSync.redis.truststore.alias }}
+          alias: {{ .Values.gateway.distributedSync.redis.truststore.alias }}
+          {{- end }}
+        {{- end }}
+        {{- if (not (empty ((.Values.gateway.distributedSync.redis.sentinel).nodes))) }}
+        sentinel:
+          master: {{ .Values.gateway.distributedSync.redis.sentinel.master }}
+          nodes:
+            {{- range .Values.gateway.distributedSync.redis.sentinel.nodes }}
+            - host: {{ .host }}
+              port: {{ .port }}
+            {{- end }}
+        {{- end }}
+        {{- if (not (empty (.Values.gateway.distributedSync.redis.operation))) }}
+        operation:
+          timeout: {{ .Values.gateway.distributedSync.redis.operation.timeout | default "10" }}
+        {{- end }}
+        {{- if (not (empty (.Values.gateway.distributedSync.redis.tcp))) }}
+        tcp:
+          connectTimeout: {{ .Values.gateway.distributedSync.redis.tcp.connectTimeout | default "5000" }}
+          idleTimeout: {{ .Values.gateway.distributedSync.redis.tcp.idleTimeout | default "0" }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
     # Gateway HTTP server
     {{- if .Values.gateway.servers }}
     # add support for multi-servers (both http and tcp)
@@ -96,6 +179,13 @@ data:
             path: {{ $server.ssl.truststore.path }}
             password: {{ $server.ssl.truststore.password | quote }}
           {{- end }}
+          {{- if $server.ssl.crl }}
+          crl:
+            path: {{ $server.ssl.crl.path }}
+            {{- if hasKey $server.ssl.crl "watch" }}
+            watch: {{ $server.ssl.crl.watch }}
+            {{- end }}
+          {{- end }}
           {{- if $server.ssl.sni }}
           sni: true
           {{- end }}
@@ -132,7 +222,7 @@ data:
           {{- if .Values.gateway.ssl.keystore.path }}
           path: {{ .Values.gateway.ssl.keystore.path }}
           {{- end }}
-          {{- if .Values.gateway.ssl.keystore.password }}
+          {{- if hasKey .Values.gateway.ssl.keystore "password" }}
           password: {{ .Values.gateway.ssl.keystore.password | quote }}
           {{- end }}
           {{- if .Values.gateway.ssl.keystore.kubernetes }}
@@ -152,6 +242,13 @@ data:
           {{- end }}
           path: {{ .Values.gateway.ssl.truststore.path }}
           password: {{ .Values.gateway.ssl.truststore.password | quote }}
+        {{- end }}
+        {{- if .Values.gateway.ssl.crl }}
+        crl:
+          path: {{ .Values.gateway.ssl.crl.path }}
+          {{- if hasKey .Values.gateway.ssl.crl "watch" }}
+          watch: {{ .Values.gateway.ssl.crl.watch }}
+          {{- end }}
         {{- end }}
         {{- if .Values.gateway.ssl.sni }}
         sni: true
@@ -435,6 +532,9 @@ data:
       redis:
         host: {{ .Values.gateway.ratelimit.redis.host }}
         port: {{ .Values.gateway.ratelimit.redis.port }}
+        {{- if .Values.gateway.ratelimit.redis.username }}
+        username: {{ .Values.gateway.ratelimit.redis.username }}
+        {{- end }}
         {{- if .Values.gateway.ratelimit.redis.password }}
         password: {{ .Values.gateway.ratelimit.redis.password }}
         {{- end }}
@@ -516,6 +616,12 @@ data:
     # Reporters configuration (used to store reporting monitoring data, request metrics, healthchecks and others...
     # All reporters are enabled by default. To stop one of them, you have to add the property 'enabled: false'
     reporters:
+      {{- if ((.Values.gateway).reporters).warnings }}
+      {{- if hasKey .Values.gateway.reporters.warnings "enabled" }}
+      warnings:
+        enabled: {{ .Values.gateway.reporters.warnings.enabled }}
+      {{- end }}
+      {{- end }}
       # Elasticsearch reporter
       elasticsearch:
         {{- if ((.Values.gateway).reporters).elasticsearch }}
@@ -622,6 +728,7 @@ data:
       # Endpoint healthcheck service.
       healthcheck:
         threads: 3 # Threads core size used to check endpoint availability
+        jitterInMs: {{ .Values.gateway.services.healthcheck.jitterInMs | default 900 }}
 
       heartbeat: {{ toYaml .Values.gateway.services.heartbeat | nindent 8 }}
 
@@ -673,16 +780,6 @@ data:
       api-key:
         header: {{ .Values.gateway.apiKey.header }}
         param: {{ .Values.gateway.apiKey.param }}
-    {{- end }}
-
-    # Dictionaries multi tenant
-    {{- if .Values.gateway.dictionaries }}
-    {{- $multitenant := index .Values.gateway.dictionaries "multi-tenant" }}
-    {{- if and $multitenant (not $multitenant.enabled) }}
-    dictionaries:
-      multi-tenant:
-        enabled: false
-    {{- end }}
     {{- end }}
 
     # Alert Engine communication
@@ -740,6 +837,20 @@ data:
       legacy:
         enabled: {{ .Values.gateway.classloader.legacy.enabled }}
 
+    {{- if hasKey .Values.gateway "el" }}
+    el:
+      {{- if hasKey .Values.gateway.el "whitelist" }}
+      whitelist:
+        mode: {{ .Values.gateway.el.whitelist.mode | default "append" }}
+        {{- if hasKey .Values.gateway.el.whitelist "list" }}
+        list:
+          {{- range $item := .Values.gateway.el.whitelist.list }}
+          - {{ $item | quote }}
+          {{- end }}
+        {{- end }}
+      {{- end}}
+    {{- end}}
+
   {{- end }}
     {{- if .Values.gateway.logging.debug }}
   logback.xml: |
@@ -773,6 +884,10 @@ data:
                     <appendLineSeparator>true</appendLineSeparator>
                     <timestampFormat>yyyy-MM-dd'T'HH:mm:ss.SSSXX</timestampFormat>
                 </layout>
+            </encoder>
+            {{- else if .Values.gateway.logging.stdout.ecs }}
+            <encoder class="co.elastic.logging.logback.EcsEncoder">
+                <serviceName>gravitee-gateway</serviceName>
             </encoder>
             {{- else }}
             <!-- encoders are assigned the type

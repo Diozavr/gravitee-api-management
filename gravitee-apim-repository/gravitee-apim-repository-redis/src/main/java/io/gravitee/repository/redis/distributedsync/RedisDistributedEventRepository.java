@@ -35,13 +35,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class RedisDistributedEventRepository implements DistributedEventRepository {
 
     private static final String REDIS_INDEX_NAME = "distributed-event-search-idx";
@@ -64,19 +64,21 @@ public class RedisDistributedEventRepository implements DistributedEventReposito
 
     @Override
     public Flowable<DistributedEvent> search(final DistributedEventCriteria criteria, final Long page, final Long size) {
-        return Single
-            .defer(() ->
-                Single.fromCompletionStage(
-                    redisClient
-                        .redisApi()
-                        .flatMap(redisAPI -> redisAPI.ftSearch(buildSearchArgs(criteria, page, size)))
-                        .toCompletionStage()
-                        .toCompletableFuture()
-                )
+        return Single.defer(() ->
+            Single.fromCompletionStage(
+                redisClient
+                    .redisApi()
+                    .flatMap(redisAPI -> redisAPI.ftSearch(buildSearchArgs(criteria, page, size)))
+                    .toCompletionStage()
+                    .toCompletableFuture()
             )
+        )
             .filter(response -> response.type() == ResponseType.MULTI)
             .flattenStreamAsFlowable(response ->
-                getSearchResults(response).stream().filter(item -> item.type() == ResponseType.MULTI).map(this::mapSearchResponse)
+                getSearchResults(response)
+                    .stream()
+                    .filter(item -> item.type() == ResponseType.MULTI)
+                    .map(this::mapSearchResponse)
             );
     }
 
@@ -94,15 +96,14 @@ public class RedisDistributedEventRepository implements DistributedEventReposito
     ) {
         String matchingKey = REDIS_KEY_PREFIX + refType.name() + REDIS_KEY_SEPARATOR + refId + "*";
         AtomicInteger cursor = new AtomicInteger(0);
-        return Single
-            .defer(() ->
-                Single.fromCompletionStage(
-                    redisClient
-                        .redisApi()
-                        .flatMap(redisAPI -> redisAPI.scan(List.of(String.valueOf(cursor.get()), "MATCH", matchingKey)))
-                        .toCompletionStage()
-                )
+        return Single.defer(() ->
+            Single.fromCompletionStage(
+                redisClient
+                    .redisApi()
+                    .flatMap(redisAPI -> redisAPI.scan(List.of(String.valueOf(cursor.get()), "MATCH", matchingKey)))
+                    .toCompletionStage()
             )
+        )
             .filter(response -> response.type() == ResponseType.MULTI)
             .flattenStreamAsFlowable(response -> {
                 Integer nextCursor = response.get(0).toInteger();
@@ -120,7 +121,10 @@ public class RedisDistributedEventRepository implements DistributedEventReposito
     private Completable createOrUpdateKey(final String key, final DistributedEvent distributedEvent) {
         return Completable.defer(() ->
             Completable.fromCompletionStage(
-                redisClient.redisApi().flatMap(redisAPI -> redisAPI.hset(buildUpdateArgs(key, distributedEvent))).toCompletionStage()
+                redisClient
+                    .redisApi()
+                    .flatMap(redisAPI -> redisAPI.hset(buildUpdateArgs(key, distributedEvent)))
+                    .toCompletionStage()
             )
         );
     }

@@ -28,6 +28,7 @@ import inmemory.ApiKeyCrudServiceInMemory;
 import inmemory.ApplicationCrudServiceInMemory;
 import inmemory.InMemoryAlternative;
 import inmemory.SubscriptionCrudServiceInMemory;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.rest.api.management.v2.rest.model.ApiKey;
 import io.gravitee.rest.api.model.ApiKeyMode;
 import io.gravitee.rest.api.model.BaseApplicationEntity;
@@ -81,9 +82,9 @@ public class ApiSubscriptionsResource_RevokeApiKeyTest extends AbstractApiSubscr
     @AfterEach
     public void tearDown() {
         super.tearDown();
-        Stream
-            .of(apiKeyCrudServiceInMemory, applicationCrudServiceInMemory, subscriptionCrudServiceInMemory)
-            .forEach(InMemoryAlternative::reset);
+        Stream.of(apiKeyCrudServiceInMemory, applicationCrudServiceInMemory, subscriptionCrudServiceInMemory).forEach(
+            InMemoryAlternative::reset
+        );
 
         GraviteeContext.cleanContext();
     }
@@ -104,7 +105,15 @@ public class ApiSubscriptionsResource_RevokeApiKeyTest extends AbstractApiSubscr
     @Test
     public void should_return_404_if_subscription_associated_to_another_api() {
         subscriptionCrudServiceInMemory.initWith(
-            List.of(fixtures.core.model.SubscriptionFixtures.aSubscription().toBuilder().id(SUBSCRIPTION).apiId("another-api").build())
+            List.of(
+                fixtures.core.model.SubscriptionFixtures.aSubscription()
+                    .toBuilder()
+                    .id(SUBSCRIPTION)
+                    .apiId("another-api")
+                    .referenceId("another-api")
+                    .referenceType(SubscriptionReferenceType.API)
+                    .build()
+            )
         );
         apiKeyCrudServiceInMemory.initWith(
             List.of(
@@ -127,12 +136,19 @@ public class ApiSubscriptionsResource_RevokeApiKeyTest extends AbstractApiSubscr
     @Test
     public void should_return_404_if_api_key_associated_to_another_subscription() {
         subscriptionCrudServiceInMemory.initWith(
-            List.of(fixtures.core.model.SubscriptionFixtures.aSubscription().toBuilder().id(SUBSCRIPTION).apiId(API).build())
+            List.of(
+                fixtures.core.model.SubscriptionFixtures.aSubscription()
+                    .toBuilder()
+                    .id(SUBSCRIPTION)
+                    .apiId(API)
+                    .referenceId(API)
+                    .referenceType(SubscriptionReferenceType.API)
+                    .build()
+            )
         );
         apiKeyCrudServiceInMemory.initWith(
             List.of(
-                ApiKeyFixtures
-                    .anApiKey()
+                ApiKeyFixtures.anApiKey()
                     .toBuilder()
                     .id(API_KEY_ID)
                     .applicationId(APPLICATION)
@@ -150,11 +166,12 @@ public class ApiSubscriptionsResource_RevokeApiKeyTest extends AbstractApiSubscr
     public void should_return_400_if_application_is_in_shared_api_key_mode() {
         subscriptionCrudServiceInMemory.initWith(
             List.of(
-                fixtures.core.model.SubscriptionFixtures
-                    .aSubscription()
+                fixtures.core.model.SubscriptionFixtures.aSubscription()
                     .toBuilder()
                     .id(SUBSCRIPTION)
                     .apiId(API)
+                    .referenceId(API)
+                    .referenceType(SubscriptionReferenceType.API)
                     .applicationId(APPLICATION)
                     .build()
             )
@@ -185,8 +202,7 @@ public class ApiSubscriptionsResource_RevokeApiKeyTest extends AbstractApiSubscr
                 eq(API),
                 eq(RolePermissionAction.UPDATE)
             )
-        )
-            .thenReturn(false);
+        ).thenReturn(false);
 
         final Response response = rootTarget().request().post(Entity.json(null));
 
@@ -197,11 +213,12 @@ public class ApiSubscriptionsResource_RevokeApiKeyTest extends AbstractApiSubscr
     public void should_revoke_api_key() {
         subscriptionCrudServiceInMemory.initWith(
             List.of(
-                fixtures.core.model.SubscriptionFixtures
-                    .aSubscription()
+                fixtures.core.model.SubscriptionFixtures.aSubscription()
                     .toBuilder()
                     .id(SUBSCRIPTION)
                     .apiId(API)
+                    .referenceId(API)
+                    .referenceType(SubscriptionReferenceType.API)
                     .applicationId(APPLICATION)
                     .build()
             )

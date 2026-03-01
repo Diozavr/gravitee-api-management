@@ -23,11 +23,11 @@ import io.gravitee.repository.distributedsync.model.DistributedSyncAction;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Date;
 import java.util.Set;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class NodeMetadataMapper {
 
     private final ObjectMapper objectMapper;
@@ -42,8 +42,7 @@ public class NodeMetadataMapper {
                     event.getPayload(),
                     DistributedNodeMetadataDeployable.class
                 );
-                return NodeMetadataDeployable
-                    .builder()
+                return NodeMetadataDeployable.builder()
                     .organizationIds(distributedDeployable.organizationIds)
                     .installationId(distributedDeployable.installationId)
                     .build();
@@ -57,8 +56,7 @@ public class NodeMetadataMapper {
     public Maybe<DistributedEvent> to(final NodeMetadataDeployable nodeMetadataDeployable) {
         return Maybe.fromCallable(() -> {
             try {
-                return DistributedEvent
-                    .builder()
+                return DistributedEvent.builder()
                     .id(nodeMetadataDeployable.id())
                     .type(DistributedEventType.NODE_METADATA)
                     .syncAction(DistributedSyncAction.DEPLOY)

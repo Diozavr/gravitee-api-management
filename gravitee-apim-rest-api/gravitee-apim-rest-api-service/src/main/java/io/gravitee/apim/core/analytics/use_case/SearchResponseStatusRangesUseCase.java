@@ -32,10 +32,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 @UseCase
 public class SearchResponseStatusRangesUseCase {
@@ -49,8 +49,7 @@ public class SearchResponseStatusRangesUseCase {
 
         validateDates(start, end);
         validateApiRequirements(input);
-        var queryParameters = AnalyticsQueryParameters
-            .builder()
+        var queryParameters = AnalyticsQueryParameters.builder()
             .apiIds(List.of(input.apiId()))
             .from(start)
             .to(end)
@@ -68,7 +67,7 @@ public class SearchResponseStatusRangesUseCase {
     }
 
     private void validateApiIsNotTcp(Api api) {
-        if (api.getApiDefinitionHttpV4().isTcpProxy()) {
+        if (api.isTcpProxy()) {
             throw new TcpProxyNotSupportedException(api.getId());
         }
     }

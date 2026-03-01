@@ -27,14 +27,14 @@ import io.gravitee.repository.management.model.Category;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
 @Component
-@Slf4j
+@CustomLog
 public class OrphanCategoryUpgrader implements Upgrader {
 
     @Lazy
@@ -53,13 +53,13 @@ public class OrphanCategoryUpgrader implements Upgrader {
     @Override
     public boolean upgrade() throws UpgraderException {
         return this.wrapException(() -> {
-                Set<Api> updatedApis = findAndFixApisWithOrphanCategories();
-                for (Api api : updatedApis) {
-                    log.info("Removing orphan categories for API [{}]", api.getId());
-                    apiRepository.update(api);
-                }
-                return true;
-            });
+            Set<Api> updatedApis = findAndFixApisWithOrphanCategories();
+            for (Api api : updatedApis) {
+                log.info("Removing orphan categories for API [{}]", api.getId());
+                apiRepository.update(api);
+            }
+            return true;
+        });
     }
 
     private Set<Api> findAndFixApisWithOrphanCategories() throws TechnicalException {

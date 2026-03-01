@@ -26,6 +26,13 @@ parameters:
     default: /home/circleci/project/pom.xml
     description: Path to pom.xml with APIM version
 commands:
+  cmd-install-yarn:
+    steps:
+      - run:
+          name: Enable Corepack and Set Yarn Version
+          command: |-
+            corepack enable || sudo corepack enable
+                    yarn set version 4.1.1
   cmd-restore-maven-job-cache:
     parameters:
       jobName:
@@ -35,9 +42,9 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
-            - gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}
-            - gravitee-api-management-v12-<< parameters.jobName >>-master
+            - gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
+            - gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}
+            - gravitee-api-management-v14-<< parameters.jobName >>-master
     description: Restore Maven cache for a dedicated job
   cmd-save-maven-job-cache:
     parameters:
@@ -50,7 +57,7 @@ commands:
           name: Exclude all APIM artefacts from cache.
           command: rm -rf ~/.m2/repository/io/gravitee/apim
       - save_cache:
-          key: gravitee-api-management-v12-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
+          key: gravitee-api-management-v14-<< parameters.jobName >>-{{ .Branch }}-{{ checksum "pom.xml" }}
           paths:
             - ~/.m2
           when: always
@@ -66,6 +73,19 @@ commands:
           event: fail
           template: basic_fail_1
 jobs:
+  job-danger-js:
+    docker:
+      - image: cimg/node:22.12.0
+    resource_class: small
+    steps:
+      - checkout
+      - cmd-install-yarn
+      - keeper/env-export:
+          secret-url: keeper://TIlcGPFq4rN5GvgnZb9hng/field/password
+          var-name: DANGER_GITHUB_API_TOKEN
+      - run:
+          name: Run Danger JS
+          command: cd .circleci/danger && yarn install && yarn run danger
   job-setup:
     docker:
       - image: cimg/base:stable
@@ -84,7 +104,7 @@ jobs:
   job-validate:
     docker:
       - image: cimg/openjdk:21.0.5
-    resource_class: small
+    resource_class: medium
     steps:
       - checkout
       - attach_workspace:
@@ -93,22 +113,10 @@ jobs:
           jobName: job-validate
       - run:
           name: Validate project
-          command: mvn -s .gravitee.settings.xml validate --no-transfer-progress -Pall-modules,integration-tests-modules -T 2C
+          command: mvn -s .gravitee.settings.xml validate -Dgravitee.archrules.skip=true --no-transfer-progress -Pall-modules,integration-tests-modules -T 2C
       - cmd-notify-on-failure
       - cmd-save-maven-job-cache:
           jobName: job-validate
-  job-danger-js:
-    docker:
-      - image: cimg/node:20.11.1
-    resource_class: small
-    steps:
-      - checkout
-      - keeper/env-export:
-          secret-url: keeper://TIlcGPFq4rN5GvgnZb9hng/field/password
-          var-name: DANGER_GITHUB_API_TOKEN
-      - run:
-          name: Run Danger JS
-          command: cd .circleci/danger && yarn run danger
   job-build:
     docker:
       - image: cimg/openjdk:21.0.5
@@ -121,7 +129,7 @@ jobs:
           jobName: job-build
       - run:
           name: Build project
-          command: mvn -s .gravitee.settings.xml clean install --no-transfer-progress --update-snapshots -DskipTests -Dskip.validation=true -T 2C -Dbundle=dev -P all-modules,integration-tests-modules -DwithJavadoc
+          command: mvn -s .gravitee.settings.xml clean install --no-transfer-progress --update-snapshots -DskipTests -Dskip.validation=true -Dgravitee.archrules.skip=false -T 2C -Dbundle=dev -P all-modules,integration-tests-modules -DwithJavadoc
           environment:
             BUILD_ID: "1234"
             BUILD_NUMBER: "1234"
@@ -130,7 +138,7 @@ jobs:
       - save_cache:
           paths:
             - ~/.m2/repository/io/gravitee/apim
-          key: gravitee-api-management-v12-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+          key: gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
           when: on_success
       - cmd-save-maven-job-cache:
           jobName: job-build
@@ -152,10 +160,10 @@ jobs:
           jobName: job-test-definition
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+            - gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
       - run:
           name: Run definition tests
-          command: mvn --fail-fast -s .gravitee.settings.xml test --no-transfer-progress -Ddefinition-modules -Dskip.validation=true -T 2C
+          command: mvn --fail-fast -s .gravitee.settings.xml test --no-transfer-progress -Ddefinition-modules -Dskip.validation=true -Dgravitee.archrules.skip=true -T 2C
       - run:
           name: Save test results
           command: |-
@@ -188,12 +196,13 @@ jobs:
       - image: sonarsource/sonar-scanner-cli:11.2
     resource_class: large
     steps:
-      - checkout
+      - checkout:
+          method: full
       - attach_workspace:
           at: .
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-sonarcloud-analysis-<< parameters.cache_type >>
+            - gravitee-api-management-v14-sonarcloud-analysis-<< parameters.cache_type >>
       - keeper/env-export:
           secret-url: keeper://9x9YgyU6DWzux4DPoHAzDQ/field/password
           var-name: SONAR_TOKEN
@@ -205,7 +214,7 @@ jobs:
       - save_cache:
           paths:
             - /opt/sonar-scanner/.sonar/cache
-          key: gravitee-api-management-v12-sonarcloud-analysis-<< parameters.cache_type >>
+          key: gravitee-api-management-v14-sonarcloud-analysis-<< parameters.cache_type >>
           when: always
   job-test-gateway:
     docker:
@@ -219,10 +228,10 @@ jobs:
           jobName: job-test-gateway
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+            - gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
       - run:
           name: Run gateway tests
-          command: mvn --fail-fast -s .gravitee.settings.xml test --no-transfer-progress -Dgateway-modules -Dskip.validation=true -T 2C
+          command: mvn --fail-fast -s .gravitee.settings.xml test --no-transfer-progress -Dgateway-modules -Dskip.validation=true -Dgravitee.archrules.skip=true -T 2C
       - run:
           name: Save test results
           command: |-
@@ -239,8 +248,9 @@ jobs:
           paths:
             - gravitee-apim-gateway/gravitee-apim-gateway-coverage/target/site/jacoco-aggregate/
   job-test-rest-api:
-    docker:
-      - image: cimg/openjdk:21.0.5
+    machine:
+      image: ubuntu-2204:current
+      docker_layer_caching: false
     resource_class: medium
     steps:
       - checkout
@@ -250,10 +260,10 @@ jobs:
           jobName: job-test-rest-api
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+            - gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
       - run:
           name: Run Rest API tests
-          command: mvn --fail-fast -s .gravitee.settings.xml test --no-transfer-progress -Drest-api-modules -Dskip.validation=true -T 2C
+          command: mvn --fail-fast -s .gravitee.settings.xml test --no-transfer-progress -Drest-api-modules -Dskip.validation=true -Dgravitee.archrules.skip=true -T 2C
       - run:
           name: Save test results
           command: |-
@@ -282,7 +292,7 @@ jobs:
           jobName: job-test-integration
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+            - gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
       - run:
           name: Run tests
           command: |-
@@ -303,8 +313,8 @@ jobs:
             echo "Following test files will run on this executor:"
             cat tests-to-run
 
-            # Run tests with rerunFailingTestsCount=2 because some integration tests related to RabbitMQ or Websocket are randomly failing on the CI
-            mvn --fail-fast -s ../.gravitee.settings.xml test --no-transfer-progress -Dskip.validation=true -Dsurefire.excludesFile=/tmp/ignore_list -Dsurefire.rerunFailingTestsCount=2
+            # Run tests with rerunFailingTestsCount=3 because some integration tests related to RabbitMQ or Websocket are randomly failing on the CI
+            mvn --fail-fast -s ../.gravitee.settings.xml test --no-transfer-progress -Dskip.validation=true -Dgravitee.archrules.skip=true -Dsurefire.excludesFile=/tmp/ignore_list -Dsurefire.rerunFailingTestsCount=3 -Dsurefire.exitTimeout=300
       - run:
           name: Save test results
           command: |-
@@ -316,7 +326,7 @@ jobs:
           jobName: job-test-integration
       - store_test_results:
           path: ~/test-results
-    parallelism: 4
+    parallelism: 3
   job-test-plugin:
     machine:
       image: ubuntu-2204:current
@@ -330,10 +340,10 @@ jobs:
           jobName: job-test-plugin
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+            - gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
       - run:
           name: Run plugin tests
-          command: mvn --fail-fast -s .gravitee.settings.xml test --no-transfer-progress -Dplugin-modules -Dskip.validation=true -T 2C
+          command: mvn --fail-fast -s .gravitee.settings.xml test --no-transfer-progress -Dplugin-modules -Dskip.validation=true -Dgravitee.archrules.skip=true -T 2C
       - run:
           name: Save test results
           command: |-
@@ -349,6 +359,38 @@ jobs:
           root: .
           paths:
             - gravitee-apim-plugin/gravitee-apim-plugin-coverage/target/site/jacoco-aggregate/
+  job-test-reporter:
+    machine:
+      image: ubuntu-2204:current
+      docker_layer_caching: false
+    resource_class: medium
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - cmd-restore-maven-job-cache:
+          jobName: job-test-reporter
+      - restore_cache:
+          keys:
+            - gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+      - run:
+          name: Run reporter tests
+          command: mvn --fail-fast -s .gravitee.settings.xml test --no-transfer-progress -Dreporter-modules -Dskip.validation=true -Dgravitee.archrules.skip=true -T 2C
+      - run:
+          name: Save test results
+          command: |-
+            mkdir -p ~/test-results/junit/
+            find . -type f -regex ".*/target/surefire-reports/.*xml" -exec cp {} ~/test-results/junit/ \;
+          when: always
+      - cmd-notify-on-failure
+      - cmd-save-maven-job-cache:
+          jobName: job-test-reporter
+      - store_test_results:
+          path: ~/test-results
+      - persist_to_workspace:
+          root: .
+          paths:
+            - gravitee-apim-reporter/gravitee-apim-reporter-coverage/target/site/jacoco-aggregate/
   job-test-repository:
     machine:
       image: ubuntu-2204:current
@@ -362,10 +404,10 @@ jobs:
           jobName: job-test-repository
       - restore_cache:
           keys:
-            - gravitee-api-management-v12-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
+            - gravitee-api-management-v14-build-apim-{{ .Environment.CIRCLE_WORKFLOW_WORKSPACE_ID }}
       - run:
           name: Run repository tests
-          command: mvn --fail-fast -s .gravitee.settings.xml verify --no-transfer-progress -Drepository-modules -Dskip.validation=true -T 2C
+          command: mvn --fail-fast -s .gravitee.settings.xml verify --no-transfer-progress -Drepository-modules -Dskip.validation=true -Dgravitee.archrules.skip=true -T 2C
       - run:
           name: Save test results
           command: |-
@@ -405,6 +447,10 @@ workflows:
             - keeper/env-export:
                 secret-url: keeper://TIlcGPFq4rN5GvgnZb9hng/field/password
                 var-name: GITHUB_TOKEN
+      - job-danger-js:
+          name: Run Danger JS
+          context:
+            - cicd-orchestrator
       - job-setup:
           name: Setup
           context:
@@ -415,12 +461,6 @@ workflows:
             - cicd-orchestrator
           requires:
             - Setup
-      - job-danger-js:
-          name: Run Danger JS
-          context:
-            - cicd-orchestrator
-          requires:
-            - Validate backend
       - job-build:
           name: Build backend
           context:
@@ -489,6 +529,20 @@ workflows:
             - Test plugins
           working_directory: gravitee-apim-plugin
           cache_type: backend
+      - job-test-reporter:
+          name: Test reporters
+          context:
+            - cicd-orchestrator
+          requires:
+            - Build backend
+      - job-sonarcloud-analysis:
+          name: Sonar - gravitee-apim-reporter
+          context:
+            - cicd-orchestrator
+          requires:
+            - Test reporters
+          working_directory: gravitee-apim-reporter
+          cache_type: backend
       - job-test-repository:
           name: Test repository
           context:
@@ -509,7 +563,9 @@ workflows:
             - Test definition
             - Test gateway
             - Test rest-api
+            - Integration tests
             - Test plugins
+            - Test reporters
             - Test repository
 orbs:
   keeper: gravitee-io/keeper@0.7.0

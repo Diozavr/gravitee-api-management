@@ -32,8 +32,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.stereotype.Repository;
@@ -42,10 +41,9 @@ import org.springframework.stereotype.Repository;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Repository
 public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepository<CustomUserField> implements CustomUserFieldsRepository {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcCustomUserFieldsRepository.class);
 
     private final String CUSTOM_USER_FIELDS_VALUES;
 
@@ -56,8 +54,7 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
 
     @Override
     protected JdbcObjectMapper<CustomUserField> buildOrm() {
-        return JdbcObjectMapper
-            .builder(CustomUserField.class, this.tableName, "key")
+        return JdbcObjectMapper.builder(CustomUserField.class, this.tableName, "key")
             .addColumn("key", Types.NVARCHAR, String.class)
             .addColumn("reference_id", Types.NVARCHAR, String.class)
             .addColumn("reference_type", Types.NVARCHAR, CustomUserFieldReferenceType.class)
@@ -68,20 +65,20 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
             .addColumn("updated_at", Types.TIMESTAMP, Date.class)
             .updateSql(
                 "UPDATE  " +
-                this.tableName +
-                " set " +
-                escapeReservedWord("key") +
-                " = ?, " +
-                " reference_id = ?, " +
-                " reference_type = ?, " +
-                " label = ?, " +
-                " format = ?, " +
-                " required = ?, " +
-                " created_at = ?, " +
-                " updated_at = ? " +
-                " WHERE " +
-                escapeReservedWord("key") +
-                " = ? AND reference_id = ?  AND reference_type = ? "
+                    this.tableName +
+                    " set " +
+                    escapeReservedWord("key") +
+                    " = ?, " +
+                    " reference_id = ?, " +
+                    " reference_type = ?, " +
+                    " label = ?, " +
+                    " format = ?, " +
+                    " required = ?, " +
+                    " created_at = ?, " +
+                    " updated_at = ? " +
+                    " WHERE " +
+                    escapeReservedWord("key") +
+                    " = ? AND reference_id = ?  AND reference_type = ? "
             )
             .build();
     }
@@ -100,10 +97,10 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
     private void deleteValues(String key, String refId, CustomUserFieldReferenceType refType) {
         jdbcTemplate.update(
             "delete from " +
-            CUSTOM_USER_FIELDS_VALUES +
-            " where " +
-            escapeReservedWord("key") +
-            " = ? and reference_id = ? and reference_type = ?",
+                CUSTOM_USER_FIELDS_VALUES +
+                " where " +
+                escapeReservedWord("key") +
+                " = ? and reference_id = ? and reference_type = ?",
             key,
             refId,
             refType.name()
@@ -119,10 +116,10 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
             List<String> entries = field.getValues();
             jdbcTemplate.batchUpdate(
                 "insert into " +
-                CUSTOM_USER_FIELDS_VALUES +
-                " ( " +
-                escapeReservedWord("key") +
-                ", reference_id, reference_type, value ) values ( ?, ?, ?, ? )",
+                    CUSTOM_USER_FIELDS_VALUES +
+                    " ( " +
+                    escapeReservedWord("key") +
+                    ", reference_id, reference_type, value ) values ( ?, ?, ?, ? )",
                 new BatchPreparedStatementSetter() {
                     @Override
                     public void setValues(PreparedStatement ps, int i) throws SQLException {
@@ -143,7 +140,7 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
 
     @Override
     public Optional<CustomUserField> findById(String key, String refId, CustomUserFieldReferenceType refType) throws TechnicalException {
-        LOGGER.debug("JdbcCustomUserFieldsRepository.findById({}, {})", key, refId);
+        log.debug("JdbcCustomUserFieldsRepository.findById({}, {})", key, refId);
         try {
             JdbcHelper.CollatingRowMapper<CustomUserField> rowMapper = new JdbcHelper.CollatingRowMapper<>(
                 getOrm().getRowMapper(),
@@ -152,28 +149,28 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
             );
             jdbcTemplate.query(
                 "select c.*, cv.value from " +
-                this.tableName +
-                " c " +
-                " left join " +
-                CUSTOM_USER_FIELDS_VALUES +
-                " cv on " +
-                " c." +
-                escapeReservedWord("key") +
-                " = cv." +
-                escapeReservedWord("key") +
-                " and c.reference_id = cv.reference_id and c.reference_type = cv.reference_type " +
-                " where c." +
-                escapeReservedWord("key") +
-                " = ? AND c.reference_id = ? AND c.reference_type = ?",
+                    this.tableName +
+                    " c " +
+                    " left join " +
+                    CUSTOM_USER_FIELDS_VALUES +
+                    " cv on " +
+                    " c." +
+                    escapeReservedWord("key") +
+                    " = cv." +
+                    escapeReservedWord("key") +
+                    " and c.reference_id = cv.reference_id and c.reference_type = cv.reference_type " +
+                    " where c." +
+                    escapeReservedWord("key") +
+                    " = ? AND c.reference_id = ? AND c.reference_type = ?",
                 rowMapper,
                 key,
                 refId,
                 refType.name()
             );
-            LOGGER.debug("JdbcCustomUserFieldsRepository.findById({}, {}, {})", key, refId, refType, rowMapper.getRows());
+            log.debug("JdbcCustomUserFieldsRepository.findById({}, {}, {})", key, refId, refType, rowMapper.getRows());
             return rowMapper.getRows().stream().findFirst();
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find custom user fields for key and refId: {}, {}/{})", key, refId, refType, ex);
+            log.error("Failed to find custom user fields for key and refId: {}, {}/{})", key, refId, refType, ex);
             throw new TechnicalException("Failed to find custom user fields by key and refId", ex);
         }
     }
@@ -181,7 +178,7 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
     @Override
     public List<CustomUserField> findByReferenceIdAndReferenceType(String refId, CustomUserFieldReferenceType refType)
         throws TechnicalException {
-        LOGGER.debug("JdbcCustomUserFieldsRepository.findByReferenceIdAndReferenceType({}, {})", refId, refType);
+        log.debug("JdbcCustomUserFieldsRepository.findByReferenceIdAndReferenceType({}, {})", refId, refType);
         try {
             JdbcHelper.CollatingRowMapper<CustomUserField> rowMapper = new JdbcHelper.CollatingRowMapper<>(
                 getOrm().getRowMapper(),
@@ -190,30 +187,25 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
             );
             jdbcTemplate.query(
                 "select c.*, cValues.value from " +
-                this.tableName +
-                " c " +
-                " left join " +
-                CUSTOM_USER_FIELDS_VALUES +
-                " cValues on c." +
-                escapeReservedWord("key") +
-                " = cValues." +
-                escapeReservedWord("key") +
-                " and " +
-                " c.reference_id = cValues.reference_id and c.reference_type = cValues.reference_type " +
-                " where c.reference_id = ? and  c.reference_type = ? ",
+                    this.tableName +
+                    " c " +
+                    " left join " +
+                    CUSTOM_USER_FIELDS_VALUES +
+                    " cValues on c." +
+                    escapeReservedWord("key") +
+                    " = cValues." +
+                    escapeReservedWord("key") +
+                    " and " +
+                    " c.reference_id = cValues.reference_id and c.reference_type = cValues.reference_type " +
+                    " where c.reference_id = ? and  c.reference_type = ? ",
                 rowMapper,
                 refId,
                 refType.name()
             );
-            LOGGER.debug(
-                "JdbcCustomUserFieldsRepository.findByReferenceIdAndReferenceType({}, {}) = {}",
-                refId,
-                refType,
-                rowMapper.getRows()
-            );
+            log.debug("JdbcCustomUserFieldsRepository.findByReferenceIdAndReferenceType({}, {}) = {}", refId, refType, rowMapper.getRows());
             return rowMapper.getRows();
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find custom user fields for refId: {}/{}", refId, refType, ex);
+            log.error("Failed to find custom user fields for refId: {}/{}", refId, refType, ex);
             throw new TechnicalException("Failed to find custom user fields by reference", ex);
         }
     }
@@ -221,7 +213,7 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
     @Override
     public List<String> deleteByReferenceIdAndReferenceType(String referenceId, CustomUserFieldReferenceType referenceType)
         throws TechnicalException {
-        LOGGER.debug("JdbcCustomUserFieldsRepository.deleteByReferenceIdAndReferenceType({}, {})", referenceId, referenceType);
+        log.debug("JdbcCustomUserFieldsRepository.deleteByReferenceIdAndReferenceType({}, {})", referenceId, referenceType);
         try {
             final var keys = jdbcTemplate.queryForList(
                 "select " + escapeReservedWord("key") + " from " + tableName + " where reference_id = ? and  reference_type = ? ",
@@ -243,72 +235,71 @@ public class JdbcCustomUserFieldsRepository extends JdbcAbstractFindAllRepositor
                 );
             }
 
-            LOGGER.debug("JdbcCustomUserFieldsRepository.deleteByReferenceIdAndReferenceType({}, {}) - Done", referenceId, referenceType);
+            log.debug("JdbcCustomUserFieldsRepository.deleteByReferenceIdAndReferenceType({}, {}) - Done", referenceId, referenceType);
             return keys;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to delete custom user fields for refId: {}/{}", referenceId, referenceType, ex);
+            log.error("Failed to delete custom user fields for refId: {}/{}", referenceId, referenceType, ex);
             throw new TechnicalException("Failed to delete custom user fields by reference", ex);
         }
     }
 
     @Override
     public void delete(String key, String refId, CustomUserFieldReferenceType refType) throws TechnicalException {
-        LOGGER.debug("JdbcCustomUserFieldsRepository.delete({}, {}, {})", key, refId, refType);
+        log.debug("JdbcCustomUserFieldsRepository.delete({}, {}, {})", key, refId, refType);
         try {
             deleteValues(key, refId, refType);
             jdbcTemplate.update(
                 "delete from " +
-                this.tableName +
-                " where " +
-                escapeReservedWord("key") +
-                " = ? AND reference_id = ? AND reference_type = ?",
+                    this.tableName +
+                    " where " +
+                    escapeReservedWord("key") +
+                    " = ? AND reference_id = ? AND reference_type = ?",
                 key,
                 refId,
                 refType.name()
             );
-            LOGGER.debug("JdbcCustomUserFieldsRepository.delete({}, {}, {})", key, refId, refType);
+            log.debug("JdbcCustomUserFieldsRepository.delete({}, {}, {})", key, refId, refType);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to delete custom user fields for key and refId: {}, {}, {})", key, refId, refType, ex);
+            log.error("Failed to delete custom user fields for key and refId: {}, {}, {})", key, refId, refType, ex);
             throw new TechnicalException("Failed to delete custom user fields by key and refId", ex);
         }
     }
 
     @Override
     public CustomUserField create(CustomUserField field) throws TechnicalException {
-        LOGGER.debug("JdbcCustomUserFieldsRepository.create({})", field);
+        log.debug("JdbcCustomUserFieldsRepository.create({})", field);
         try {
             jdbcTemplate.update(getOrm().buildInsertPreparedStatementCreator(field));
             storeValues(field, true);
             return findById(field.getKey(), field.getReferenceId(), field.getReferenceType()).orElse(null);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to create custom user field", ex);
+            log.error("Failed to create custom user field", ex);
             throw new TechnicalException("Failed to create custom user field", ex);
         }
     }
 
     @Override
     public CustomUserField update(CustomUserField field) throws TechnicalException {
-        LOGGER.debug("JdbcCustomUserFieldsRepository.update({})", field);
+        log.debug("JdbcCustomUserFieldsRepository.update({})", field);
         try {
             jdbcTemplate.update(
                 getOrm().buildUpdatePreparedStatementCreator(field, field.getKey(), field.getReferenceId(), field.getReferenceType().name())
             );
             storeValues(field, true);
-            return findById(field.getKey(), field.getReferenceId(), field.getReferenceType())
-                .orElseThrow(() ->
-                    new IllegalStateException(
-                        format(
-                            "No CustomUserField found with id [%s, %s, %s]",
-                            field.getKey(),
-                            field.getReferenceId(),
-                            field.getReferenceType()
-                        )
+            return findById(field.getKey(), field.getReferenceId(), field.getReferenceType()).orElseThrow(() ->
+                new IllegalStateException(
+                    format(
+                        "No CustomUserField found with id [%s, %s, %s]",
+                        field.getKey(),
+                        field.getReferenceId(),
+                        field.getReferenceType()
                     )
-                );
+                )
+            );
         } catch (final IllegalStateException ex) {
             throw ex;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to create custom user field", ex);
+            log.error("Failed to create custom user field", ex);
             throw new TechnicalException("Failed to create custom user field", ex);
         }
     }

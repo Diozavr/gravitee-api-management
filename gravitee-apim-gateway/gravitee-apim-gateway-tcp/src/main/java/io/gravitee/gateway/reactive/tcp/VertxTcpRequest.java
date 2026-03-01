@@ -70,6 +70,7 @@ public class VertxTcpRequest extends AbstractRequest {
         this.tlsSession = new DefaultTlsSession(this.sslSession);
         this.parameters = new LinkedMultiValueMap<>();
         this.pathParameters = new LinkedMultiValueMap<>();
+        this.connectionTimestamp = System.currentTimeMillis();
     }
 
     @Override
@@ -118,8 +119,9 @@ public class VertxTcpRequest extends AbstractRequest {
     @Override
     public String originalHost() {
         if (this.originalHost == null) {
-            this.originalHost =
-                Optional.ofNullable(proxySocket.remoteAddress()).map(address -> proxySocket.remoteAddress().host()).orElse(null);
+            this.originalHost = Optional.ofNullable(proxySocket.remoteAddress())
+                .map(address -> proxySocket.remoteAddress().host())
+                .orElse(null);
         }
         return this.originalHost;
     }

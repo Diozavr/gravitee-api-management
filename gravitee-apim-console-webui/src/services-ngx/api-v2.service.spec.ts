@@ -48,10 +48,10 @@ describe('ApiV2Service', () => {
   });
 
   describe('create', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const newApi = fakeCreateApiV4();
 
-      apiV2Service.create(newApi).subscribe((api) => {
+      apiV2Service.create(newApi).subscribe(api => {
         expect(api.name).toEqual(newApi.name);
         done();
       });
@@ -66,10 +66,10 @@ describe('ApiV2Service', () => {
   });
 
   describe('get', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const fakeApi = fakeApiV4();
 
-      apiV2Service.get(fakeApi.id).subscribe((api) => {
+      apiV2Service.get(fakeApi.id).subscribe(api => {
         expect(api.name).toEqual(fakeApi.name);
         done();
       });
@@ -84,12 +84,12 @@ describe('ApiV2Service', () => {
   });
 
   describe('update', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const apiId = 'apiId';
       const fakeApi = fakeApiV4();
       const fakeUpdateApi = fakeUpdateApiV4();
 
-      apiV2Service.update(apiId, fakeUpdateApi).subscribe((api) => {
+      apiV2Service.update(apiId, fakeUpdateApi).subscribe(api => {
         expect(api.name).toEqual(fakeApi.name);
         done();
       });
@@ -105,7 +105,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('delete', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const apiId = 'apiId';
       apiV2Service.delete(apiId).subscribe(() => {
         done();
@@ -117,7 +117,7 @@ describe('ApiV2Service', () => {
       });
       req.flush(null);
     });
-    it('should add a parameter to close plans', (done) => {
+    it('should add a parameter to close plans', done => {
       const apiId = 'apiId';
       apiV2Service.delete(apiId, true).subscribe(() => {
         done();
@@ -132,7 +132,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('start', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const fakeApi = fakeApiV4();
 
       apiV2Service.start(fakeApi.id).subscribe(() => {
@@ -150,7 +150,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('stop', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const fakeApi = fakeApiV4();
 
       apiV2Service.stop(fakeApi.id).subscribe(() => {
@@ -168,11 +168,11 @@ describe('ApiV2Service', () => {
   });
 
   describe('deploy', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const fakeApi = fakeApiV4();
 
       apiV2Service.deploy(fakeApi.id, 'Deployment label').subscribe({
-        error: (err) => {
+        error: err => {
           done.fail(err);
         },
         complete: () => {
@@ -193,7 +193,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('duplicate', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const fakeApi = fakeApiV4();
 
       const options: DuplicateApiOptions = { contextPath: '/duplicate', filteredFields: [] };
@@ -213,7 +213,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('export', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const fakeApi = fakeApiV4();
 
       apiV2Service.export(fakeApi.id).subscribe(() => {
@@ -233,10 +233,10 @@ describe('ApiV2Service', () => {
   });
 
   describe('import', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const fakeApi = fakeApiV4();
 
-      apiV2Service.import(fakeApi.id).subscribe((api) => {
+      apiV2Service.import(fakeApi.id).subscribe(api => {
         expect(api).toEqual(fakeApi);
         done();
       });
@@ -251,7 +251,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('search', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const fakeApi = fakeApiV4();
 
       apiV2Service.search({ ids: [fakeApi.id] }).subscribe(() => {
@@ -271,7 +271,7 @@ describe('ApiV2Service', () => {
       });
     });
 
-    it('should not get manage only APIs', (done) => {
+    it('should not get manage only APIs', done => {
       const fakeApi = fakeApiV4();
 
       apiV2Service.search({ ids: [fakeApi.id] }, null, 1, 9999, false).subscribe(() => {
@@ -293,7 +293,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('picture', () => {
-    it('should update', (done) => {
+    it('should update', done => {
       const apiId = 'apiId';
 
       apiV2Service.updatePicture(apiId, 'newPicture').subscribe(() => {
@@ -309,7 +309,7 @@ describe('ApiV2Service', () => {
       req.flush(null);
     });
 
-    it('should delete', (done) => {
+    it('should delete', done => {
       const apiId = 'apiId';
 
       apiV2Service.deletePicture(apiId).subscribe(() => {
@@ -326,7 +326,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('background', () => {
-    it('should update', (done) => {
+    it('should update', done => {
       const apiId = 'apiId';
 
       apiV2Service.updateBackground(apiId, 'newBackground').subscribe(() => {
@@ -342,7 +342,7 @@ describe('ApiV2Service', () => {
       req.flush(null);
     });
 
-    it('should delete', (done) => {
+    it('should delete', done => {
       const apiId = 'apiId';
 
       apiV2Service.deleteBackground(apiId).subscribe(() => {
@@ -359,7 +359,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('subscribers', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const apiId = 'apiId';
 
       apiV2Service.getSubscribers(apiId, 'my-app').subscribe(() => {
@@ -375,8 +375,28 @@ describe('ApiV2Service', () => {
     });
   });
 
+  describe('getApiProductsForApi', () => {
+    it('should call the API and return data wrapper', done => {
+      const apiId = 'apiId';
+      const apiProductsResponse = { data: [{ id: 'apip1' }] };
+
+      apiV2Service.getApiProductsForApi(apiId).subscribe(response => {
+        expect(response).toEqual(apiProductsResponse);
+        done();
+      });
+
+      const req = httpTestingController.expectOne(
+        r => r.url.startsWith(`${CONSTANTS_TESTING.env.v2BaseURL}/apis/${apiId}/api-products`) && r.method === 'GET',
+      );
+
+      expect(req.request.params.get('page')).toBe('1');
+      expect(req.request.params.get('perPage')).toBe('500');
+      req.flush(apiProductsResponse);
+    });
+  });
+
   describe('transfer ownership', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const apiId = 'apiId';
 
       const transferOwnership: ApiTransferOwnership = {
@@ -401,7 +421,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('verify API path', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const apiId = 'apiId';
       const paths: PathToVerify[] = [{ path: 'path', host: 'host' }];
 
@@ -420,7 +440,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('verify API hosts', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const apiId = 'apiId';
       const hosts = ['host1', 'host2'];
       const listenerType = 'TCP';
@@ -445,7 +465,7 @@ describe('ApiV2Service', () => {
 
       const done: string[] = [];
       // First call
-      apiV2Service.getLastApiFetch(fakeApi.id).subscribe((api) => {
+      apiV2Service.getLastApiFetch(fakeApi.id).subscribe(api => {
         done.push(`first getLastApiFetch: last api "${api.name}" fetch`);
       });
 
@@ -458,13 +478,13 @@ describe('ApiV2Service', () => {
         .flush(fakeApi);
       expect(done).toEqual(['first getLastApiFetch: last api "🪐 Planets" fetch']);
 
-      apiV2Service.getLastApiFetch(fakeApi.id).subscribe((api) => {
+      apiV2Service.getLastApiFetch(fakeApi.id).subscribe(api => {
         done.push(`second getLastApiFetch: last api "${api.name}" fetch`);
       });
       expect(done).toEqual(['first getLastApiFetch: last api "🪐 Planets" fetch', 'second getLastApiFetch: last api "🪐 Planets" fetch']);
 
       // On new get with unmodified api, no new event
-      apiV2Service.get(fakeApi.id).subscribe((api) => {
+      apiV2Service.get(fakeApi.id).subscribe(api => {
         done.push(`get done: with unmodified api "${api.name}"`);
       });
       httpTestingController
@@ -480,7 +500,7 @@ describe('ApiV2Service', () => {
       ]);
 
       // On new get with modified api, new event
-      apiV2Service.get(fakeApi.id).subscribe((api) => {
+      apiV2Service.get(fakeApi.id).subscribe(api => {
         done.push(`get done: with modified api "${api.name}"`);
       });
       httpTestingController
@@ -512,7 +532,7 @@ describe('ApiV2Service', () => {
       apiV2Service
         .getLastApiFetch(fakeApiOne.id)
         .pipe(take(1))
-        .subscribe((api) => {
+        .subscribe(api => {
           expect(api.name).toEqual(fakeApiOne.name);
           done.push('first');
         });
@@ -528,7 +548,7 @@ describe('ApiV2Service', () => {
       apiV2Service
         .getLastApiFetch(fakeApiTwo.id)
         .pipe(take(1))
-        .subscribe((api) => {
+        .subscribe(api => {
           expect(api.name).toEqual(fakeApiTwo.name);
           done.push('second');
         });
@@ -545,7 +565,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('rollback', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const apiId = 'apiId';
       const eventId = 'eventId';
 
@@ -571,7 +591,7 @@ describe('ApiV2Service', () => {
   });
 
   describe('importSwaggerApi', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const descriptor = 'dumb descriptor';
 
       apiV2Service.importSwaggerApi({ payload: descriptor, withDocumentation: false }).subscribe(() => {
@@ -593,7 +613,7 @@ describe('ApiV2Service', () => {
 
       const done: string[] = [];
       // First call
-      apiV2Service.getLastApiFetch(fakeApi.id).subscribe((api) => {
+      apiV2Service.getLastApiFetch(fakeApi.id).subscribe(api => {
         done.push(`getLastApiFetch: last api "${api.name}" fetch`);
       });
 
@@ -628,9 +648,9 @@ describe('ApiV2Service', () => {
       ]);
     });
 
-    it('should not call the api', (done) => {
+    it('should not call the api', done => {
       apiV2Service.refreshLastApiFetch().subscribe({
-        error: (err) => {
+        error: err => {
           done.fail(err);
         },
         complete: () => {
@@ -639,6 +659,54 @@ describe('ApiV2Service', () => {
       });
 
       httpTestingController.expectNone(`${CONSTANTS_TESTING.env.v2BaseURL}/apis`);
+    });
+  });
+
+  describe('migrateToV4', () => {
+    it('should POST to migrate endpoint without mode', done => {
+      const apiId = 'my-api-id';
+
+      apiV2Service.migrateToV4(apiId).subscribe(res => {
+        expect(res).toEqual({ state: 'MIGRATABLE', issues: [] });
+        done();
+      });
+
+      const req = httpTestingController.expectOne({
+        url: `${CONSTANTS_TESTING.env.v2BaseURL}/apis/${apiId}/_migrate`,
+        method: 'POST',
+      });
+      expect(req.request.params.keys().length).toBe(0);
+      req.flush({ state: 'MIGRATABLE', issues: [] });
+    });
+
+    it('should POST to migrate endpoint with mode=DRY_RUN', done => {
+      const apiId = 'my-api-id';
+
+      apiV2Service.migrateToV4(apiId, 'DRY_RUN').subscribe(res => {
+        expect(res).toEqual({ state: 'MIGRATABLE', issues: [] });
+        done();
+      });
+
+      const req = httpTestingController.expectOne({
+        url: `${CONSTANTS_TESTING.env.v2BaseURL}/apis/${apiId}/_migrate?mode=DRY_RUN`,
+        method: 'POST',
+      });
+      req.flush({ state: 'MIGRATABLE', issues: [] });
+    });
+
+    it('should POST to migrate endpoint with mode=FORCE', done => {
+      const apiId = 'my-api-id';
+
+      apiV2Service.migrateToV4(apiId, 'FORCE').subscribe(res => {
+        expect(res).toEqual({ state: 'MIGRATED', issues: [] });
+        done();
+      });
+
+      const req = httpTestingController.expectOne({
+        url: `${CONSTANTS_TESTING.env.v2BaseURL}/apis/${apiId}/_migrate?mode=FORCE`,
+        method: 'POST',
+      });
+      req.flush({ state: 'MIGRATED', issues: [] });
     });
   });
 });

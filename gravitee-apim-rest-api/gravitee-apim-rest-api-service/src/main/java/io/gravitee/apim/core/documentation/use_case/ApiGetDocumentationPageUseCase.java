@@ -19,21 +19,25 @@ import io.gravitee.apim.core.UseCase;
 import io.gravitee.apim.core.api.crud_service.ApiCrudService;
 import io.gravitee.apim.core.documentation.crud_service.PageCrudService;
 import io.gravitee.apim.core.documentation.domain_service.ApiDocumentationDomainService;
+import io.gravitee.apim.core.documentation.domain_service.PageSourceDomainService;
 import io.gravitee.apim.core.documentation.model.Page;
 
 @UseCase
 public class ApiGetDocumentationPageUseCase {
 
     private final ApiDocumentationDomainService apiDocumentationDomainService;
+    private final PageSourceDomainService pageSourceDomainService;
     private final ApiCrudService apiCrudService;
     private final PageCrudService pageCrudService;
 
     public ApiGetDocumentationPageUseCase(
         ApiDocumentationDomainService apiDocumentationDomainService,
+        PageSourceDomainService pageSourceDomainService,
         ApiCrudService apiCrudService,
         PageCrudService pageCrudService
     ) {
         this.apiDocumentationDomainService = apiDocumentationDomainService;
+        this.pageSourceDomainService = pageSourceDomainService;
         this.apiCrudService = apiCrudService;
         this.pageCrudService = pageCrudService;
     }
@@ -44,10 +48,11 @@ public class ApiGetDocumentationPageUseCase {
         var page = this.pageCrudService.get(input.pageId);
         this.apiDocumentationDomainService.validatePageAssociatedToApi(page, input.apiId);
 
-        page =
-            page
-                .withHidden(this.apiDocumentationDomainService.pageIsHidden(page))
-                .withGeneralConditions(this.apiDocumentationDomainService.pageIsUsedAsGeneralConditions(page, api));
+        page = page
+            .withHidden(this.apiDocumentationDomainService.pageIsHidden(page))
+            .withGeneralConditions(this.apiDocumentationDomainService.pageIsUsedAsGeneralConditions(page, api));
+
+        this.pageSourceDomainService.removeSensitiveData(page);
 
         return new Output(page);
     }

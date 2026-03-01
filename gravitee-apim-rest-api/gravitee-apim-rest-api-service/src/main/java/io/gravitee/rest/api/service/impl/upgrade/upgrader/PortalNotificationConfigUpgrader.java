@@ -17,6 +17,7 @@ package io.gravitee.rest.api.service.impl.upgrade.upgrader;
 
 import static io.gravitee.rest.api.service.impl.upgrade.upgrader.UpgraderOrder.PORTAL_NOTIFICATION_CONFIG_UPGRADER;
 
+import io.gravitee.definition.model.Origin;
 import io.gravitee.node.api.upgrader.Upgrader;
 import io.gravitee.node.api.upgrader.UpgraderException;
 import io.gravitee.repository.exceptions.DuplicateKeyException;
@@ -31,12 +32,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class PortalNotificationConfigUpgrader implements Upgrader {
 
     EnvironmentRepository environmentRepository;
@@ -62,9 +63,10 @@ public class PortalNotificationConfigUpgrader implements Upgrader {
         List<PortalNotificationConfig> portalNotificationConfigs = portalNotificationConfigRepository
             .findAll()
             .stream()
-            .filter(portalNotificationConfig ->
-                portalNotificationConfig.getReferenceType().equals(NotificationReferenceType.PORTAL) &&
-                portalNotificationConfig.getReferenceId().equals("DEFAULT")
+            .filter(
+                portalNotificationConfig ->
+                    portalNotificationConfig.getReferenceType().equals(NotificationReferenceType.PORTAL) &&
+                    portalNotificationConfig.getReferenceId().equals("DEFAULT")
             )
             .flatMap(
                 (Function<PortalNotificationConfig, Stream<PortalNotificationConfig>>) portalNotificationConfig ->
@@ -101,11 +103,11 @@ public class PortalNotificationConfigUpgrader implements Upgrader {
     }
 
     private PortalNotificationConfig duplicate(Environment environment, PortalNotificationConfig portalNotificationConfig) {
-        return PortalNotificationConfig
-            .builder()
+        return PortalNotificationConfig.builder()
             .referenceId(environment.getId())
             .referenceType(NotificationReferenceType.ENVIRONMENT)
             .hooks(portalNotificationConfig.getHooks())
+            .origin(portalNotificationConfig.getOrigin() != null ? portalNotificationConfig.getOrigin() : Origin.MANAGEMENT)
             .user(portalNotificationConfig.getUser())
             .createdAt(portalNotificationConfig.getCreatedAt())
             .updatedAt(portalNotificationConfig.getUpdatedAt())

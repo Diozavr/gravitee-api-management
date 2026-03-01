@@ -24,7 +24,6 @@ import { InstanceDetailsEnvironmentComponent } from './instances/instance-detail
 import { InstanceDetailsMonitoringComponent } from './instances/instance-details/instance-details-monitoring/instance-details-monitoring.component';
 import { EnvAuditComponent } from './audit/env-audit.component';
 import { MessagesComponent } from './messages/messages.component';
-import { CloudHostedGuard } from './cloud-hosted-guard';
 
 import { TasksComponent } from '../user/tasks/tasks.component';
 import { UserComponent } from '../user/my-accout/user.component';
@@ -43,15 +42,31 @@ const managementRoutes: Routes = [
     children: [
       {
         path: 'home',
-        loadChildren: () => import('./home/home.module').then((m) => m.HomeModule),
+        loadChildren: () => import('./home/home.module').then(m => m.HomeModule),
       },
       {
         path: 'apis',
-        loadChildren: () => import('./api/apis.module').then((m) => m.ApisModule),
+        loadChildren: () => import('./api/apis.module').then(m => m.ApisModule),
+      },
+      {
+        path: 'api-products',
+        loadChildren: () => import('./api-products/api-products.routes').then(m => m.API_PRODUCTS_ROUTES),
+        data: {
+          requireLicense: {
+            license: { feature: ApimFeature.APIM_API_PRODUCTS },
+            redirect: '/',
+          },
+          permissions: {
+            anyOf: ['environment-api_product-r'],
+          },
+          docs: {
+            page: 'management-api-products',
+          },
+        },
       },
       {
         path: 'integrations',
-        loadChildren: () => import('./integrations/integrations.module').then((m) => m.IntegrationsModule),
+        loadChildren: () => import('./integrations/integrations.module').then(m => m.IntegrationsModule),
         data: {
           permissions: {
             anyOf: ['environment-integration-r'],
@@ -60,11 +75,11 @@ const managementRoutes: Routes = [
       },
       {
         path: 'settings',
-        loadChildren: () => import('./settings/settings.module').then((m) => m.SettingsModule),
+        loadChildren: () => import('./settings/settings.module').then(m => m.SettingsModule),
       },
       {
         path: 'support/tickets',
-        loadChildren: () => import('../user/support/tickets.module').then((m) => m.TicketsModule),
+        loadChildren: () => import('../user/support/tickets.module').then(m => m.TicketsModule),
       },
       {
         path: 'my-account',
@@ -81,11 +96,10 @@ const managementRoutes: Routes = [
       },
       {
         path: 'applications',
-        loadChildren: () => import('./application/applications.module').then((m) => m.ApplicationsModule),
+        loadChildren: () => import('./application/applications.module').then(m => m.ApplicationsModule),
       },
       {
         path: 'gateways',
-        canActivate: [CloudHostedGuard],
         component: InstanceListComponent,
         data: {
           permissions: {
@@ -99,7 +113,7 @@ const managementRoutes: Routes = [
 
       {
         path: 'api-score',
-        loadChildren: () => import('./api-score/api-score.module').then((m) => m.ApiScoreModule),
+        loadChildren: () => import('./api-score/api-score.module').then(m => m.ApiScoreModule),
         canActivate: [ApiScoringGuard],
         data: {
           permissions: {
@@ -111,7 +125,6 @@ const managementRoutes: Routes = [
       {
         path: 'gateways/:instanceId',
         component: InstanceDetailsComponent,
-        canActivate: [CloudHostedGuard],
         data: {
           permissions: {
             anyOf: ['environment-instance-r'],
@@ -172,7 +185,7 @@ const managementRoutes: Routes = [
       },
       {
         path: 'analytics',
-        loadChildren: () => import('./analytics/env-analytics.module').then((m) => m.EnvAnalyticsModule),
+        loadChildren: () => import('./analytics/env-analytics.module').then(m => m.EnvAnalyticsModule),
         data: {
           permissions: {
             anyOf: ['environment-platform-r'],
@@ -181,7 +194,7 @@ const managementRoutes: Routes = [
       },
       {
         path: 'alerts',
-        loadChildren: () => import('./alerts/env-alerts.module').then((m) => m.EnvAlertModule),
+        loadChildren: () => import('./alerts/env-alerts.module').then(m => m.EnvAlertModule),
         data: {
           requireLicense: {
             license: { feature: ApimFeature.ALERT_ENGINE },
@@ -189,6 +202,15 @@ const managementRoutes: Routes = [
           },
           permissions: {
             anyOf: ['environment-alert-r'],
+          },
+        },
+      },
+      {
+        path: 'clusters',
+        loadChildren: () => import('./clusters/cluster.module').then(m => m.ClusterModule),
+        data: {
+          permissions: {
+            anyOf: ['environment-cluster-r'],
           },
         },
       },

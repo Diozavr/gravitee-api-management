@@ -20,6 +20,7 @@ import io.gravitee.definition.model.v4.flow.Flow;
 import io.gravitee.definition.model.v4.flow.selector.ChannelSelector;
 import io.gravitee.definition.model.v4.flow.selector.ConditionSelector;
 import io.gravitee.definition.model.v4.flow.selector.HttpSelector;
+import io.gravitee.definition.model.v4.flow.selector.McpSelector;
 import io.gravitee.definition.model.v4.flow.selector.Selector;
 import io.gravitee.definition.model.v4.flow.step.Step;
 import io.gravitee.definition.model.v4.nativeapi.NativeFlow;
@@ -28,6 +29,7 @@ import io.gravitee.repository.management.model.flow.FlowStep;
 import io.gravitee.repository.management.model.flow.selector.FlowChannelSelector;
 import io.gravitee.repository.management.model.flow.selector.FlowConditionSelector;
 import io.gravitee.repository.management.model.flow.selector.FlowHttpSelector;
+import io.gravitee.repository.management.model.flow.selector.FlowMcpSelector;
 import io.gravitee.repository.management.model.flow.selector.FlowOperator;
 import io.gravitee.repository.management.model.flow.selector.FlowSelector;
 import io.gravitee.rest.api.service.common.UuidString;
@@ -73,7 +75,9 @@ public class FlowMapper {
         definitionFlow.setPublish(repositoryFlow.getPublish().stream().map(this::toDefinition).collect(Collectors.toList()));
         definitionFlow.setSubscribe(repositoryFlow.getSubscribe().stream().map(this::toDefinition).collect(Collectors.toList()));
         definitionFlow.setInteract(repositoryFlow.getInteract().stream().map(this::toDefinition).collect(Collectors.toList()));
-        definitionFlow.setConnect(repositoryFlow.getConnect().stream().map(this::toDefinition).collect(Collectors.toList()));
+        definitionFlow.setEntrypointConnect(
+            repositoryFlow.getEntrypointConnect().stream().map(this::toDefinition).collect(Collectors.toList())
+        );
         definitionFlow.setTags(repositoryFlow.getTags());
         return definitionFlow;
     }
@@ -170,6 +174,11 @@ public class FlowMapper {
             FlowConditionSelector repositoryFlowConditionSelector = new FlowConditionSelector();
             repositoryFlowConditionSelector.setCondition(definitionConditionChannel.getCondition());
             return repositoryFlowConditionSelector;
+        } else if (definitionSelector instanceof McpSelector) {
+            McpSelector definitionMcpSelector = (McpSelector) definitionSelector;
+            FlowMcpSelector repositoryFlowMcpSelector = new FlowMcpSelector();
+            repositoryFlowMcpSelector.setMethods(definitionMcpSelector.getMethods());
+            return repositoryFlowMcpSelector;
         }
         throw new IllegalArgumentException(String.format("Unsupported definitionSelector %s", definitionSelector));
     }
@@ -203,6 +212,11 @@ public class FlowMapper {
             ConditionSelector definitionConditionChannel = new ConditionSelector();
             definitionConditionChannel.setCondition(repositoryFlowConditionSelector.getCondition());
             return definitionConditionChannel;
+        } else if (repositoryFlowSelector instanceof FlowMcpSelector) {
+            FlowMcpSelector repositoryFlowMcpSelector = (FlowMcpSelector) repositoryFlowSelector;
+            McpSelector definitionMcpSelector = new McpSelector();
+            definitionMcpSelector.setMethods(repositoryFlowMcpSelector.getMethods());
+            return definitionMcpSelector;
         }
         throw new IllegalArgumentException(String.format("Unsupported flow selector %s", repositoryFlowSelector));
     }

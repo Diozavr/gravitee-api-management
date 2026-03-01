@@ -20,6 +20,7 @@ import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;
 import io.gravitee.apim.core.api_key.use_case.RevokeApiSubscriptionApiKeyUseCase;
 import io.gravitee.apim.core.audit.model.AuditActor;
 import io.gravitee.apim.core.audit.model.AuditInfo;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.common.http.MediaType;
 import io.gravitee.rest.api.model.ApiKeyEntity;
 import io.gravitee.rest.api.model.SubscriptionEntity;
@@ -115,14 +116,13 @@ public class ApiSubscriptionApiKeyResource extends AbstractApiKeyResource {
             new RevokeApiSubscriptionApiKeyUseCase.Input(
                 apikey,
                 api,
+                SubscriptionReferenceType.API.name(),
                 subscription,
-                AuditInfo
-                    .builder()
+                AuditInfo.builder()
                     .organizationId(executionContext.getOrganizationId())
                     .environmentId(executionContext.getEnvironmentId())
                     .actor(
-                        AuditActor
-                            .builder()
+                        AuditActor.builder()
                             .userId(user.getUsername())
                             .userSource(user.getSource())
                             .userSourceId(user.getSourceId())
@@ -152,8 +152,7 @@ public class ApiSubscriptionApiKeyResource extends AbstractApiKeyResource {
         SubscriptionEntity subscriptionEntity = checkSubscription(subscription);
 
         if (!apikey.equals(apiKey.getId())) {
-            return Response
-                .status(BAD_REQUEST)
+            return Response.status(BAD_REQUEST)
                 .entity("'apikey' parameter in path does not correspond to the api-key id to update")
                 .build();
         }

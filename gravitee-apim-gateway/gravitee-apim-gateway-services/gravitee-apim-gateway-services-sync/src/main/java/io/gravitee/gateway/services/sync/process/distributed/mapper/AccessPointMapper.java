@@ -22,11 +22,11 @@ import io.gravitee.repository.distributedsync.model.DistributedEvent;
 import io.gravitee.repository.distributedsync.model.DistributedEventType;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Date;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class AccessPointMapper {
 
     private final ObjectMapper objectMapper;
@@ -35,8 +35,7 @@ public class AccessPointMapper {
         return Maybe.fromCallable(() -> {
             try {
                 final ReactableAccessPoint accessPoint = objectMapper.readValue(event.getPayload(), ReactableAccessPoint.class);
-                return AccessPointDeployable
-                    .builder()
+                return AccessPointDeployable.builder()
                     .reactableAccessPoint(accessPoint)
                     .syncAction(SyncActionMapper.to(event.getSyncAction()))
                     .build();
@@ -50,8 +49,7 @@ public class AccessPointMapper {
     public Maybe<DistributedEvent> to(final AccessPointDeployable deployable) {
         return Maybe.fromCallable(() -> {
             try {
-                return DistributedEvent
-                    .builder()
+                return DistributedEvent.builder()
                     .payload(objectMapper.writeValueAsString(deployable.reactableAccessPoint()))
                     .id(deployable.id())
                     .type(DistributedEventType.ACCESS_POINT)

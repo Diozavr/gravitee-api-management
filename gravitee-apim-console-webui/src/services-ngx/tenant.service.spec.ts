@@ -36,24 +36,24 @@ describe('TenantService', () => {
   });
 
   describe('list', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const tenants = [fakeTenant()];
 
-      tenantService.list().subscribe((response) => {
+      tenantService.list().subscribe(response => {
         expect(response).toStrictEqual(tenants);
         done();
       });
 
-      httpTestingController.expectOne({ method: 'GET', url: `${CONSTANTS_TESTING.org.baseURL}/configuration/tenants` }).flush(tenants);
+      expectTenantsGetRequest(httpTestingController, tenants);
     });
   });
 
   describe('create', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const newTenants = [fakeNewTenant()];
       const createdTenants = [{ ...newTenants[0], id: 'createdTenant' }];
 
-      tenantService.create(newTenants).subscribe((response) => {
+      tenantService.create(newTenants).subscribe(response => {
         expect(response).toStrictEqual(createdTenants);
         done();
       });
@@ -65,10 +65,10 @@ describe('TenantService', () => {
   });
 
   describe('update', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const tenants = [fakeTenant()];
 
-      tenantService.update(tenants).subscribe((response) => {
+      tenantService.update(tenants).subscribe(response => {
         expect(response).toStrictEqual(tenants);
         done();
       });
@@ -80,7 +80,7 @@ describe('TenantService', () => {
   });
 
   describe('delete', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       tenantService.delete('tenant#1').subscribe(() => done());
 
       httpTestingController
@@ -93,3 +93,7 @@ describe('TenantService', () => {
     httpTestingController.verify();
   });
 });
+
+export function expectTenantsGetRequest(httpTestingController: HttpTestingController, tenants = [fakeTenant()]): void {
+  httpTestingController.expectOne({ url: `${CONSTANTS_TESTING.org.baseURL}/configuration/tenants`, method: 'GET' }).flush(tenants);
+}

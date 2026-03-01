@@ -63,7 +63,7 @@ class PlanAppenderTest {
 
     @BeforeEach
     public void beforeEach() {
-        cut = new PlanAppender(objectMapper, planRepository, gatewayConfiguration);
+        cut = new PlanAppender(objectMapper, planRepository, gatewayConfiguration, null);
     }
 
     @Nested
@@ -79,11 +79,13 @@ class PlanAppenderTest {
             ApiReactorDeployable apiReactorDeployable = ApiReactorDeployable.builder().apiId("apiId").reactableApi(reactableApi).build();
             Plan plan = new Plan();
             plan.setId("planId");
-            plan.setApi("apiId");
             plan.setStatus(Plan.Status.PUBLISHED);
+            plan.setReferenceId("apiId");
+            plan.setReferenceType(Plan.PlanReferenceType.API);
             Plan plan2 = new Plan();
             plan2.setId("planId2");
-            plan2.setApi("apiId");
+            plan2.setReferenceId("apiId");
+            plan2.setReferenceType(Plan.PlanReferenceType.API);
             plan2.setStatus(Plan.Status.CLOSED);
             when(planRepository.findByApisAndEnvironments(List.of("apiId"), Set.of("env"))).thenReturn(List.of(plan, plan2));
             List<ApiReactorDeployable> appends = cut.appends(List.of(apiReactorDeployable), Set.of("env"));
@@ -155,14 +157,12 @@ class PlanAppenderTest {
             apiV4.setDefinitionVersion(DefinitionVersion.V4);
             PlanSecurity planSecurity = new PlanSecurity();
             planSecurity.setType("api-key");
-            io.gravitee.definition.model.v4.plan.Plan plan = io.gravitee.definition.model.v4.plan.Plan
-                .builder()
+            io.gravitee.definition.model.v4.plan.Plan plan = io.gravitee.definition.model.v4.plan.Plan.builder()
                 .id("planId")
                 .security(planSecurity)
                 .status(PlanStatus.PUBLISHED)
                 .build();
-            io.gravitee.definition.model.v4.plan.Plan plan2 = io.gravitee.definition.model.v4.plan.Plan
-                .builder()
+            io.gravitee.definition.model.v4.plan.Plan plan2 = io.gravitee.definition.model.v4.plan.Plan.builder()
                 .id("planId2")
                 .security(planSecurity)
                 .status(PlanStatus.CLOSED)
@@ -196,9 +196,9 @@ class PlanAppenderTest {
         void should_return_v4_native_apis_with_plans() {
             when(gatewayConfiguration.hasMatchingTags(Set.of("matching"))).thenReturn(true);
             when(gatewayConfiguration.hasMatchingTags(Set.of("unmatching"))).thenReturn(false);
-            final NativePlan.NativePlanBuilder<?, ?> securedPlanBuilder = NativePlan
-                .builder()
-                .security(PlanSecurity.builder().type("api-key").build());
+            final NativePlan.NativePlanBuilder<?, ?> securedPlanBuilder = NativePlan.builder().security(
+                PlanSecurity.builder().type("api-key").build()
+            );
             final NativePlan publishedPlanWithMatchingTag = securedPlanBuilder
                 .id("plan-published-matching-tag")
                 .status(PlanStatus.PUBLISHED)
@@ -215,8 +215,7 @@ class PlanAppenderTest {
                 .status(PlanStatus.DEPRECATED)
                 .build();
             final NativeApi nativeApi = new NativeApi(
-                io.gravitee.definition.model.v4.nativeapi.NativeApi
-                    .builder()
+                io.gravitee.definition.model.v4.nativeapi.NativeApi.builder()
                     .plans(
                         Map.of(
                             "plan-without-status-no-tag",

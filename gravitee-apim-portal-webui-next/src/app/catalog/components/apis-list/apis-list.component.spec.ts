@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 The Gravitee team (http://gravitee.io)
+ * Copyright (C) 2024 The Gravitee team (http://gravitee.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,8 +155,8 @@ describe('ApisListComponent', () => {
       const allHarnesses = await harnessLoader.getAllHarnesses(ApiCardHarness);
       expect(allHarnesses.length).toEqual(3);
 
-      const secondPageApi = await harnessLoader.getHarnessOrNull(ApiCardHarness.with({ selector: '[ng-reflect-id="second-page-api"]' }));
-      expect(secondPageApi).toBeTruthy();
+      const secondPageApiTitle = await allHarnesses[2].getTitle();
+      expect(secondPageApiTitle).toEqual('second page api');
     });
 
     it('should call API list with search query', async () => {

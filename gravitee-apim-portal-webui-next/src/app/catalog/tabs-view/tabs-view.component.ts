@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 The Gravitee team (http://gravitee.io)
+ * Copyright (C) 2024 The Gravitee team (http://gravitee.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ export class TabsViewComponent implements OnInit {
   onFilterSelection($event: MatTabChangeEvent) {
     const categoryId = this.categories().find(cat => cat.name === $event.tab.textLabel)?.id ?? '';
 
-    this.router.navigate([''], {
+    this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
         filter: categoryId,
@@ -81,7 +81,7 @@ export class TabsViewComponent implements OnInit {
   }
 
   onSearchResults(searchInput: string) {
-    this.router.navigate([''], {
+    this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
         filter: this.filter(),

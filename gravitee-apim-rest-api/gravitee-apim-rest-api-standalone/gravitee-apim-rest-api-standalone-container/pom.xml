@@ -51,6 +51,11 @@
 
         <dependency>
             <groupId>io.gravitee.node</groupId>
+            <artifactId>gravitee-node-logging</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.gravitee.node</groupId>
             <artifactId>gravitee-node-vertx</artifactId>
         </dependency>
 
@@ -58,6 +63,11 @@
             <groupId>io.gravitee.apim.common</groupId>
             <artifactId>gravitee-apim-common</artifactId>
             <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.gravitee.plugin</groupId>
+            <artifactId>gravitee-plugin-common-configurations</artifactId>
         </dependency>
 
         <dependency>
@@ -217,6 +227,11 @@
         <dependency>
             <groupId>ch.qos.logback.contrib</groupId>
             <artifactId>logback-json-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>co.elastic.logging</groupId>
+            <artifactId>logback-ecs-encoder</artifactId>
             <scope>compile</scope>
         </dependency>
         <dependency>

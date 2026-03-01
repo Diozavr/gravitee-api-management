@@ -25,7 +25,10 @@ import io.gravitee.apim.core.api.model.crd.PageCRD;
 import io.gravitee.apim.core.api.model.crd.PlanCRD;
 import io.gravitee.apim.core.member.model.crd.MemberCRD;
 import io.gravitee.definition.jackson.datatype.GraviteeMapper;
+import io.gravitee.node.logging.NodeLoggerFactory;
 import io.gravitee.rest.api.model.PageEntity;
+import io.gravitee.rest.api.model.PageSourceEntity;
+import io.gravitee.rest.api.model.PageType;
 import io.gravitee.rest.api.model.v4.api.ApiEntity;
 import io.gravitee.rest.api.model.v4.api.ExportApiEntity;
 import io.gravitee.rest.api.model.v4.api.GenericApiEntity;
@@ -45,7 +48,6 @@ import org.mapstruct.Mapping;
 import org.mapstruct.Named;
 import org.mapstruct.factory.Mappers;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
@@ -54,7 +56,7 @@ import org.slf4j.LoggerFactory;
 @Mapper
 public interface ApiCRDAdapter {
     ApiCRDAdapter INSTANCE = Mappers.getMapper(ApiCRDAdapter.class);
-    Logger logger = LoggerFactory.getLogger(ApiCRDAdapter.class);
+    Logger log = NodeLoggerFactory.getLogger(ApiCRDAdapter.class);
 
     @Mapping(target = "version", source = "apiEntity.apiVersion")
     @Mapping(target = "metadata", source = "exportEntity.metadata")
@@ -75,10 +77,10 @@ public interface ApiCRDAdapter {
     ApiCRDSpec toCRDSpec(ExportApiEntity exportEntity, NativeApiEntity apiEntity);
 
     default ApiCRDSpec toCRDSpec(ExportApiEntity exportEntity, GenericApiEntity apiEntity) {
-        if (apiEntity instanceof ApiEntity) {
-            return toCRDSpec(exportEntity, (ApiEntity) apiEntity);
-        } else if (apiEntity instanceof NativeApiEntity) {
-            return toCRDSpec(exportEntity, (NativeApiEntity) apiEntity);
+        if (apiEntity instanceof ApiEntity entity) {
+            return toCRDSpec(exportEntity, entity);
+        } else if (apiEntity instanceof NativeApiEntity nativeApiEntity) {
+            return toCRDSpec(exportEntity, nativeApiEntity);
         }
         return null;
     }
@@ -97,9 +99,16 @@ public interface ApiCRDAdapter {
 
     default Map<String, PlanCRD> mapPlans(ExportApiEntity definition) {
         var plansMap = new HashMap<String, PlanCRD>();
-        var nonClosedPlans = definition.getPlans().stream().filter(plan -> !plan.isClosed()).toList();
+        var nonClosedPlans = definition
+            .getPlans()
+            .stream()
+            .filter(plan -> !plan.isClosed())
+            .toList();
         for (var plan : nonClosedPlans) {
-            var key = plansMap.containsKey(plan.getName()) ? randomize(plan.getName()) : plan.getName();
+            var key = plan.getName().trim().replace(" ", "-");
+            if (plansMap.containsKey(key)) {
+                key = randomize(key);
+            }
             plansMap.put(key, toCRDPlan(plan));
         }
         return plansMap;
@@ -110,12 +119,53 @@ public interface ApiCRDAdapter {
 
     default Map<String, PageCRD> mapPages(ExportApiEntity definition) {
         return definition.getPages() != null
-            ? definition.getPages().stream().map(this::toCRDPage).collect(toMap(this::pageKey, identity()))
+            ? definition
+                .getPages()
+                .stream()
+                .map(this::clearAutoFetchedContent)
+                .filter(Objects::nonNull)
+                .map(this::toCRDPage)
+                .collect(toMap(this::pageKey, identity(), (a, b) -> a, LinkedHashMap::new))
             : null;
     }
 
+    private PageEntity clearAutoFetchedContent(PageEntity page) {
+        PageSourceEntity source = page.getSource();
+        if (source == null) {
+            return page;
+        }
+
+        String pageType = source.getType();
+        boolean isMarkdownOrSwagger = PageType.SWAGGER.name().equals(page.getType()) || PageType.MARKDOWN.name().equals(page.getType());
+        boolean isAutoFetch =
+            "github-fetcher".equals(pageType) ||
+            "gitlab-fetcher".equals(pageType) ||
+            "git-fetcher".equals(pageType) ||
+            "http-fetcher".equals(pageType) ||
+            "bitbucket-fetcher".equals(pageType);
+
+        if (isMarkdownOrSwagger && isAutoFetch) {
+            // Remove auto-fetched pages that was generated from ROOT github source
+            if (page.getMetadata() != null && "auto_fetched".equals(page.getMetadata().get("graviteeio/fetcher_type"))) {
+                return null;
+            } else {
+                page.setContent(null);
+                page.setMetadata(null);
+            }
+        } else if (PageType.FOLDER.name().equals(page.getType()) && isAutoFetch) {
+            // Remove auto-generated folders generated from ROOT github fetcher
+            return null;
+        }
+
+        return page;
+    }
+
     default String pageKey(PageCRD page) {
-        return page.getName() == null ? page.getId() : page.getName();
+        if (page.getHrid() == null) {
+            return page.getName() == null ? page.getId() : page.getName();
+        } else {
+            return page.getHrid();
+        }
     }
 
     default Set<MemberCRD> mapMembers(ExportApiEntity definition) {
@@ -123,7 +173,7 @@ public interface ApiCRDAdapter {
             ? definition
                 .getMembers()
                 .stream()
-                .map(me -> new MemberCRD(me.getId(), null, null, me.getRoles().get(0).getName()))
+                .map(me -> new MemberCRD(me.getId(), null, null, me.getRoles().getFirst().getName()))
                 .collect(Collectors.toSet())
             : null;
     }
@@ -138,13 +188,13 @@ public interface ApiCRDAdapter {
         try {
             return mapper.readValue(configuration, LinkedHashMap.class);
         } catch (JsonProcessingException jse) {
-            logger.debug("Cannot parse configuration as LinkedHashMap: " + configuration);
+            log.debug("Cannot parse configuration as LinkedHashMap: {}", configuration);
         }
 
         return Map.of();
     }
 
     private static String randomize(String strToRandomize) {
-        return strToRandomize + "-" + RandomStringUtils.randomNumeric(8);
+        return strToRandomize + "-" + RandomStringUtils.secure().nextNumeric(8);
     }
 }

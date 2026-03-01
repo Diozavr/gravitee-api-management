@@ -66,7 +66,7 @@ public class ApiTemplateServiceImpl implements ApiTemplateService {
 
     @Override
     public GenericApiModel findByIdForTemplates(ExecutionContext executionContext, String apiId, boolean decodeTemplate) {
-        final GenericApiEntity genericApiEntity = apiSearchService.findGenericById(executionContext, apiId);
+        final GenericApiEntity genericApiEntity = apiSearchService.findGenericById(executionContext, apiId, false, false, false);
 
         return switch (genericApiEntity.getDefinitionVersion()) {
             case FEDERATED, FEDERATED_AGENT -> {
@@ -216,16 +216,14 @@ public class ApiTemplateServiceImpl implements ApiTemplateService {
         Map<String, String> metadata
     ) {
         try {
-            String decodedValue =
-                this.notificationTemplateService.resolveInlineTemplateWithParam(
-                        executionContext.getOrganizationId(),
-                        genericApiModel.getId(),
-                        new StringReader(metadata.toString()),
-                        Collections.singletonMap("api", genericApiModel)
-                    );
+            String decodedValue = this.notificationTemplateService.resolveInlineTemplateWithParam(
+                executionContext.getOrganizationId(),
+                genericApiModel.getId(),
+                new StringReader(metadata.toString()),
+                Collections.singletonMap("api", genericApiModel)
+            );
 
-            Map<String, String> decodedMetadata = Arrays
-                .stream(decodedValue.substring(1, decodedValue.length() - 1).split(", "))
+            Map<String, String> decodedMetadata = Arrays.stream(decodedValue.substring(1, decodedValue.length() - 1).split(", "))
                 .map(entry -> entry.split("=", 2))
                 .collect(Collectors.toMap(entry -> entry[0], entry -> entry.length > 1 ? entry[1] : ""));
 

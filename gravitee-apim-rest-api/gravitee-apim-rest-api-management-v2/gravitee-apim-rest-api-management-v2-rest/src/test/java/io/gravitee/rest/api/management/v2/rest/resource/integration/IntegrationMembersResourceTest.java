@@ -22,12 +22,17 @@ import static io.gravitee.common.http.HttpStatusCode.FORBIDDEN_403;
 import static io.gravitee.common.http.HttpStatusCode.NO_CONTENT_204;
 import static io.gravitee.common.http.HttpStatusCode.OK_200;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import fixtures.core.model.ApiFixtures;
+import fixtures.core.model.IntegrationFixture;
 import fixtures.core.model.LicenseFixtures;
+import inmemory.ApiCrudServiceInMemory;
+import inmemory.IntegrationCrudServiceInMemory;
 import io.gravitee.apim.core.user.model.BaseUserEntity;
 import io.gravitee.node.api.license.LicenseManager;
 import io.gravitee.rest.api.management.v2.rest.mapper.MemberMapper;
@@ -71,6 +76,12 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
     @Autowired
     LicenseManager licenseManager;
 
+    @Autowired
+    ApiCrudServiceInMemory apiCrudServiceInMemory;
+
+    @Autowired
+    IntegrationCrudServiceInMemory integrationCrudServiceInMemory;
+
     @Override
     protected String contextPath() {
         return "/environments/" + ENVIRONMENT + "/integrations/" + INTEGRATION_ID + "/members";
@@ -93,7 +104,9 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
             List.of(BaseUserEntity.builder().id(USER_NAME).firstname("Jane").lastname("Doe").email("jane.doe@gravitee.io").build())
         );
 
-        when(licenseManager.getOrganizationLicenseOrPlatform(ORGANIZATION)).thenReturn(LicenseFixtures.anEnterpriseLicense());
+        when(licenseManager.getOrganizationLicenseOrPlatform(anyString())).thenReturn(LicenseFixtures.anEnterpriseLicense());
+        integrationCrudServiceInMemory.initWith(List.of(IntegrationFixture.anApiIntegration()));
+        apiCrudServiceInMemory.initWith(List.of(ApiFixtures.aFederatedApi()));
     }
 
     @AfterEach
@@ -108,16 +121,14 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
 
         @BeforeEach
         void setUp() {
-            when(membershipService.createNewMembershipForIntegration(any(), any(), any(), any(), any()))
-                .thenAnswer(invocation ->
-                    MemberEntity
-                        .builder()
-                        .id(invocation.getArgument(2))
-                        .referenceId(invocation.getArgument(1))
-                        .displayName("John Doe")
-                        .roles(List.of(RoleEntity.builder().name(invocation.getArgument(4)).build()))
-                        .build()
-                );
+            when(membershipService.createNewMembershipForIntegration(any(), any(), any(), any(), any())).thenAnswer(invocation ->
+                MemberEntity.builder()
+                    .id(invocation.getArgument(2))
+                    .referenceId(invocation.getArgument(1))
+                    .displayName("John Doe")
+                    .roles(List.of(RoleEntity.builder().name(invocation.getArgument(4)).build()))
+                    .build()
+            );
         }
 
         @Test
@@ -129,8 +140,7 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
                     eq(INTEGRATION_ID),
                     eq(RolePermissionAction.CREATE)
                 )
-            )
-                .thenReturn(false);
+            ).thenReturn(false);
 
             final Response response = target.request().post(Entity.json(new AddMember()));
             assertThat(response).hasStatus(FORBIDDEN_403);
@@ -176,8 +186,7 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
                     eq(INTEGRATION_ID),
                     any()
                 )
-            )
-                .thenReturn(false);
+            ).thenReturn(false);
 
             final Response response = target.request().get();
             assertThat(response).hasStatus(FORBIDDEN_403);
@@ -185,8 +194,7 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
 
         @Test
         public void should_list_one_integration_member() {
-            var member = MemberEntity
-                .builder()
+            var member = MemberEntity.builder()
                 .id("memberId")
                 .displayName("John Doe")
                 .roles(List.of(RoleEntity.builder().name("OWNER").build()))
@@ -199,8 +207,7 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
                     eq(MembershipReferenceType.INTEGRATION),
                     eq(INTEGRATION_ID)
                 )
-            )
-                .thenReturn(Set.of(member));
+            ).thenReturn(Set.of(member));
 
             final Response response = target.request().get();
             assertThat(response)
@@ -222,32 +229,28 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
             var roleOwner = RoleEntity.builder().name("OWNER").build();
             var roleUser = RoleEntity.builder().name("USER").build();
 
-            var member1 = MemberEntity
-                .builder()
+            var member1 = MemberEntity.builder()
                 .id("member1")
                 .displayName("John Doe")
                 .roles(List.of(roleOwner))
                 .type(MembershipMemberType.USER)
                 .build();
 
-            var member2 = MemberEntity
-                .builder()
+            var member2 = MemberEntity.builder()
                 .id("member2")
                 .displayName("Jane Doe")
                 .roles(List.of(roleUser))
                 .type(MembershipMemberType.USER)
                 .build();
 
-            var member3 = MemberEntity
-                .builder()
+            var member3 = MemberEntity.builder()
                 .id("member3")
                 .displayName("Richard Roe")
                 .roles(List.of(roleUser))
                 .type(MembershipMemberType.USER)
                 .build();
 
-            var member4 = MemberEntity
-                .builder()
+            var member4 = MemberEntity.builder()
                 .id("member4")
                 .displayName("Baby Doe")
                 .roles(List.of(roleUser))
@@ -260,8 +263,7 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
                     eq(MembershipReferenceType.INTEGRATION),
                     eq(INTEGRATION_ID)
                 )
-            )
-                .thenReturn(Set.of(member1, member2, member3, member4));
+            ).thenReturn(Set.of(member1, member2, member3, member4));
 
             var paginatedTarget = target
                 .queryParam(PaginationParam.PAGE_QUERY_PARAM_NAME, 1)
@@ -305,8 +307,7 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
                     eq(INTEGRATION_ID),
                     eq(RolePermissionAction.DELETE)
                 )
-            )
-                .thenReturn(false);
+            ).thenReturn(false);
 
             final Response response = target.request().delete();
             assertThat(response).hasStatus(FORBIDDEN_403);
@@ -317,8 +318,11 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
             final Response response = target.request().delete();
             assertThat(response).hasStatus(NO_CONTENT_204);
 
-            verify(membershipService)
-                .deleteMemberForIntegration(eq(GraviteeContext.getExecutionContext()), eq(INTEGRATION_ID), eq(MEMBER_ID));
+            verify(membershipService).deleteMemberForIntegration(
+                eq(GraviteeContext.getExecutionContext()),
+                eq(INTEGRATION_ID),
+                eq(MEMBER_ID)
+            );
         }
     }
 
@@ -331,16 +335,14 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
         void setUp() {
             target = rootTarget(MEMBER_ID);
 
-            when(membershipService.updateMembershipForIntegration(any(), any(), any(), any()))
-                .thenAnswer(invocation ->
-                    MemberEntity
-                        .builder()
-                        .id(invocation.getArgument(2))
-                        .referenceId(invocation.getArgument(1))
-                        .displayName("John Doe")
-                        .roles(List.of(RoleEntity.builder().name(invocation.getArgument(3)).build()))
-                        .build()
-                );
+            when(membershipService.updateMembershipForIntegration(any(), any(), any(), any())).thenAnswer(invocation ->
+                MemberEntity.builder()
+                    .id(invocation.getArgument(2))
+                    .referenceId(invocation.getArgument(1))
+                    .displayName("John Doe")
+                    .roles(List.of(RoleEntity.builder().name(invocation.getArgument(3)).build()))
+                    .build()
+            );
         }
 
         @Test
@@ -352,8 +354,7 @@ public class IntegrationMembersResourceTest extends AbstractResourceTest {
                     eq(INTEGRATION_ID),
                     eq(RolePermissionAction.UPDATE)
                 )
-            )
-                .thenReturn(false);
+            ).thenReturn(false);
 
             final Response response = target.request().put(Entity.json(new UpdateMember()));
             assertThat(response).hasStatus(FORBIDDEN_403);

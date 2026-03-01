@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 The Gravitee team (http://gravitee.io)
+ * Copyright (C) 2024 The Gravitee team (http://gravitee.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { tap } from 'rxjs';
 
 import { SslTruststoreFormValue, TRUSTSTORE_TYPE_LABELS } from './ssl-trust-store.model';
+import { MobileClassDirective } from '../../../../../../directives/mobile-class.directive';
 import { JKSTrustStore, PEMTrustStore, PKCS12TrustStore, SslTrustStore, SslTrustStoreType } from '../../../../../../entities/ssl';
 import { pathOrContentRequired } from '../validators/ssl-trust-store.validators';
 
@@ -54,7 +55,7 @@ import { pathOrContentRequired } from '../validators/ssl-trust-store.validators'
     },
   ],
   standalone: true,
-  imports: [ReactiveFormsModule, MatFormFieldModule, MatSelectModule, MatInputModule],
+  imports: [ReactiveFormsModule, MatFormFieldModule, MatSelectModule, MatInputModule, MobileClassDirective],
 })
 export class SslTrustStoreComponent implements OnInit, ControlValueAccessor, Validator {
   types = TRUSTSTORE_TYPE_LABELS;

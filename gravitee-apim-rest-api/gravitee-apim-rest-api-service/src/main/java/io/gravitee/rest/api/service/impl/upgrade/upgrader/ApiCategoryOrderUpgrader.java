@@ -25,13 +25,13 @@ import io.gravitee.repository.management.api.search.ApiCriteria;
 import io.gravitee.repository.management.api.search.ApiFieldFilter;
 import io.gravitee.repository.management.model.ApiCategoryOrder;
 import java.util.concurrent.atomic.AtomicInteger;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class ApiCategoryOrderUpgrader implements Upgrader {
 
     private final ApiRepository apiRepository;
@@ -62,31 +62,25 @@ public class ApiCategoryOrderUpgrader implements Upgrader {
     }
 
     private boolean fillApiCategoryOrderTable() throws TechnicalException {
-        this.categoryRepository.findAll()
-            .forEach(category -> {
-                var order = new AtomicInteger(0);
-                this.apiRepository.search(new ApiCriteria.Builder().category(category.getId()).build(), ApiFieldFilter.defaultFields())
-                    .forEach(api -> {
-                        try {
-                            this.apiCategoryOrderRepository.create(
-                                    ApiCategoryOrder
-                                        .builder()
-                                        .apiId(api.getId())
-                                        .categoryId(category.getId())
-                                        .order(order.getAndIncrement())
-                                        .build()
-                                );
-                        } catch (TechnicalException e) {
-                            log.error(
-                                "Unable to create api category order for API [{}] and Category [{}]",
-                                api.getId(),
-                                category.getId(),
-                                e
-                            );
-                            throw new RuntimeException(e);
-                        }
-                    });
-            });
+        this.categoryRepository.findAll().forEach(category -> {
+            var order = new AtomicInteger(0);
+            this.apiRepository.search(new ApiCriteria.Builder().category(category.getId()).build(), ApiFieldFilter.defaultFields()).forEach(
+                api -> {
+                    try {
+                        this.apiCategoryOrderRepository.create(
+                            ApiCategoryOrder.builder()
+                                .apiId(api.getId())
+                                .categoryId(category.getId())
+                                .order(order.getAndIncrement())
+                                .build()
+                        );
+                    } catch (TechnicalException e) {
+                        log.error("Unable to create api category order for API [{}] and Category [{}]", api.getId(), category.getId(), e);
+                        throw new RuntimeException(e);
+                    }
+                }
+            );
+        });
         return true;
     }
 }

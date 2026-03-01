@@ -14,17 +14,32 @@
  * limitations under the License.
  */
 @use './m3-adapter';
+@use './theme';
 
 a.external-link {
   color: inherit;
   text-decoration: none;
 }
 
+a.internal-link {
+  color: #{theme.$primary-main-color};
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+span.icon-with-background {
+  padding: 15px;
+  border-radius: 50%;
+  background: #{theme.$primary-highlight-color};
+  line-height: 1;
+}
+
 code {
   padding: 0.2em 0.4em;
-  border-radius: 6px;
   margin: 0;
-  background-color: m3-adapter.$surface-variant;
   font-size: 85%;
   white-space: break-spaces !important; // Overrides Swagger-UI inline styling of bash language
 }

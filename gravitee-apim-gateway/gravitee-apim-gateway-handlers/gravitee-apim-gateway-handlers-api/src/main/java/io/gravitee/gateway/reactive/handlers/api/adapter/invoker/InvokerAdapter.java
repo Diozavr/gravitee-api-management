@@ -30,8 +30,7 @@ import io.gravitee.gateway.reactive.policy.adapter.context.ExecutionContextAdapt
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import java.util.Locale;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * Specific implementation of {@link Invoker} that adapt the behavior of an existing {@link io.gravitee.gateway.api.Invoker}
@@ -42,9 +41,9 @@ import org.slf4j.LoggerFactory;
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class InvokerAdapter implements HttpInvoker, Invoker, io.gravitee.gateway.api.Invoker {
 
-    private static final Logger log = LoggerFactory.getLogger(InvokerAdapter.class);
     static final String GATEWAY_CLIENT_CONNECTION_ERROR = "GATEWAY_CLIENT_CONNECTION_ERROR";
     static final String CLIENT_ABORTED_DURING_RESPONSE_ERROR = "CLIENT_ABORTED_DURING_RESPONSE_ERROR";
     static final String CLIENT_ABORTED_DURING_RESPONSE_ERROR_MESSAGE =
@@ -71,33 +70,32 @@ public class InvokerAdapter implements HttpInvoker, Invoker, io.gravitee.gateway
     @Override
     public Completable invoke(HttpExecutionContext ctx) {
         final ExecutionContextAdapter adaptedCtx = ExecutionContextAdapter.create(ctx);
-        return Completable
-            .create(nextEmitter -> {
-                log.debug("Executing invoker {}", id);
+        return Completable.create(nextEmitter -> {
+            ctx.withLogger(log).debug("Executing invoker {}", id);
 
-                // Http status set to 0 to reflect the fact we are waiting for the backend http status.
-                ctx.response().status(0);
+            // Http status set to 0 to reflect the fact we are waiting for the backend http status.
+            ctx.response().status(0);
 
-                // Stream adapter allowing to write the request content to the upstream.
-                final ReadWriteStreamAdapter streamAdapter = new ReadWriteStreamAdapter(adaptedCtx, nextEmitter);
+            // Stream adapter allowing to write the request content to the upstream.
+            final ReadWriteStreamAdapter streamAdapter = new ReadWriteStreamAdapter(adaptedCtx, nextEmitter);
 
-                // Connection handler adapter to receive the response from the invoker.
-                final ConnectionHandlerAdapter connectionHandlerAdapter = new ConnectionHandlerAdapter(ctx, nextEmitter);
+            // Connection handler adapter to receive the response from the invoker.
+            final ConnectionHandlerAdapter connectionHandlerAdapter = new ConnectionHandlerAdapter(ctx, nextEmitter);
 
-                // Assign the chunks from the connection handler to the response.
-                ctx.response().chunks(connectionHandlerAdapter.getChunks());
+            // Assign the chunks from the connection handler to the response.
+            ctx.response().chunks(connectionHandlerAdapter.getChunks());
 
-                try {
-                    // Invoke to make the connection happen.
-                    invoke(adaptedCtx, streamAdapter, connectionHandlerAdapter);
-                } catch (Throwable t) {
-                    nextEmitter.tryOnError(new Exception("An error occurred while trying to execute invoker " + id, t));
-                }
-            })
+            try {
+                // Invoke to make the connection happen.
+                invoke(adaptedCtx, streamAdapter, connectionHandlerAdapter);
+            } catch (Throwable t) {
+                nextEmitter.tryOnError(new Exception("An error occurred while trying to execute invoker " + id, t));
+            }
+        })
             .doOnTerminate(adaptedCtx::restore)
             .doOnDispose(() -> {
                 if (ctx.response().status() == 0) {
-                    ctx.response().status(500);
+                    ctx.response().status(499);
                     ctx.metrics().setErrorKey(CLIENT_ABORTED_DURING_RESPONSE_ERROR);
                     ctx.metrics().setErrorMessage(CLIENT_ABORTED_DURING_RESPONSE_ERROR_MESSAGE);
                 }
@@ -110,8 +108,10 @@ public class InvokerAdapter implements HttpInvoker, Invoker, io.gravitee.gateway
                 if (throwable instanceof InterruptionFailureException) {
                     return ctx.interruptWith(((InterruptionFailureException) throwable).getExecutionFailure());
                 } else {
-                    log.error("An error occurred when invoking the backend.", throwable);
-                    return ctx.interruptWith(new ExecutionFailure(HttpStatusCode.BAD_GATEWAY_502).key(GATEWAY_CLIENT_CONNECTION_ERROR));
+                    ctx.withLogger(log).error("An error occurred when invoking the backend.", throwable);
+                    return ctx.interruptWith(
+                        new ExecutionFailure(HttpStatusCode.BAD_GATEWAY_502).key(GATEWAY_CLIENT_CONNECTION_ERROR).cause(throwable)
+                    );
                 }
             });
     }

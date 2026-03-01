@@ -65,10 +65,12 @@ public interface PlanMapper {
 
     @Mapping(target = "security.type", qualifiedByName = "mapToPlanSecurityType")
     @Mapping(target = "security.configuration", qualifiedByName = "deserializeConfiguration")
+    @Mapping(target = "apiId", source = "referenceId")
     PlanV4 map(PlanEntity planEntity);
 
     @Mapping(target = "security.type", qualifiedByName = "mapToPlanSecurityType")
     @Mapping(target = "security.configuration", qualifiedByName = "deserializeConfiguration")
+    @Mapping(target = "apiId", source = "referenceId")
     PlanV4 map(NativePlanEntity planEntity);
 
     default PlanV4 mapToPlanV4(GenericPlanEntity planEntity) {
@@ -167,7 +169,10 @@ public interface PlanMapper {
         if (apiType == io.gravitee.rest.api.management.v2.rest.model.ApiType.NATIVE) {
             return plans.stream().map(INSTANCE::toNativePlanWithFlows).collect(Collectors.toSet());
         }
-        return plans.stream().map(p -> INSTANCE.toHttpPlanWithFlows(p, apiType)).collect(Collectors.toSet());
+        return plans
+            .stream()
+            .map(p -> INSTANCE.toHttpPlanWithFlows(p, apiType))
+            .collect(Collectors.toSet());
     }
 
     @Mapping(target = "validation", defaultValue = "MANUAL")

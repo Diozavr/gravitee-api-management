@@ -25,12 +25,12 @@ import io.netty.handler.codec.http.HttpHeaderNames;
 import io.vertx.rxjava3.core.http.HttpServerRequest;
 import java.util.Map;
 import java.util.Optional;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.stereotype.Service;
 
-@Slf4j
+@CustomLog
 @Service("integrationWebsocketControllerAuthentication")
 @RequiredArgsConstructor
 public class IntegrationWebsocketControllerAuthentication implements WebSocketControllerAuthentication<IntegrationCommandContext> {
@@ -46,9 +46,9 @@ public class IntegrationWebsocketControllerAuthentication implements WebSocketCo
     @Override
     public IntegrationCommandContext authenticate(final HttpServerRequest httpServerRequest) {
         var headers = httpServerRequest.headers();
-        var tokenValue = Optional
-            .ofNullable(headers.get(AUTHORIZATION_HEADER))
-            .map(authorizationHeader -> authorizationHeader.substring(AUTHORIZATION_HEADER_BEARER.length()).trim());
+        var tokenValue = Optional.ofNullable(headers.get(AUTHORIZATION_HEADER)).map(authorizationHeader ->
+            authorizationHeader.substring(AUTHORIZATION_HEADER_BEARER.length()).trim()
+        );
 
         if (tokenValue.isPresent()) {
             try {

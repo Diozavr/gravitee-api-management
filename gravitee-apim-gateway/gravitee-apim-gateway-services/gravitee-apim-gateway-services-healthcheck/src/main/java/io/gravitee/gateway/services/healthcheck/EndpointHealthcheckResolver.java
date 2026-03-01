@@ -35,8 +35,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -45,9 +44,8 @@ import org.springframework.beans.factory.annotation.Autowired;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class EndpointHealthcheckResolver implements InitializingBean {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(EndpointHealthcheckResolver.class);
 
     @Autowired
     private GatewayConfiguration gatewayConfiguration;
@@ -68,10 +66,10 @@ public class EndpointHealthcheckResolver implements InitializingBean {
             if (configuration.containsProperty("system.proxy.host")) {
                 this.systemProxyOptions = buildProxyOptions(configuration);
             } else {
-                LOGGER.debug("System proxy not defined");
+                log.debug("System proxy not defined");
             }
         } catch (Exception e) {
-            LOGGER.warn("System proxy not properly initialized", e);
+            log.warn("System proxy not properly initialized", e);
         }
     }
 
@@ -104,31 +102,23 @@ public class EndpointHealthcheckResolver implements InitializingBean {
         // Filtering endpoints according to tenancy configuration
         if (gatewayConfiguration.tenant().isPresent()) {
             String tenant = gatewayConfiguration.tenant().get();
-            httpEndpoints =
-                httpEndpoints.filter(endpoint ->
-                    endpoint.getTenants() == null || endpoint.getTenants().isEmpty() || endpoint.getTenants().contains(tenant)
-                );
+            httpEndpoints = httpEndpoints.filter(
+                endpoint -> endpoint.getTenants() == null || endpoint.getTenants().isEmpty() || endpoint.getTenants().contains(tenant)
+            );
         }
 
         // Remove backup endpoints
         httpEndpoints = httpEndpoints.filter(endpoint -> !endpoint.isBackup());
 
         // Keep only endpoints where health-check is enabled or not settled (inherit from service)
-        httpEndpoints =
-            httpEndpoints.filter(endpoint ->
-                (
-                    (endpoint.getHealthCheck() == null && hcEnabled) ||
-                    (
-                        endpoint.getHealthCheck() != null && endpoint.getHealthCheck().isEnabled() && !endpoint.getHealthCheck().isInherit()
-                    ) ||
-                    (
-                        endpoint.getHealthCheck() != null &&
-                        endpoint.getHealthCheck().isEnabled() &&
-                        endpoint.getHealthCheck().isInherit() &&
-                        hcEnabled
-                    )
-                )
-            );
+        httpEndpoints = httpEndpoints.filter(endpoint ->
+            ((endpoint.getHealthCheck() == null && hcEnabled) ||
+                (endpoint.getHealthCheck() != null && endpoint.getHealthCheck().isEnabled() && !endpoint.getHealthCheck().isInherit()) ||
+                (endpoint.getHealthCheck() != null &&
+                    endpoint.getHealthCheck().isEnabled() &&
+                    endpoint.getHealthCheck().isInherit() &&
+                    hcEnabled))
+        );
 
         return httpEndpoints
             .map(
@@ -157,7 +147,7 @@ public class EndpointHealthcheckResolver implements InitializingBean {
                 endpoint.getEndpointStatusListeners().forEach(httpEndpoint::addEndpointStatusListener);
                 return httpEndpoint;
             } catch (JsonProcessingException e) {
-                LOGGER.warn("Cannot convert endpoint to http endpoint", e);
+                log.warn("Cannot convert endpoint to http endpoint", e);
             }
         }
         return null;

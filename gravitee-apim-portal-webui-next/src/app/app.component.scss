@@ -17,12 +17,20 @@
 
 :host {
   display: flex;
-  min-height: 95vh;
+  width: 100%;
+  max-width: 100%;
+  height: 100vh;
+  box-sizing: border-box;
   flex-flow: column;
   margin: auto;
-  gap: 40px;
 }
 
 .main-container-wrapper {
+  display: flex;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   flex: 1 1 100%;
+  justify-content: center;
 }

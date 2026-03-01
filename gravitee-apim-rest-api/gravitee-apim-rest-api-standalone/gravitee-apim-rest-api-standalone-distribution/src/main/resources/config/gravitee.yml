@@ -54,6 +54,12 @@
 #      path: ${gravitee.home}/security/truststore.jks
 #      password: secret
 
+# Configure CORS configuration cache
+#cors:
+#  cache:
+#    max-size: 1000
+#    ttl: 60000
+
 http:
   api:
     # Configure the listening path for the API. Default to /
@@ -89,13 +95,38 @@ http:
 #        allow-headers: 'Cache-Control, Pragma, Origin, Authorization, Content-Type, X-Requested-With, If-Match, X-Xsrf-Token'
 #  Allows to configure the header Access-Control-Expose-Headers
 #        exposed-headers: 'ETag;X-Xsrf-Token'
-  csrf:
-    # Allows to enable or disable the CSRF protection. Enabled by default.
-    enabled: true
-  hsts:
-    enabled: true
-    include-sub-domains: true
-    max-age: 31536000
+  secureHeaders:
+    csrf:
+      # Allows to enable or disable the CSRF protection. Enabled by default.
+      enabled: true
+    hsts:
+      enabled: true
+      include-sub-domains: true
+      max-age: 31536000
+
+    # Adds the X-Frame-Options header. Possible values: DENY, SAMEORIGIN. Enabled by default on SAMEORIGIN.
+    xframe:
+      enabled: true
+      action: SAMEORIGIN
+
+    # Adds the X-Content-Type-Options: nosniff header. Enabled by default.
+    xContentTypeOptions:
+      enabled: true
+
+    # Adds the Content-Security-Policy header.
+    # Example: "default-src 'self'; frame-ancestors 'none';"
+    csp:
+      policy: "frame-ancestors 'self';"
+
+    # Adds the Referrer-Policy header.
+    # Example: "no-referrer", "strict-origin-when-cross-origin", ...
+    referrerPolicy:
+      policy: "strict-origin-when-cross-origin"
+
+    # Adds the Permissions-Policy header.
+    # Example: "geolocation=(), microphone=(), camera=()"
+    permissionsPolicy:
+      policy: "geolocation=(), microphone=(), camera=()"
 
 # Plugins repository
 #plugins:
@@ -245,6 +276,7 @@ services:
     enabled: false
     prometheus:
       enabled: true
+      concurrencyLimit: 3
 
   # v3 upgrader service. Can be disabled after first launch.
   v3-upgrader:
@@ -307,6 +339,9 @@ analytics:
 #    temporal:
 #      default: PT1S
 #      limit: PT1S
+#    windowed_count:
+#      default: 1/PT10S
+#      limit: 1/PT1S
 
 # Authentication and identity sources
 # Users can have following roles (authorities):

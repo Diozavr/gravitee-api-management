@@ -34,28 +34,18 @@ import { Constants } from '../../../entities/Constants';
 
 const TYPES_INFOS = {
   SIMPLE: {
-    title: 'Simple',
-    subtitle: 'A hands-free application. Using this type, you will be able to define the client_id by your own',
     icon: 'gio:hand',
   },
   BROWSER: {
-    title: 'SPA',
-    subtitle: 'Angular, React, Ember, ...',
     icon: 'gio:laptop',
   },
   WEB: {
-    title: 'Web',
-    subtitle: 'Java, .Net, ...',
     icon: 'gio:language',
   },
   NATIVE: {
-    title: 'Native',
-    subtitle: 'iOS, Android, ...',
     icon: 'gio:tablet-device',
   },
   BACKEND_TO_BACKEND: {
-    title: 'Backend to backend',
-    subtitle: 'Machine to machine',
     icon: 'gio:share-2',
   },
 };
@@ -89,19 +79,19 @@ export class ApplicationCreationComponent implements OnInit {
 
   requireUserGroups = false;
   public applicationTypes$ = this.applicationTypesService.getEnabledApplicationTypes().pipe(
-    map((types) =>
-      types.map((type) => {
+    map(types =>
+      types.map(type => {
         const typeInfo = TYPES_INFOS[type.id.toUpperCase()];
         return {
           ...type,
           id: type.id.toUpperCase(),
-          title: typeInfo.title,
-          subtitle: typeInfo.subtitle,
+          title: type.name,
+          subtitle: type.description,
           icon: typeInfo.icon,
         };
       }),
     ),
-    tap((types) => {
+    tap(types => {
       // Set the first type as default
       this.applicationFormGroup.get('type').setValue(types[0].id.toUpperCase());
     }),
@@ -156,11 +146,11 @@ export class ApplicationCreationComponent implements OnInit {
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (application) => {
+        next: application => {
           this.snackBarService.success('Application created');
           this.router.navigate(['../', application.id], { relativeTo: this.activatedRoute });
         },
-        error: (error) => {
+        error: error => {
           this.snackBarService.error(error?.error?.message ?? 'An error occurred while creating the application!');
           this.isCreating = false;
         },

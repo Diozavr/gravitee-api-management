@@ -1,0 +1,184 @@
+/*
+ * Copyright (C) 2025 The Gravitee team (http://gravitee.io)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@use './overrides' as overrides;
+@use '../scss/token-utils' as token-utils;
+
+$token-mapping: overrides.tokens();
+
+// Color tokens
+$card-background: token-utils.slot(card-background-color, $token-mapping);
+$surface-variant: color-mix(in srgb, token-utils.slot(outline-color, $token-mapping) 5%, $card-background);
+$primary-color: token-utils.slot(primary-color, $token-mapping);
+$error-color: token-utils.slot(error-color, $token-mapping);
+$contrast-text: token-utils.slot(contrast-text-color, $token-mapping);
+$text-primary: token-utils.slot(text-primary-color, $token-mapping);
+$text-secondary: color-mix(in srgb, $text-primary 60%, transparent);
+$outline-color: token-utils.slot(outline-color, $token-mapping);
+
+.container {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 16px;
+  background-color: $card-background;
+  gap: 16px;
+
+  &__editor-preview {
+    display: flex;
+    height: clamp(320px, 55vh, 720px);
+    min-height: 0;
+    flex: 0 0 auto;
+  }
+
+  &__inner-border {
+    position: relative;
+    overflow: auto;
+    width: calc(50% - 6.5px);
+    padding: 16px;
+    border: 1px solid $outline-color;
+    border-radius: 4px;
+    contain: layout style;
+  }
+
+  &__form-status {
+    flex: 0 0 auto;
+  }
+
+  .hr {
+    width: 1px;
+    border: none;
+    margin: 0 12px;
+    background-color: $outline-color;
+  }
+}
+
+.status-panel {
+  padding: 12px;
+  border: 1px solid $outline-color;
+  border-radius: 4px;
+  font-size: 0.875rem;
+
+  &--validation {
+    margin-bottom: 16px;
+  }
+
+  &--summary {
+    background-color: $surface-variant;
+  }
+
+  &__section + &__section {
+    padding-top: 12px;
+    border-top: 1px solid $outline-color;
+    margin-top: 12px;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    font-weight: 500;
+    gap: 8px;
+  }
+
+  &__section--error &__header {
+    color: $error-color;
+  }
+
+  &__icon {
+    font-size: 1rem;
+  }
+
+  &__title {
+    font-size: 0.875rem;
+  }
+
+  &__badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+
+    &--valid {
+      background-color: $primary-color;
+      color: $contrast-text;
+    }
+
+    &--invalid {
+      background-color: $error-color;
+      color: $contrast-text;
+    }
+  }
+
+  &__meta {
+    margin-bottom: 8px;
+    color: $text-secondary;
+  }
+
+  &__subtitle {
+    margin-bottom: 4px;
+    color: $error-color;
+    font-weight: 500;
+  }
+
+  &__list {
+    padding-left: 20px;
+    margin: 0;
+    list-style: disc;
+  }
+
+  &__item {
+    margin-bottom: 4px;
+    line-height: 1.4;
+  }
+
+  &__key {
+    margin-right: 4px;
+    font-weight: 500;
+  }
+
+  &__message {
+    font-size: 0.875rem;
+  }
+
+  &__muted {
+    color: $text-secondary;
+  }
+
+  &__details {
+    padding: 8px 0 0;
+    border-top: 1px solid $outline-color;
+    margin-top: 12px;
+  }
+
+  &__summary {
+    color: $text-primary;
+    cursor: pointer;
+    font-weight: 500;
+    list-style: none;
+  }
+
+  &__summary::-webkit-details-marker {
+    display: none;
+  }
+
+  &__summary::before {
+    content: '> ';
+  }
+
+  &__details[open] > &__summary::before {
+    content: 'v ';
+  }
+}

@@ -24,15 +24,13 @@ import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class ProcessorChain implements Hookable<ProcessorHook> {
 
     private final String id;
@@ -63,7 +61,7 @@ public class ProcessorChain implements Hookable<ProcessorHook> {
     }
 
     private Completable executeNext(final HttpExecutionContextInternal ctx, final Processor processor, final ExecutionPhase phase) {
-        log.debug("Executing processor {} in processor chain {}", processor.getId(), id);
+        ctx.withLogger(log).debug("Executing processor {} in processor chain {}", processor.getId(), id);
         return HookHelper.hook(() -> processor.execute(ctx), processor.getId(), processorHooks, ctx, phase);
     }
 

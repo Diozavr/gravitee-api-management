@@ -36,8 +36,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
@@ -47,12 +46,8 @@ import org.springframework.beans.factory.annotation.Autowired;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class AverageAvailabilityCommand extends AbstractElasticsearchQueryCommand<AvailabilityResponse> {
-
-    /**
-     * Logger.
-     */
-    private final Logger logger = LoggerFactory.getLogger(AverageAvailabilityCommand.class);
 
     private static final String TEMPLATE = "healthcheck/avg-availability.ftl";
 
@@ -73,22 +68,20 @@ public class AverageAvailabilityCommand extends AbstractElasticsearchQueryComman
 
         try {
             final long now = System.currentTimeMillis();
-            final long from = ZonedDateTime
-                .ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault())
+            final long from = ZonedDateTime.ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault())
                 .minus(1, ChronoUnit.MONTHS)
                 .toInstant()
                 .toEpochMilli();
 
-            final Single<SearchResponse> result =
-                this.client.search(
-                        this.indexNameGenerator.getIndexName(queryContext.placeholder(), Type.HEALTH_CHECK, from, now, clusters),
-                        !info.getVersion().canUseTypeRequests() ? null : Type.HEALTH_CHECK.getType(),
-                        sQuery
-                    );
+            final Single<SearchResponse> result = this.client.search(
+                this.indexNameGenerator.getIndexName(queryContext.placeholder(), Type.HEALTH_CHECK, from, now, clusters),
+                !info.getVersion().canUseTypeRequests() ? null : Type.HEALTH_CHECK.getType(),
+                sQuery
+            );
 
             return this.toAvailabilityResponseResponse(result.blockingGet());
         } catch (Exception eex) {
-            logger.error("Impossible to perform AverageResponseTimeQuery", eex);
+            log.error("Impossible to perform AverageResponseTimeQuery", eex);
             throw new AnalyticsException("Impossible to perform AverageResponseTimeQuery", eex);
         }
     }

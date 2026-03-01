@@ -1,0 +1,105 @@
+@use 'sass:map';
+
+@use '@angular/material' as mat;
+@use '@gravitee/ui-particles-angular' as gio;
+@use '../../../scss/gio-layout' as gio-layout;
+
+$typography: map.get(gio.$mat-theme, typography);
+
+:host {
+  @include gio-layout.gio-responsive-content-container;
+  display: flex;
+  flex-direction: column;
+}
+
+.api-product-create {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+
+  &__header {
+    margin-bottom: 24px;
+  }
+
+  &__title {
+    @include mat.m2-typography-level($typography, headline-6);
+    margin: 0 0 8px 0;
+    color: mat.m2-get-color-from-palette(gio.$mat-smoke-palette, 'darker80');
+  }
+
+  &__instructions {
+    @include mat.m2-typography-level($typography, body-2);
+    margin: 0 0 24px 0;
+    color: mat.m2-get-color-from-palette(gio.$mat-space-palette, 'lighter40');
+  }
+
+  &__form-card {
+    flex: 1;
+    margin-bottom: 24px;
+    padding: 24px;
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 16px 0;
+    gap: 16px;
+  }
+}
+
+.back-link {
+  @include mat.m2-typography-level($typography, body-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  margin-bottom: 16px;
+  border: none;
+  background: none;
+  color: mat.m2-get-color-from-palette(gio.$mat-space-palette, 'default');
+  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+
+  mat-icon {
+    font-size: 1.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    line-height: 1.25rem;
+  }
+
+  &:hover {
+    color: mat.m2-get-color-from-palette(gio.$mat-space-palette, 'darker');
+    text-decoration: underline;
+  }
+}
+
+.form-section {
+  &__title {
+    @include mat.m2-typography-level($typography, subtitle-1);
+    margin: 0 0 24px 0;
+    color: mat.m2-get-color-from-palette(gio.$mat-smoke-palette, 'darker80');
+  }
+}
+
+.form-row {
+  margin-bottom: 16px;
+
+  mat-form-field {
+    width: 100%;
+  }
+
+  &--inline {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+
+    .form-field--name {
+      flex: 1;
+    }
+
+    .form-field--version {
+      flex: 0 0 12.5rem;
+    }
+  }
+}

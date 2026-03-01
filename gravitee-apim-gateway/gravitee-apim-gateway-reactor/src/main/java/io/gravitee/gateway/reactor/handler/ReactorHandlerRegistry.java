@@ -37,8 +37,8 @@ public interface ReactorHandlerRegistry {
      * A collection of {@link Acceptor} based on the acceptorType parameter and ordered by natural comparison method.
      *
      * @param acceptorType The type of acceptor
-     * @return
-     * @param <T>
+     * @return collection of acceptors
+     * @param <T> acceptor type
      */
     <T extends Acceptor<T>> Collection<T> getAcceptors(Class<T> acceptorType);
 }

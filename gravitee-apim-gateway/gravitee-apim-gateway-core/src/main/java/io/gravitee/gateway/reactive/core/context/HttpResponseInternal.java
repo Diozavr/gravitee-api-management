@@ -24,7 +24,7 @@ import io.gravitee.gateway.reactive.api.message.Message;
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-public interface HttpResponseInternal extends HttpResponse, OnMessagesInterceptor<Message> {
+public interface HttpResponseInternal extends HttpResponse, OnMessagesInterceptor<Message>, OnBuffersInterceptor {
     /**
      * Allows to replace the response headers.
      *

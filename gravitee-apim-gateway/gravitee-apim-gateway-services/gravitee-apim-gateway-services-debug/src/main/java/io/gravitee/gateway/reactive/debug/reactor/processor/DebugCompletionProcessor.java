@@ -45,17 +45,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class DebugCompletionProcessor implements Processor {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(DebugCompletionProcessor.class);
     private final EventRepository eventRepository;
     private final ObjectMapper objectMapper;
 
@@ -71,32 +70,27 @@ public class DebugCompletionProcessor implements Processor {
 
     @Override
     public Completable execute(final HttpExecutionContextInternal ctx) {
-        return Completable
-            .defer(() -> {
-                final DebugExecutionContext debugContext = (DebugExecutionContext) ctx;
-                ReactableDebugApi<?> debugApi = getDebugApi(debugContext);
+        return Completable.defer(() -> {
+            final DebugExecutionContext debugContext = (DebugExecutionContext) ctx;
+            ReactableDebugApi<?> debugApi = getDebugApi(debugContext);
 
-                return Maybe
-                    .fromCallable(() -> eventRepository.findById(debugApi.getEventId()))
-                    .flatMapCompletable(eventOptional -> {
-                        if (eventOptional.isPresent()) {
-                            final Event event = eventOptional.get();
-                            return computeDebugApiEventPayload(debugContext, debugApi)
-                                .doOnSuccess(definitionDebugApi -> {
-                                    event.setPayload(objectMapper.writeValueAsString(definitionDebugApi));
-                                    updateEvent(event, ApiDebugStatus.SUCCESS);
-                                })
-                                .ignoreElement()
-                                .onErrorResumeNext(throwable -> {
-                                    LOGGER.error("Error occurs while saving debug event", throwable);
-                                    failEvent(event);
-                                    return Completable.complete();
-                                });
-                        }
-                        return Completable.complete();
-                    });
-            })
-            .subscribeOn(Schedulers.io());
+            return Maybe.fromCallable(() -> eventRepository.findById(debugApi.getEventId())).flatMapCompletable(eventOptional -> {
+                if (eventOptional.isPresent()) {
+                    final Event event = eventOptional.get();
+                    return computeDebugApiEventPayload(debugContext, debugApi)
+                        .doOnSuccess(definitionDebugApi -> {
+                            updateEvent(event.updatePayload(objectMapper.writeValueAsString(definitionDebugApi)), ApiDebugStatus.SUCCESS);
+                        })
+                        .ignoreElement()
+                        .onErrorResumeNext(throwable -> {
+                            ctx.withLogger(log).error("Error occurs while saving debug event", throwable);
+                            failEvent(event);
+                            return Completable.complete();
+                        });
+                }
+                return Completable.complete();
+            });
+        }).subscribeOn(Schedulers.io());
     }
 
     private Single<io.gravitee.definition.model.debug.DebugApiProxy> computeDebugApiEventPayload(
@@ -170,13 +164,12 @@ public class DebugCompletionProcessor implements Processor {
         try {
             updateEvent(debugEvent, ApiDebugStatus.ERROR);
         } catch (TechnicalException e) {
-            LOGGER.error("Error when updating event {} with ERROR status", debugEvent.getId());
+            log.error("Error when updating event {} with ERROR status", debugEvent.getId());
         }
     }
 
     private void updateEvent(@NonNull Event debugEvent, ApiDebugStatus apiDebugStatus) throws TechnicalException {
-        debugEvent.getProperties().put(Event.EventProperties.API_DEBUG_STATUS.getValue(), apiDebugStatus.name());
-        eventRepository.update(debugEvent);
+        eventRepository.update(debugEvent.updateProperties(Event.EventProperties.API_DEBUG_STATUS.getValue(), apiDebugStatus.name()));
     }
 
     private io.gravitee.definition.model.debug.DebugApiProxy convert(ReactableDebugApi<?> content) {

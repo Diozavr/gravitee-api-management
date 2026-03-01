@@ -21,7 +21,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import fixtures.core.model.ApiFixtures;
@@ -53,6 +52,7 @@ import io.gravitee.rest.api.service.converter.CategoryMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -110,44 +110,57 @@ class UpdateDynamicPropertiesUseCaseTest {
     void setUp() {
         apiStateDomainService = mock(ApiStateDomainService.class);
         environmentCrudServiceInMemory.initWith(List.of(Environment.builder().id(ENVIRONMENT_ID).organizationId(ORGANIZATION_ID).build()));
-        cut =
-            new UpdateDynamicPropertiesUseCase(
-                apiCrudServiceInMemory,
-                apiStateDomainService,
-                environmentCrudServiceInMemory,
-                new AuditDomainService(auditCrudServiceInMemory, userCrudServiceInMemory, new JacksonJsonDiffProcessor()),
-                apiEventQueryServiceInMemory,
-                categoryDomainService
-            );
+        cut = new UpdateDynamicPropertiesUseCase(
+            apiCrudServiceInMemory,
+            apiStateDomainService,
+            environmentCrudServiceInMemory,
+            new AuditDomainService(auditCrudServiceInMemory, userCrudServiceInMemory, new JacksonJsonDiffProcessor()),
+            apiEventQueryServiceInMemory,
+            categoryDomainService
+        );
     }
 
     @AfterEach
     void tearDown() {
-        Stream
-            .of(
-                apiCrudServiceInMemory,
-                environmentCrudServiceInMemory,
-                auditCrudServiceInMemory,
-                userCrudServiceInMemory,
-                apiEventQueryServiceInMemory
-            )
-            .forEach(InMemoryAlternative::reset);
+        Stream.of(
+            apiCrudServiceInMemory,
+            environmentCrudServiceInMemory,
+            auditCrudServiceInMemory,
+            userCrudServiceInMemory,
+            apiEventQueryServiceInMemory
+        ).forEach(InMemoryAlternative::reset);
     }
 
     @Test
     void should_not_update_api_if_same_properties() {
-        var api = givenApi(buildApiWithProperties(List.of(Property.builder().key("key").value("value").dynamic(true).build())));
+        List<Property> initialPropertiesList = List.of(Property.builder().key("key").value("value").dynamic(true).build());
+        var api = givenApi(buildApiWithProperties(initialPropertiesList));
+
+        cut.execute(new UpdateDynamicPropertiesUseCase.Input(api.getId(), HTTP_DYNAMIC_PROPERTIES, initialPropertiesList));
+
+        assertThat(auditCrudServiceInMemory.storage()).isEmpty();
+    }
+
+    @Test
+    void should_determine_sync_state_before_updating_api_properties() {
+        List<Property> initialPropertiesList = List.of(Property.builder().key("key").value("value").dynamic(true).build());
+        var api = givenApi(buildApiWithProperties(initialPropertiesList));
+
+        var receivedProperties = new ArrayList<>();
+        when(apiStateDomainService.isSynchronized(any(), any())).thenAnswer(invocationOnMock -> {
+            receivedProperties.addAll(((Api) invocationOnMock.getArgument(0)).getApiDefinitionHttpV4().getProperties().stream().toList());
+            return true;
+        });
 
         cut.execute(
             new UpdateDynamicPropertiesUseCase.Input(
                 api.getId(),
                 HTTP_DYNAMIC_PROPERTIES,
-                List.of(Property.builder().key("key").value("value").dynamic(true).build())
+                List.of(Property.builder().key("key").value("value2").dynamic(true).build())
             )
         );
 
-        assertThat(auditCrudServiceInMemory.storage()).isEmpty();
-        verifyNoInteractions(apiStateDomainService);
+        assertThat(receivedProperties).isEqualTo(initialPropertiesList);
     }
 
     @Nested
@@ -170,11 +183,10 @@ class UpdateDynamicPropertiesUseCaseTest {
                 )
             );
 
-            assertThat(apiCrudServiceInMemory.get(api.getId()).getApiDefinitionHttpV4().getProperties())
-                .containsExactlyInAnyOrder(
-                    Property.builder().key("user-prop").value("value").dynamic(false).build(),
-                    Property.builder().key("key").value("value").dynamic(true).build()
-                );
+            assertThat(apiCrudServiceInMemory.get(api.getId()).getApiDefinitionHttpV4().getProperties()).containsExactlyInAnyOrder(
+                Property.builder().key("user-prop").value("value").dynamic(false).build(),
+                Property.builder().key("key").value("value").dynamic(true).build()
+            );
             assertAuditHasBeenCreated();
         }
 
@@ -194,11 +206,10 @@ class UpdateDynamicPropertiesUseCaseTest {
                 )
             );
 
-            assertThat(apiCrudServiceInMemory.get(api.getId()).getApiDefinitionHttpV4().getProperties())
-                .containsExactlyInAnyOrder(
-                    Property.builder().key("user-prop").value("value").dynamic(false).build(),
-                    Property.builder().key("key").value("value").dynamic(true).build()
-                );
+            assertThat(apiCrudServiceInMemory.get(api.getId()).getApiDefinitionHttpV4().getProperties()).containsExactlyInAnyOrder(
+                Property.builder().key("user-prop").value("value").dynamic(false).build(),
+                Property.builder().key("key").value("value").dynamic(true).build()
+            );
             assertAuditHasBeenCreated();
         }
 
@@ -245,11 +256,10 @@ class UpdateDynamicPropertiesUseCaseTest {
                 )
             );
 
-            assertThat(apiCrudServiceInMemory.get(api.getId()).getApiDefinitionHttpV4().getProperties())
-                .containsExactlyInAnyOrder(
-                    Property.builder().key("user-prop").value("value").dynamic(false).build(),
-                    Property.builder().key("key").value("value").dynamic(true).build()
-                );
+            assertThat(apiCrudServiceInMemory.get(api.getId()).getApiDefinitionHttpV4().getProperties()).containsExactlyInAnyOrder(
+                Property.builder().key("user-prop").value("value").dynamic(false).build(),
+                Property.builder().key("key").value("value").dynamic(true).build()
+            );
             assertAuditHasBeenCreated();
         }
 
@@ -280,8 +290,7 @@ class UpdateDynamicPropertiesUseCaseTest {
                 softly
                     .assertThat(auditInfoCaptor.getValue())
                     .isEqualTo(
-                        AuditInfo
-                            .builder()
+                        AuditInfo.builder()
                             .organizationId(ORGANIZATION_ID)
                             .environmentId(ENVIRONMENT_ID)
                             .actor(AuditActor.builder().userId(USER).build())
@@ -326,8 +335,7 @@ class UpdateDynamicPropertiesUseCaseTest {
                 softly
                     .assertThat(auditInfoCaptor.getValue())
                     .isEqualTo(
-                        AuditInfo
-                            .builder()
+                        AuditInfo.builder()
                             .organizationId(ORGANIZATION_ID)
                             .environmentId(ENVIRONMENT_ID)
                             .actor(AuditActor.builder().userId(USER).build())
@@ -349,8 +357,7 @@ class UpdateDynamicPropertiesUseCaseTest {
     }
 
     private static io.gravitee.definition.model.v4.Api anApiDefinitionWithProperties(List<Property> properties) {
-        return ApiDefinitionFixtures
-            .anApiV4()
+        return ApiDefinitionFixtures.anApiV4()
             .toBuilder()
             .services(new ApiServices(Service.builder().type(HTTP_DYNAMIC_PROPERTIES).enabled(true).build()))
             .properties(properties)

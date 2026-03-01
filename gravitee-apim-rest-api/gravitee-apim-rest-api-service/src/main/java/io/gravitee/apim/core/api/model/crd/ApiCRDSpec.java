@@ -49,9 +49,12 @@ import io.gravitee.rest.api.model.context.OriginContext;
 import io.gravitee.rest.api.model.notification.PortalNotificationConfigEntity;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -143,8 +146,7 @@ public class ApiCRDSpec {
      */
     public Api.ApiBuilder toApiBuilder() {
         // Currently we can't use MapStruct in core. We will need to discuss as team if we want to introduce a rule to allow MapStruct in core.
-        return Api
-            .builder()
+        return Api.builder()
             .id(id)
             .crossId(crossId)
             .hrid(hrid)
@@ -173,8 +175,7 @@ public class ApiCRDSpec {
      */
     public io.gravitee.definition.model.v4.Api.ApiBuilder<?, ?> toApiDefinitionBuilder() {
         // Currently we can't use MapStruct in core. We will need to discuss as team if we want to introduce a rule to allow MapStruct in core.
-        return io.gravitee.definition.model.v4.Api
-            .builder()
+        return io.gravitee.definition.model.v4.Api.builder()
             .analytics(analytics)
             .apiVersion(version)
             .definitionVersion(DefinitionVersion.V4)
@@ -198,8 +199,7 @@ public class ApiCRDSpec {
      */
     public io.gravitee.definition.model.v4.nativeapi.NativeApi.NativeApiBuilder<?, ?> toNativeApiDefinitionBuilder() {
         // Currently we can't use MapStruct in core. We will need to discuss as team if we want to introduce a rule to allow MapStruct in core.
-        return io.gravitee.definition.model.v4.nativeapi.NativeApi
-            .builder()
+        return io.gravitee.definition.model.v4.nativeapi.NativeApi.builder()
             .apiVersion(version)
             .definitionVersion(DefinitionVersion.V4)
             .endpointGroups(endpointGroups != null ? (List<NativeEndpointGroup>) endpointGroups : null)
@@ -257,7 +257,9 @@ public class ApiCRDSpec {
                         plan.setFlows((List<Flow>) planCRD.getFlows());
 
                         return plan;
-                    }
+                    },
+                    (a, b) -> a,
+                    LinkedHashMap::new
                 )
             );
     }
@@ -281,7 +283,9 @@ public class ApiCRDSpec {
                         nativePlan.setFlows((List<NativeFlow>) planCRD.getFlows());
 
                         return nativePlan;
-                    }
+                    },
+                    (a, b) -> a,
+                    LinkedHashMap::new
                 )
             );
     }
@@ -298,8 +302,7 @@ public class ApiCRDSpec {
                         paths
                             .stream()
                             .map(path ->
-                                io.gravitee.definition.model.v4.listener.http.Path
-                                    .builder()
+                                io.gravitee.definition.model.v4.listener.http.Path.builder()
                                     .host(path.getHost())
                                     .path(path.getPath())
                                     .overrideAccess(path.isOverrideAccess())

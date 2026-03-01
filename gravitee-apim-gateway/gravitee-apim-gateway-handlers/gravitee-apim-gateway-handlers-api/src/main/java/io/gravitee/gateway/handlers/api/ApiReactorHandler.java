@@ -129,6 +129,8 @@ public class ApiReactorHandler extends AbstractReactorHandler<Api> {
         request.metrics().setApi(reactable.getId());
         request.metrics().setApiName(reactable.getName());
         request.metrics().setPath(request.pathInfo());
+        request.metrics().setEnvironmentId(reactable.getEnvironmentId());
+        request.metrics().setOrganizationId(reactable.getOrganizationId());
 
         // keep track of executing request to avoid 500 errors
         // when stop is called while running a policy chain
@@ -163,25 +165,21 @@ public class ApiReactorHandler extends AbstractReactorHandler<Api> {
 
         context.request().metrics().setApiResponseTimeMs(System.currentTimeMillis());
 
-        upstreamInvoker.invoke(
-            context,
-            chain,
-            connection -> {
-                context.request().customFrameHandler(connection::writeCustomFrame);
+        upstreamInvoker.invoke(context, chain, connection -> {
+            context.request().customFrameHandler(connection::writeCustomFrame);
 
-                connection.responseHandler(proxyResponse -> handleProxyResponse(context, endHandler, proxyResponse));
+            connection.responseHandler(proxyResponse -> handleProxyResponse(context, endHandler, proxyResponse));
 
-                // Override the stream error handler to be able to cancel connection to backend
-                chain.streamErrorHandler(failure -> {
-                    context
-                        .request()
-                        .metrics()
-                        .setApiResponseTimeMs(System.currentTimeMillis() - context.request().metrics().getApiResponseTimeMs());
-                    connection.cancel();
-                    handleError(context, endHandler, failure);
-                });
-            }
-        );
+            // Override the stream error handler to be able to cancel connection to backend
+            chain.streamErrorHandler(failure -> {
+                context
+                    .request()
+                    .metrics()
+                    .setApiResponseTimeMs(System.currentTimeMillis() - context.request().metrics().getApiResponseTimeMs());
+                connection.cancel();
+                handleError(context, endHandler, failure);
+            });
+        });
 
         // Plug server request stream to request processor stream
         context.request().bodyHandler(chain::write);
@@ -323,7 +321,7 @@ public class ApiReactorHandler extends AbstractReactorHandler<Api> {
 
     @Override
     protected void doStart() throws Exception {
-        logger.debug("API handler is now starting, preparing API context...");
+        log.debug("API handler is now starting, preparing API context...");
         long startTime = System.currentTimeMillis(); // Get the start Time
         super.doStart();
 
@@ -335,17 +333,17 @@ public class ApiReactorHandler extends AbstractReactorHandler<Api> {
         dumpVirtualHosts();
 
         long endTime = System.currentTimeMillis(); // Get the end Time
-        logger.debug("API handler started in {} ms", (endTime - startTime));
+        log.debug("API handler started in {} ms", (endTime - startTime));
     }
 
     @Override
     protected void doStop() throws Exception {
         super.doStop();
         if (!node.lifecycleState().equals(Lifecycle.State.STARTED)) {
-            logger.debug("Current node is not started, API handler will be stopped immediately");
+            log.debug("Current node is not started, API handler will be stopped immediately");
             stopNow();
         } else {
-            logger.debug("Current node is started, API handler will wait for pending requests before stopping");
+            log.debug("Current node is started, API handler will wait for pending requests before stopping");
             long timeout = System.currentTimeMillis() + pendingRequestsTimeout;
             stopUntil(timeout);
         }
@@ -359,12 +357,12 @@ public class ApiReactorHandler extends AbstractReactorHandler<Api> {
     }
 
     private void stopNow() throws Exception {
-        logger.debug("API handler is now stopping, closing context for {} ...", this);
+        log.debug("API handler is now stopping, closing context for {} ...", this);
         policyManager.stop();
         resourceLifecycleManager.stop();
         groupLifecycleManager.stop();
         super.doStop();
-        logger.debug("API handler is now stopped: {}", this);
+        log.debug("API handler is now stopped: {}", this);
     }
 
     @Override
@@ -453,33 +451,32 @@ public class ApiReactorHandler extends AbstractReactorHandler<Api> {
     @Override
     public List<Acceptor<?>> acceptors() {
         if (acceptors == null) {
-            acceptors =
-                reactable
-                    .getDefinition()
-                    .getProxy()
-                    .getVirtualHosts()
-                    .stream()
-                    .map(virtualHost -> {
-                        if (virtualHost.getHost() != null) {
-                            return httpAcceptorFactory.create(
-                                virtualHost.getHost(),
-                                virtualHost.getPath(),
-                                this,
-                                reactable.getDefinition().getProxy().getServers()
-                            );
-                        } else {
-                            return new AccessPointHttpAcceptor(
-                                eventManager,
-                                httpAcceptorFactory,
-                                reactable.getEnvironmentId(),
-                                accessPointManager.getByEnvironmentId(reactable.getEnvironmentId()),
-                                virtualHost.getPath(),
-                                this,
-                                reactable.getDefinition().getProxy().getServers()
-                            );
-                        }
-                    })
-                    .collect(Collectors.toList());
+            acceptors = reactable
+                .getDefinition()
+                .getProxy()
+                .getVirtualHosts()
+                .stream()
+                .map(virtualHost -> {
+                    if (virtualHost.getHost() != null) {
+                        return httpAcceptorFactory.create(
+                            virtualHost.getHost(),
+                            virtualHost.getPath(),
+                            this,
+                            reactable.getDefinition().getProxy().getServers()
+                        );
+                    } else {
+                        return new AccessPointHttpAcceptor(
+                            eventManager,
+                            httpAcceptorFactory,
+                            reactable.getEnvironmentId(),
+                            accessPointManager.getByEnvironmentId(reactable.getEnvironmentId()),
+                            virtualHost.getPath(),
+                            this,
+                            reactable.getDefinition().getProxy().getServers()
+                        );
+                    }
+                })
+                .collect(Collectors.toList());
         }
 
         return acceptors;

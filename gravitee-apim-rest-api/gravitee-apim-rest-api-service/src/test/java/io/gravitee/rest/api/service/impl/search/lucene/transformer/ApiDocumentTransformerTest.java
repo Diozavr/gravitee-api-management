@@ -15,6 +15,11 @@
  */
 package io.gravitee.rest.api.service.impl.search.lucene.transformer;
 
+import static io.gravitee.rest.api.service.impl.search.lucene.transformer.ApiDocumentTransformer.FIELD_ALLOW_IN_API_PRODUCTS;
+import static io.gravitee.rest.api.service.impl.search.lucene.transformer.ApiDocumentTransformer.FIELD_API_TYPE;
+import static io.gravitee.rest.api.service.impl.search.lucene.transformer.ApiDocumentTransformer.FIELD_STATUS;
+import static io.gravitee.rest.api.service.impl.search.lucene.transformer.ApiDocumentTransformer.FIELD_STATUS_SORTED;
+import static io.gravitee.rest.api.service.impl.search.lucene.transformer.ApiDocumentTransformer.FIELD_VISIBILITY;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.gravitee.definition.model.DefinitionContext;
@@ -23,23 +28,36 @@ import io.gravitee.definition.model.Proxy;
 import io.gravitee.definition.model.VirtualHost;
 import io.gravitee.definition.model.services.Services;
 import io.gravitee.definition.model.services.healthcheck.HealthCheckService;
+import io.gravitee.definition.model.v4.ApiType;
 import io.gravitee.definition.model.v4.endpointgroup.Endpoint;
 import io.gravitee.definition.model.v4.endpointgroup.EndpointGroup;
 import io.gravitee.definition.model.v4.endpointgroup.service.EndpointGroupServices;
 import io.gravitee.definition.model.v4.endpointgroup.service.EndpointServices;
+import io.gravitee.definition.model.v4.listener.Listener;
+import io.gravitee.definition.model.v4.listener.http.HttpListener;
+import io.gravitee.definition.model.v4.listener.tcp.TcpListener;
 import io.gravitee.definition.model.v4.service.Service;
 import io.gravitee.rest.api.model.PrimaryOwnerEntity;
 import io.gravitee.rest.api.model.UserEntity;
+import io.gravitee.rest.api.model.Visibility;
 import io.gravitee.rest.api.model.api.ApiEntity;
+import io.gravitee.rest.api.model.api.ApiLifecycleState;
 import io.gravitee.rest.api.service.impl.ApiServiceImpl;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.text.Collator;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.util.BytesRef;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -60,9 +78,7 @@ class ApiDocumentTransformerTest {
     @Test
     void shouldTransform() {
         ApiEntity toTransform = getApiEntity();
-
         Document transformed = cut.transform(toTransform);
-
         assertDocumentMatchesInputApiEntity(toTransform, transformed);
     }
 
@@ -70,19 +86,171 @@ class ApiDocumentTransformerTest {
     void shouldTransformWithoutError_OnMissingReferenceId() {
         ApiEntity api = new ApiEntity();
         api.setId("api-uuid");
+        api.setLifecycleState(ApiLifecycleState.CREATED);
+        api.setVisibility(Visibility.PUBLIC);
         Document doc = cut.transform(api);
         assertThat(doc.get("id")).isEqualTo(api.getId());
+    }
+
+    @Test
+    void shouldTransformWithoutError_WithIdOnly() {
+        // When we delete a document only the id is filled in
+        ApiEntity api = new ApiEntity();
+        api.setId("api-uuid");
+        Document doc = cut.transform(api);
+        assertThat(doc.get("id")).isEqualTo(api.getId());
+        assertThat(doc.get("type")).isEqualTo("api");
     }
 
     @Test
     void shouldTransformWithoutError_V4ApiOnDeleteMode() {
         var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
         api.setId("api-uuid");
+        api.setLifecycleState(ApiLifecycleState.CREATED);
+        api.setVisibility(Visibility.PUBLIC);
         api.setDefinitionVersion(null);
         api.setName(null);
 
         Document doc = cut.transform(api);
         assertThat(doc.get("id")).isEqualTo(api.getId());
+    }
+
+    @Test
+    void transform_api_entity_v4_message_verify_api_type() {
+        var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
+        api.setId("api-uuid");
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.MESSAGE);
+        api.setVisibility(Visibility.PUBLIC);
+
+        Document doc = cut.transform(api);
+        assertThat(doc.get("id")).isEqualTo(api.getId());
+        assertThat(doc.get(FIELD_API_TYPE)).isEqualTo("V4_MESSAGE");
+    }
+
+    @Test
+    void transform_api_entity_v4_llm_proxy_verify_api_type() {
+        var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
+        api.setId("api-uuid");
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.LLM_PROXY);
+        api.setVisibility(Visibility.PUBLIC);
+
+        Document doc = cut.transform(api);
+        assertThat(doc.get("id")).isEqualTo(api.getId());
+        assertThat(doc.get(FIELD_API_TYPE)).isEqualTo("V4_LLM_PROXY");
+    }
+
+    @Test
+    void transform_api_entity_v4_mcp_proxy_verify_api_type() {
+        var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
+        api.setId("api-uuid");
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.MCP_PROXY);
+        api.setVisibility(Visibility.PUBLIC);
+
+        Document doc = cut.transform(api);
+        assertThat(doc.get("id")).isEqualTo(api.getId());
+        assertThat(doc.get(FIELD_API_TYPE)).isEqualTo("V4_MCP_PROXY");
+    }
+
+    @Test
+    void transform_api_entity_v4_native_verify_api_type() {
+        var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
+        api.setId("api-uuid");
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.NATIVE);
+        api.setVisibility(Visibility.PUBLIC);
+
+        Document doc = cut.transform(api);
+        assertThat(doc.get("id")).isEqualTo(api.getId());
+        assertThat(doc.get(FIELD_API_TYPE)).isEqualTo("V4_KAFKA");
+    }
+
+    @Test
+    void transform_api_entity_v4_tcp_proxy_verify_api_type() {
+        var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
+        api.setId("api-uuid");
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.PROXY);
+        api.setVisibility(Visibility.PUBLIC);
+        List<Listener> listeners = List.of(TcpListener.builder().build());
+        api.setListeners(listeners);
+
+        Document doc = cut.transform(api);
+        assertThat(doc.get("id")).isEqualTo(api.getId());
+        assertThat(doc.get(FIELD_API_TYPE)).isEqualTo("V4_TCP_PROXY");
+    }
+
+    @Test
+    void transform_api_entity_v4_http_proxy_verify_api_type() {
+        var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
+        api.setId("api-uuid");
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.PROXY);
+        api.setVisibility(Visibility.PUBLIC);
+        List<Listener> listeners = List.of(HttpListener.builder().paths(List.of()).build());
+        api.setListeners(listeners);
+
+        Document doc = cut.transform(api);
+        assertThat(doc.get("id")).isEqualTo(api.getId());
+        assertThat(doc.get(FIELD_API_TYPE)).isEqualTo("V4_HTTP_PROXY");
+    }
+
+    @Test
+    void transform_api_entity_v4_http_proxy_should_index_allow_in_api_products_flag() {
+        var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
+        api.setId("api-uuid");
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.PROXY);
+        api.setVisibility(Visibility.PUBLIC);
+        api.setAllowedInApiProducts(true);
+
+        Document doc = cut.transform(api);
+        assertThat(doc.get(FIELD_ALLOW_IN_API_PRODUCTS)).isEqualTo("true");
+    }
+
+    @Test
+    void transform_api_entity_federated_verify_api_type() {
+        var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
+        api.setId("api-uuid");
+        api.setDefinitionVersion(DefinitionVersion.FEDERATED);
+        api.setType(ApiType.PROXY);
+        List<Listener> listeners = List.of(HttpListener.builder().paths(List.of()).build());
+        api.setListeners(listeners);
+        api.setVisibility(Visibility.PUBLIC);
+        Document doc = cut.transform(api);
+        assertThat(doc.get("id")).isEqualTo(api.getId());
+        assertThat(doc.get(FIELD_VISIBILITY)).isEqualTo("PUBLIC");
+        assertThat(doc.get(FIELD_API_TYPE)).isEqualTo("FEDERATED");
+        assertThat(doc.get(FIELD_STATUS)).isNull();
+        assertThat(doc.get(FIELD_STATUS_SORTED)).isNull();
+    }
+
+    @Test
+    void transform_api_entity_v2_verify_api_type() {
+        var api = ApiEntity.builder().id("api-1").name("API 1").graviteeDefinitionVersion("2.0.0").visibility(Visibility.PUBLIC).build();
+
+        Document doc = cut.transform(api);
+        assertThat(doc.get(FIELD_API_TYPE)).isEqualTo("V2");
+    }
+
+    @Test
+    void transform_v4_api_should_index_paths_and_hosts_lowercase() {
+        var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
+        api.setId("api-uuid");
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.PROXY);
+        api.setVisibility(Visibility.PUBLIC);
+
+        io.gravitee.definition.model.v4.listener.http.Path path = new io.gravitee.definition.model.v4.listener.http.Path();
+        path.setPath("/TestPath");
+        path.setHost("api.TestHost.com");
+
+        api.setListeners(List.of(HttpListener.builder().paths(List.of(path)).build()));
+        Document doc = cut.transform(api);
+        assertThat(doc.getFields("paths_lowercase")[0].stringValue()).isEqualTo("/testpath");
+        assertThat(doc.getFields("hosts_lowercase")[0].stringValue()).isEqualTo("api.testhost.com");
     }
 
     @Nested
@@ -92,7 +260,10 @@ class ApiDocumentTransformerTest {
         void v4_as_endpoint_group() {
             var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
             api.setId("api-uuid");
+            api.setLifecycleState(ApiLifecycleState.CREATED);
+            api.setVisibility(Visibility.PUBLIC);
             api.setDefinitionVersion(DefinitionVersion.V4);
+            api.setType(ApiType.PROXY);
             api.setName("name");
             api.setEndpointGroups(List.of(new EndpointGroup(new EndpointGroupServices(null, new Service(true, true, "type", "conf")))));
 
@@ -104,7 +275,10 @@ class ApiDocumentTransformerTest {
         void v4_as_endpoint_() {
             var api = new io.gravitee.rest.api.model.v4.api.ApiEntity();
             api.setId("api-uuid");
+            api.setLifecycleState(ApiLifecycleState.CREATED);
+            api.setVisibility(Visibility.PUBLIC);
             api.setDefinitionVersion(DefinitionVersion.V4);
+            api.setType(ApiType.PROXY);
             api.setName("name");
             var endpointGroup = new EndpointGroup(new EndpointGroupServices(null, null));
             endpointGroup.setEndpoints(List.of(new Endpoint(new EndpointServices(new Service(true, true, "type", "conf")))));
@@ -120,6 +294,8 @@ class ApiDocumentTransformerTest {
         ApiEntity toTransform = new ApiEntity();
         toTransform.setId("apiId");
         toTransform.setName("name");
+        toTransform.setLifecycleState(ApiLifecycleState.CREATED);
+        toTransform.setVisibility(Visibility.PUBLIC);
         toTransform.setDescription("description");
         toTransform.setReferenceId("xxxxxx");
         toTransform.setReferenceType("env1");
@@ -172,5 +348,27 @@ class ApiDocumentTransformerTest {
         assertThat(toTransform.getMetadata().values()).hasSameSizeAs(transformed.getFields("metadata"));
         assertThat(toTransform.getDefinitionContext().getOrigin()).isEqualTo(transformed.get("origin"));
         assertThat("true").isEqualTo(transformed.get("has_health_check"));
+    }
+
+    @Test
+    public void shouldSortListCorrectlyWithCollatorAndBytesRef() throws Exception {
+        List<String> names = List.of("nano", "Zorro", "äther", "vem", "foo/bar", "Épée", "épona", "öko", "bns-One");
+        List<String> expectedSorted = List.of("äther", "bns-One", "Épée", "épona", "foo/bar", "nano", "öko", "vem", "Zorro");
+        Method toSortedValueMethod = ApiDocumentTransformer.class.getDeclaredMethod("toSortedValue", String.class);
+        toSortedValueMethod.setAccessible(true);
+
+        Field collatorField = ApiDocumentTransformer.class.getDeclaredField("collator");
+        collatorField.setAccessible(true);
+        Collator collator = (Collator) collatorField.get(cut);
+        List<String> sortedByCollator = new ArrayList<>(names);
+        sortedByCollator.sort(collator);
+        Map<String, BytesRef> bytesRefMap = new HashMap<>();
+        for (String name : names) {
+            bytesRefMap.put(name, (BytesRef) toSortedValueMethod.invoke(cut, name));
+        }
+        List<String> sortedByBytesRef = new ArrayList<>(names);
+        sortedByBytesRef.sort(Comparator.comparing(bytesRefMap::get));
+        assertThat(sortedByCollator).isEqualTo(expectedSorted);
+        assertThat(sortedByBytesRef).isEqualTo(expectedSorted);
     }
 }

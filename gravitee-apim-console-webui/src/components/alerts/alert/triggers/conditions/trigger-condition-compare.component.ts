@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import * as _ from 'lodash';
 import { filter } from 'lodash';
 
 import { Metrics } from '../../../../../entities/alert';
@@ -30,7 +29,7 @@ const AlertTriggerConditionCompareComponent: ng.IComponentOptions = {
     this.$onInit = () => {
       this.metrics = filter(
         this.metrics as Metrics[],
-        (metric) => metric.conditions.indexOf('COMPARE') !== -1 && metric.key !== this.condition.property,
+        metric => metric.conditions.indexOf('COMPARE') !== -1 && metric.key !== this.condition.property,
       );
     };
   },

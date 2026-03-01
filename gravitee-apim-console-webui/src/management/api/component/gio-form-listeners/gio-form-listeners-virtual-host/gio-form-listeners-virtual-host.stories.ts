@@ -16,7 +16,7 @@
 import { Meta, moduleMetadata, StoryObj } from '@storybook/angular';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { FormControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { action } from '@storybook/addon-actions';
+import { action } from 'storybook/actions';
 import { of } from 'rxjs';
 
 import { GioFormListenersVirtualHostComponent } from './gio-form-listeners-virtual-host.component';
@@ -37,7 +37,7 @@ export default {
     }),
   ],
   argTypes: {},
-  render: (args) => ({
+  render: args => ({
     template: `<gio-form-listeners-virtual-host [ngModel]="listeners" [domainRestrictions]="domainRestrictions"></gio-form-listeners-virtual-host>`,
     props: args,
   }),
@@ -68,10 +68,10 @@ export const Filled: StoryObj = {
 };
 
 export const ReactiveForm: StoryObj = {
-  render: (args) => {
+  render: args => {
     const formControl = new FormControl(args.listeners);
 
-    formControl.valueChanges.subscribe((value) => {
+    formControl.valueChanges.subscribe(value => {
       action('Listeners')(value);
     });
 

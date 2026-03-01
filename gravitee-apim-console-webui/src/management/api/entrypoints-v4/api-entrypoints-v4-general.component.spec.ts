@@ -51,7 +51,8 @@ const ENTRYPOINTS: Partial<ConnectorPlugin>[] = [
   { id: 'sse', supportedApiType: 'MESSAGE', supportedListenerType: 'HTTP', name: 'Server-Sent Events', deployed: false },
   { id: 'webhook', supportedApiType: 'MESSAGE', supportedListenerType: 'SUBSCRIPTION', name: 'Webhook', deployed: false },
   { id: 'native-kafka', supportedApiType: 'NATIVE', supportedListenerType: 'KAFKA', name: 'Client', deployed: false },
-  { id: 'agent-to-agent', supportedApiType: 'MESSAGE', supportedListenerType: 'HTTP', name: 'Agent to agent', deployed: false },
+  { id: 'a2a-proxy', supportedApiType: 'A2A_PROXY', supportedListenerType: 'HTTP', name: 'A2A Proxy', deployed: false },
+  { id: 'llm-proxy', supportedApiType: 'LLM_PROXY', supportedListenerType: 'HTTP', name: 'LLM Proxy Entrypoint', deployed: true },
 ];
 
 describe('ApiProxyV4EntrypointsComponent', () => {
@@ -86,7 +87,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
     }
   };
 
-  const init = async (permissions: string[] = ['api-definition-u', 'api-definition-r']) => {
+  const init = async (permissions: string[] = ['api-definition-u', 'api-definition-r', 'api-gateway_definition-u']) => {
     TestBed.configureTestingModule({
       imports: [NoopAnimationsModule, GioTestingModule, ApiEntrypointsV4Module, MatIconTestingModule, MatAutocompleteModule],
       providers: [
@@ -168,8 +169,8 @@ describe('ApiProxyV4EntrypointsComponent', () => {
   describe('When API has Agent PROXY architecture type', () => {
     const RESTRICTED_DOMAINS = [];
     const API = fakeApiV4({
-      type: 'MESSAGE',
-      listeners: [{ type: 'HTTP', entrypoints: [{ type: 'agent-to-agent' }], paths: [{ path: '/path' }] }],
+      type: 'A2A_PROXY',
+      listeners: [{ type: 'HTTP', entrypoints: [{ type: 'a2a-proxy' }], paths: [{ path: '/path' }] }],
     });
 
     beforeEach(async () => {
@@ -187,6 +188,37 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       expect(virtualHost.length).toEqual(0);
       const addEntrypointButton = await loader.getAllHarnesses(MatButtonHarness.with({ text: 'Add an entrypoint' }));
       expect(addEntrypointButton.length).toEqual(0);
+    });
+  });
+
+  describe('When API has LLM PROXY architecture type', () => {
+    const RESTRICTED_DOMAINS = [];
+    const API = fakeApiV4({
+      type: 'LLM_PROXY',
+      listeners: [{ type: 'HTTP', entrypoints: [{ type: 'llm-proxy' }], paths: [{ path: '/llm-proxy' }] }],
+    });
+
+    beforeEach(async () => {
+      await createComponent(RESTRICTED_DOMAINS, API);
+    });
+
+    afterEach(() => {
+      expectApiPathVerify();
+    });
+
+    it('should not show the add entrypoint button', async () => {
+      const contextPath = await loader.getAllHarnesses(GioFormListenersContextPathHarness);
+      expect(contextPath.length).toEqual(1);
+      const virtualHost = await loader.getAllHarnesses(GioFormListenersVirtualHostHarness);
+      expect(virtualHost.length).toEqual(0);
+      const addEntrypointButton = await loader.getAllHarnesses(MatButtonHarness.with({ text: 'Add an entrypoint' }));
+      expect(addEntrypointButton.length).toEqual(0);
+    });
+
+    it('should show listener', async () => {
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ApiEntrypointsV4GeneralHarness);
+      const rows = await harness.getEntrypointsTableRows();
+      expect(rows.length).toEqual(1);
     });
   });
 
@@ -362,14 +394,14 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       expectApiPathVerify();
       fixture.detectChanges();
 
-      expect(await harness.getLastListenerRow().then((row) => row.pathInput.getValue())).toEqual('/new-context-path');
+      expect(await harness.getLastListenerRow().then(row => row.pathInput.getValue())).toEqual('/new-context-path');
 
       const resetButton = await loader.getHarness(MatButtonHarness.with({ text: 'Reset' }));
 
       expect(await resetButton.isDisabled()).toBeFalsy();
       await resetButton.click();
 
-      expect(await harness.getLastListenerRow().then((row) => row.pathInput.getValue())).toEqual('/context-path');
+      expect(await harness.getLastListenerRow().then(row => row.pathInput.getValue())).toEqual('/context-path');
       expectGetExposedEntrypoints(httpTestingController, API_ID, []);
     });
 
@@ -379,7 +411,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
 
       const harness = await loader.getHarness(GioFormListenersVirtualHostHarness);
       expect(harness).toBeDefined();
-      expect(await harness.getLastListenerRow().then((row) => row.pathInput.getValue())).toEqual('/context-path');
+      expect(await harness.getLastListenerRow().then(row => row.pathInput.getValue())).toEqual('/context-path');
       expectGetPortalSettings();
     });
   });
@@ -443,14 +475,14 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       await harness.addListener({ host: 'host3' });
       expectApiHostVerify();
 
-      expect(await harness.getLastListenerRow().then((row) => row.hostInput.getValue())).toEqual('host3');
+      expect(await harness.getLastListenerRow().then(row => row.hostInput.getValue())).toEqual('host3');
 
       const resetButton = await loader.getHarness(MatButtonHarness.with({ text: 'Reset' }));
 
       expect(await resetButton.isDisabled()).toBeFalsy();
       await resetButton.click();
 
-      expect(await harness.getLastListenerRow().then((row) => row.hostInput.getValue())).toEqual('host2');
+      expect(await harness.getLastListenerRow().then(row => row.hostInput.getValue())).toEqual('host2');
       expectGetExposedEntrypoints(httpTestingController, API_ID, []);
     });
   });
@@ -462,7 +494,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
     });
 
     beforeEach(async () => {
-      await createComponent(RESTRICTED_DOMAINS, API, undefined, ['api-definition-u'], false);
+      await createComponent(RESTRICTED_DOMAINS, API, undefined, ['api-definition-u', 'api-gateway_definition-u'], false);
     });
 
     afterEach(() => {
@@ -470,7 +502,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
     });
 
     it('should show virtual host and disable button', async () => {
-      const listeners = await loader.getHarness(GioFormListenersVirtualHostHarness).then((h) => h.getListenerRows());
+      const listeners = await loader.getHarness(GioFormListenersVirtualHostHarness).then(h => h.getListenerRows());
       expect(listeners.length).toEqual(1);
       expect(await listeners[0].pathInput.getValue()).toEqual('/context-path');
 
@@ -536,7 +568,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
 
       const harness = await loader.getHarness(GioFormListenersContextPathHarness);
       expect(harness).toBeDefined();
-      expect(await harness.getLastListenerRow().then((row) => row.pathInput.getValue())).toEqual('/context-path');
+      expect(await harness.getLastListenerRow().then(row => row.pathInput.getValue())).toEqual('/context-path');
       expectGetPortalSettings();
     });
   });
@@ -564,15 +596,15 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       const harness = await loader.getHarness(ApiEntrypointsV4GeneralHarness);
       const rows = await harness.getEntrypointsTableRows();
       expect(rows.length).toEqual(3);
-      const entrypointsTypes: MatRowHarnessColumnsText[] = await Promise.all(rows.map(async (row) => await row.getCellTextByColumnName()));
-      expect(entrypointsTypes.map((cell) => cell.type)).toEqual(['HTTP GET', 'HTTP POST', 'Webhook']);
+      const entrypointsTypes: MatRowHarnessColumnsText[] = await Promise.all(rows.map(async row => await row.getCellTextByColumnName()));
+      expect(entrypointsTypes.map(cell => cell.type)).toEqual(['HTTP GET', 'HTTP POST', 'Webhook']);
 
       const actionCell = await rows[0].getCells({ columnName: 'actions' });
       expect(actionCell.length).toEqual(1);
       const actionButtons = await actionCell[0].getAllHarnesses(MatButtonHarness);
       expect(actionButtons.length).toEqual(2);
-      expect(await actionButtons[0].getHarness(MatIconHarness).then((icon) => icon.getName())).toEqual('edit-pencil');
-      expect(await actionButtons[1].getHarness(MatIconHarness).then((icon) => icon.getName())).toEqual('trash');
+      expect(await actionButtons[0].getHarness(MatIconHarness).then(icon => icon.getName())).toEqual('edit-pencil');
+      expect(await actionButtons[1].getHarness(MatIconHarness).then(icon => icon.getName())).toEqual('trash');
     });
 
     it('should remove entrypoint and save changes', async () => {
@@ -583,7 +615,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
 
       // Find row to delete
       const allEntrypointsType = await Promise.all(
-        tableRows.map((row) => row.getCells({ columnName: 'type' }).then((cells) => cells[0].getText())),
+        tableRows.map(row => row.getCells({ columnName: 'type' }).then(cells => cells[0].getText())),
       );
       const indexToRemove = allEntrypointsType.indexOf('HTTP POST');
       expect(indexToRemove).toEqual(1);
@@ -626,7 +658,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
 
       // Find row to delete
       const allEntrypointsType = await Promise.all(
-        tableRows.map((row) => row.getCells({ columnName: 'type' }).then((cells) => cells[0].getText())),
+        tableRows.map(row => row.getCells({ columnName: 'type' }).then(cells => cells[0].getText())),
       );
       const indexToRemove = allEntrypointsType.indexOf('HTTP POST');
       expect(indexToRemove).toEqual(1);
@@ -662,7 +694,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       await items[0].select();
 
       // click on save
-      await dialog.getCancelButton().then((btn) => btn.click());
+      await dialog.getCancelButton().then(btn => btn.click());
     });
 
     it('should add a new listener', async () => {
@@ -677,7 +709,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       await items[0].select();
 
       // click on save
-      await dialog.getSaveButton().then((btn) => btn.click());
+      await dialog.getSaveButton().then(btn => btn.click());
       const currentApi = API();
       expectGetApi(currentApi);
       // UPDATE
@@ -687,10 +719,10 @@ describe('ApiProxyV4EntrypointsComponent', () => {
         listeners: [
           {
             type: 'HTTP',
-            ...currentApi.listeners.find((l) => l.type === 'HTTP'),
-            entrypoints: [...currentApi.listeners.find((l) => l.type === 'HTTP').entrypoints, { type: 'sse', configuration: {} }],
+            ...currentApi.listeners.find(l => l.type === 'HTTP'),
+            entrypoints: [...currentApi.listeners.find(l => l.type === 'HTTP').entrypoints, { type: 'sse', configuration: {} }],
           },
-          ...currentApi.listeners.filter((l) => l.type !== 'HTTP'),
+          ...currentApi.listeners.filter(l => l.type !== 'HTTP'),
         ],
       };
       const expectedUpdateApi: UpdateApiV4 = { ...updatedApi };
@@ -725,7 +757,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
 
       // Find row to delete
       const allEntrypointsType = await Promise.all(
-        tableRows.map((row) => row.getCells({ columnName: 'type' }).then((cells) => cells[0].getText())),
+        tableRows.map(row => row.getCells({ columnName: 'type' }).then(cells => cells[0].getText())),
       );
       const indexToRemove = allEntrypointsType.indexOf('HTTP GET');
       expect(indexToRemove).toEqual(0);
@@ -778,7 +810,7 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       await items[0].select();
 
       // click on save
-      await dialog.getSaveButton().then((btn) => btn.click());
+      await dialog.getSaveButton().then(btn => btn.click());
       expectGetApi(API);
       // UPDATE
       const saveReq = httpTestingController.expectOne({ url: `${CONSTANTS_TESTING.env.v2BaseURL}/apis/${API_ID}`, method: 'PUT' });
@@ -837,11 +869,11 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       await items[0].select();
 
       // click on save
-      await dialog.getSaveButton().then((btn) => btn.click());
+      await dialog.getSaveButton().then(btn => btn.click());
 
       // dialog should show context path component
       const contextPathForm = await dialog.getContextPathForm();
-      await contextPathForm.getLastListenerRow().then((row) => row.pathInput.setValue('/new-context-path'));
+      await contextPathForm.getLastListenerRow().then(row => row.pathInput.setValue('/new-context-path'));
       expectApiPathVerify();
       fixture.detectChanges();
 
@@ -883,19 +915,19 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       // switch to virtual host mode/context path mode
       await loader
         .getHarness(MatButtonHarness.with({ text: 'Enable virtual hosts' }))
-        .then((_) => fail('A user should not be able to enable virtual hosts'))
-        .catch((err) => expect(err).toBeTruthy());
+        .then(_ => fail('A user should not be able to enable virtual hosts'))
+        .catch(err => expect(err).toBeTruthy());
 
       // save changes or reset for context path form
       await loader
         .getHarness(MatButtonHarness.with({ text: 'Save changes' }))
-        .then((_) => fail('A user should not be able to save context path form'))
-        .catch((err) => expect(err).toBeTruthy());
+        .then(_ => fail('A user should not be able to save context path form'))
+        .catch(err => expect(err).toBeTruthy());
 
       await loader
         .getHarness(MatButtonHarness.with({ text: 'Reset' }))
-        .then((_) => fail('A user should not be able to reset context path form'))
-        .catch((err) => expect(err).toBeTruthy());
+        .then(_ => fail('A user should not be able to reset context path form'))
+        .catch(err => expect(err).toBeTruthy());
 
       // actions for a given entrypoint
       const harness = await loader.getHarness(ApiEntrypointsV4GeneralHarness);
@@ -903,13 +935,13 @@ describe('ApiProxyV4EntrypointsComponent', () => {
       expect(rows.length).toEqual(2);
 
       const actionCell = await rows[0].getCells({ columnName: 'actions' });
-      expect(await actionCell[0].getAllHarnesses(MatButtonHarness).then((buttons) => buttons?.length)).toEqual(0);
+      expect(await actionCell[0].getAllHarnesses(MatButtonHarness).then(buttons => buttons?.length)).toEqual(0);
 
       // add an entrypoint
       await loader
         .getHarness(MatButtonHarness.with({ text: 'Add an entrypoint' }))
-        .then((_) => fail('A user should not be able to add a new entrypoint'))
-        .catch((err) => expect(err).toBeTruthy());
+        .then(_ => fail('A user should not be able to add a new entrypoint'))
+        .catch(err => expect(err).toBeTruthy());
     });
   });
 

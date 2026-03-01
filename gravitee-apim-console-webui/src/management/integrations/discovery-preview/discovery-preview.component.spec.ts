@@ -115,8 +115,16 @@ describe('DiscoveryPreviewComponent', () => {
     expectIntegrationGetRequest(fakeIntegration({ id: integrationId }));
     expectPreviewGetRequest(fakeDiscoveryPreview());
 
-    await componentHarness.getCancelButton().then((button) => button.click());
+    await componentHarness.getCancelButton().then(button => button.click());
     expect(routerNavigateSpy).toHaveBeenCalledWith(['..'], { relativeTo: TestBed.inject(ActivatedRoute) });
+  });
+
+  it('should display partial discovery warning banner', async () => {
+    expectIntegrationGetRequest(fakeIntegration({ id: integrationId }));
+    expectPreviewGetRequest(fakeDiscoveryPreview({ isPartiallyDiscovered: true }));
+
+    const bannerContent = await componentHarness.getPartialDiscoveryWarning().then(banner => banner.getText());
+    expect(bannerContent).toContain('We were only able to discover a subset of the APIs listed below due to an extended discovery time.');
   });
 
   describe('proceed', () => {
@@ -124,9 +132,21 @@ describe('DiscoveryPreviewComponent', () => {
       expectIntegrationGetRequest(fakeIntegration({ id: integrationId }));
       expectPreviewGetRequest(fakeDiscoveryPreview());
 
-      await componentHarness.getProceedButton().then((button) => button.click());
+      await componentHarness.getProceedButton().then(button => button.click());
 
       expectIngestPostRequest(['testit', 'testit2', 'testit3']);
+      expect(routerNavigateSpy).toHaveBeenCalledWith(['..'], { relativeTo: TestBed.inject(ActivatedRoute) });
+    });
+
+    it('should pass an empty list of apis for ingestion in case of partial discovery when proceeding', async () => {
+      expectIntegrationGetRequest(fakeIntegration({ id: integrationId }));
+      const preview = fakeDiscoveryPreview();
+      preview.isPartiallyDiscovered = true;
+      expectPreviewGetRequest(preview);
+
+      await componentHarness.getProceedButton().then(button => button.click());
+
+      expectIngestPostRequest([]);
       expect(routerNavigateSpy).toHaveBeenCalledWith(['..'], { relativeTo: TestBed.inject(ActivatedRoute) });
     });
 
@@ -134,7 +154,7 @@ describe('DiscoveryPreviewComponent', () => {
       expectIntegrationGetRequest(fakeIntegration({ id: integrationId }));
       expectPreviewGetRequest(fakeDiscoveryPreview());
 
-      await componentHarness.getProceedButton().then((button) => button.click());
+      await componentHarness.getProceedButton().then(button => button.click());
 
       expectIngestPostRequest(['testit', 'testit2', 'testit3'], { status: AsyncJobStatus.SUCCESS });
       expect(fakeSnackBarService.success).toHaveBeenCalledWith('Ingestion complete! Your integration is now updated.');
@@ -144,7 +164,7 @@ describe('DiscoveryPreviewComponent', () => {
       expectIntegrationGetRequest(fakeIntegration({ id: integrationId }));
       expectPreviewGetRequest(fakeDiscoveryPreview());
 
-      await componentHarness.getProceedButton().then((button) => button.click());
+      await componentHarness.getProceedButton().then(button => button.click());
 
       expectIngestPostRequest(['testit', 'testit2', 'testit3'], { status: AsyncJobStatus.ERROR, message: 'an error' });
       expect(fakeSnackBarService.error).toHaveBeenCalledWith('Ingestion failed. Please check your settings and try again: an error');

@@ -99,12 +99,6 @@
 
         <dependency>
             <groupId>io.gravitee.apim.gateway</groupId>
-            <artifactId>gravitee-apim-gateway-buffer</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.gravitee.apim.gateway</groupId>
             <artifactId>gravitee-apim-gateway-env</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -337,6 +331,11 @@
         <dependency>
             <groupId>ch.qos.logback.contrib</groupId>
             <artifactId>logback-json-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>co.elastic.logging</groupId>
+            <artifactId>logback-ecs-encoder</artifactId>
             <scope>compile</scope>
         </dependency>
 

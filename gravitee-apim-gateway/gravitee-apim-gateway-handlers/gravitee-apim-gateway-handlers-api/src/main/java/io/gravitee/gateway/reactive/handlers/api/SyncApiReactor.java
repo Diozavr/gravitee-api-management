@@ -20,6 +20,8 @@ import static io.gravitee.gateway.handlers.api.ApiReactorHandlerFactory.REPORTER
 import static io.gravitee.gateway.handlers.api.ApiReactorHandlerFactory.REPORTERS_LOGGING_MAX_SIZE_PROPERTY;
 import static io.gravitee.gateway.reactive.api.ExecutionPhase.REQUEST;
 import static io.gravitee.gateway.reactive.api.ExecutionPhase.RESPONSE;
+import static io.gravitee.gateway.reactive.api.context.ContextAttributes.ATTR_CONTEXT_PATH;
+import static io.gravitee.gateway.reactive.api.context.ContextAttributes.ATTR_REQUEST_METHOD;
 import static io.gravitee.gateway.reactive.api.context.InternalContextAttributes.ATTR_INTERNAL_INVOKER;
 import static io.reactivex.rxjava3.core.Completable.defer;
 import static io.reactivex.rxjava3.core.Observable.interval;
@@ -35,6 +37,7 @@ import io.gravitee.gateway.env.RequestTimeoutConfiguration;
 import io.gravitee.gateway.handlers.accesspoint.manager.AccessPointManager;
 import io.gravitee.gateway.handlers.api.definition.Api;
 import io.gravitee.gateway.opentelemetry.TracingContext;
+import io.gravitee.gateway.reactive.api.ComponentType;
 import io.gravitee.gateway.reactive.api.ExecutionFailure;
 import io.gravitee.gateway.reactive.api.ExecutionPhase;
 import io.gravitee.gateway.reactive.api.context.ContextAttributes;
@@ -45,6 +48,9 @@ import io.gravitee.gateway.reactive.api.hook.ChainHook;
 import io.gravitee.gateway.reactive.api.hook.InvokerHook;
 import io.gravitee.gateway.reactive.api.invoker.HttpInvoker;
 import io.gravitee.gateway.reactive.api.invoker.Invoker;
+import io.gravitee.gateway.reactive.core.context.ComponentScope;
+import io.gravitee.gateway.reactive.core.context.DefaultExecutionContext;
+import io.gravitee.gateway.reactive.core.context.HttpExecutionContextInternal;
 import io.gravitee.gateway.reactive.core.context.MutableExecutionContext;
 import io.gravitee.gateway.reactive.core.context.interruption.InterruptionHelper;
 import io.gravitee.gateway.reactive.core.hook.HookHelper;
@@ -62,13 +68,15 @@ import io.gravitee.gateway.reactive.handlers.api.v4.analytics.logging.LoggingHoo
 import io.gravitee.gateway.reactive.policy.PolicyManager;
 import io.gravitee.gateway.reactive.reactor.ApiReactor;
 import io.gravitee.gateway.reactor.handler.Acceptor;
-import io.gravitee.gateway.reactor.handler.DefaultHttpAcceptor;
 import io.gravitee.gateway.reactor.handler.HttpAcceptorFactory;
 import io.gravitee.gateway.reactor.handler.ReactorHandler;
 import io.gravitee.gateway.reactor.handler.http.AccessPointHttpAcceptor;
+import io.gravitee.gateway.report.guard.LogGuardService;
 import io.gravitee.gateway.resource.ResourceLifecycleManager;
 import io.gravitee.node.api.Node;
 import io.gravitee.node.api.configuration.Configuration;
+import io.gravitee.node.logging.LogEntry;
+import io.gravitee.node.logging.LogEntryFactory;
 import io.gravitee.reporter.api.v4.metric.Metrics;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.reactivex.rxjava3.core.Completable;
@@ -80,22 +88,27 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
 public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> implements ApiReactor<Api> {
 
-    private static final Logger log = LoggerFactory.getLogger(SyncApiReactor.class);
+    private static final Set<LogEntry<? extends HttpExecutionContextInternal>> DEFAULT_EXECUTION_CONTEXT_LOG_ENTRIES = Set.of(
+        LogEntryFactory.refreshable("contextPath", DefaultExecutionContext.class, context -> context.getAttribute(ATTR_CONTEXT_PATH)),
+        LogEntryFactory.refreshable("requestMethod", DefaultExecutionContext.class, context -> context.getAttribute(ATTR_REQUEST_METHOD))
+    );
+
     protected final Api api;
     protected final List<ChainHook> processorChainHooks;
     protected final List<InvokerHook> invokerHooks;
@@ -128,6 +141,7 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
     protected AnalyticsContext analyticsContext;
     protected HttpSecurityChain httpSecurityChain;
     protected List<Acceptor<?>> acceptors;
+    private final LogGuardService logGuardService;
 
     public SyncApiReactor(
         final Api api,
@@ -145,7 +159,8 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
         final AccessPointManager accessPointManager,
         final EventManager eventManager,
         final HttpAcceptorFactory httpAcceptorFactory,
-        final TracingContext tracingContext
+        final TracingContext tracingContext,
+        final LogGuardService logGuardService
     ) {
         this.api = api;
         this.componentProvider = componentProvider;
@@ -159,6 +174,7 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
         this.eventManager = eventManager;
         this.httpAcceptorFactory = httpAcceptorFactory;
         this.tracingContext = tracingContext;
+        this.logGuardService = logGuardService;
 
         this.beforeHandleProcessors = apiProcessorChainFactory.beforeHandle(api, tracingContext);
         this.afterHandleProcessors = apiProcessorChainFactory.afterHandle(api, tracingContext);
@@ -175,8 +191,11 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
 
         this.configuration = configuration;
         this.pendingRequestsTimeout = configuration.getProperty(PENDING_REQUESTS_TIMEOUT_PROPERTY, Long.class, 10_000L);
-        this.loggingExcludedResponseType =
-            configuration.getProperty(REPORTERS_LOGGING_EXCLUDED_RESPONSE_TYPES_PROPERTY, String.class, null);
+        this.loggingExcludedResponseType = configuration.getProperty(
+            REPORTERS_LOGGING_EXCLUDED_RESPONSE_TYPES_PROPERTY,
+            String.class,
+            null
+        );
         this.loggingMaxSize = configuration.getProperty(REPORTERS_LOGGING_MAX_SIZE_PROPERTY, String.class, null);
 
         this.processorChainHooks = new ArrayList<>();
@@ -216,6 +235,7 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
         ctx.setAttribute(ContextAttributes.ATTR_ENVIRONMENT, api.getEnvironmentId());
         ctx.setInternalAttribute(ATTR_INTERNAL_INVOKER, defaultInvoker);
         ctx.setInternalAttribute(InternalContextAttributes.ATTR_INTERNAL_ANALYTICS_CONTEXT, analyticsContext);
+        ctx.logEntries(DEFAULT_EXECUTION_CONTEXT_LOG_ENTRIES);
     }
 
     private void prepareMetrics(HttpExecutionContext ctx) {
@@ -225,6 +245,8 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
         metrics.setApiId(api.getId());
         metrics.setApiName(api.getName());
         metrics.setPathInfo(request.pathInfo());
+        metrics.setOrganizationId(api.getOrganizationId());
+        metrics.setEnvironmentId(api.getEnvironmentId());
     }
 
     private void setApiResponseTimeMetric(HttpExecutionContext ctx) {
@@ -304,15 +326,18 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
      */
     private Completable invokeBackend(final MutableExecutionContext ctx) {
         return defer(() -> {
-                if (!Objects.equals(false, ctx.<Boolean>getInternalAttribute(InternalContextAttributes.ATTR_INTERNAL_INVOKER))) {
-                    HttpInvoker invoker = getInvoker(ctx);
+            if (!Objects.equals(false, ctx.<Boolean>getInternalAttribute(InternalContextAttributes.ATTR_INTERNAL_INVOKER))) {
+                HttpInvoker invoker = getInvoker(ctx);
 
-                    if (invoker != null) {
-                        return HookHelper.hook(() -> invoker.invoke(ctx), invoker.getId(), invokerHooks, ctx, null);
-                    }
+                if (invoker != null) {
+                    ComponentScope.push(ctx, ComponentType.ENDPOINT, invoker.getId());
+                    return HookHelper.hook(() -> invoker.invoke(ctx), invoker.getId(), invokerHooks, ctx, null).doFinally(() ->
+                        ComponentScope.remove(ctx, ComponentType.ENDPOINT, invoker.getId())
+                    );
                 }
-                return Completable.complete();
-            })
+            }
+            return Completable.complete();
+        })
             .doOnSubscribe(disposable -> ctx.metrics().setEndpointResponseTimeMs(System.currentTimeMillis()))
             .doOnDispose(() -> setApiResponseTimeMetric(ctx))
             .doOnTerminate(() -> setApiResponseTimeMetric(ctx));
@@ -355,11 +380,18 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
                     requestTimeoutConfiguration.getRequestTimeout() - (System.currentTimeMillis() - ctx.request().timestamp())
                 ),
                 TimeUnit.MILLISECONDS,
-                ctx
-                    .interruptWith(
-                        new ExecutionFailure(HttpStatusCode.GATEWAY_TIMEOUT_504).key("REQUEST_TIMEOUT").message("Request timeout")
-                    )
-                    .onErrorResumeNext(error -> executeProcessorChain(ctx, onErrorProcessors, RESPONSE))
+                Completable.fromRunnable(() -> {
+                    ComponentScope.push(ctx, ComponentType.SYSTEM, "request-timeout");
+                }).andThen(
+                    ctx
+                        .interruptWith(
+                            new ExecutionFailure(HttpStatusCode.GATEWAY_TIMEOUT_504).key("REQUEST_TIMEOUT").message("Request timeout")
+                        )
+                        .onErrorResumeNext(error -> executeProcessorChain(ctx, onErrorProcessors, RESPONSE))
+                        .doFinally(() -> {
+                            ComponentScope.remove(ctx, ComponentType.SYSTEM, "request-timeout");
+                        })
+                )
             )
         );
     }
@@ -380,14 +412,14 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
             return executeProcessorChain(ctx, onErrorProcessors, RESPONSE);
         } else {
             // In case of any error exception, log original exception, execute api error processor chain and resume the execution
-            log.error("Unexpected error while handling request", throwable);
+            ctx.withLogger(log).error("Unexpected error while handling request", throwable);
             return executeProcessorChain(ctx, onErrorProcessors, RESPONSE);
         }
     }
 
     private Completable handleUnexpectedError(final HttpExecutionContext ctx, final Throwable throwable) {
         return Completable.fromRunnable(() -> {
-            log.error("Unexpected error while handling request", throwable);
+            ctx.withLogger(log).error("Unexpected error while handling request", throwable);
             setApiResponseTimeMetric(ctx);
 
             ctx.response().status(HttpResponseStatus.INTERNAL_SERVER_ERROR.code());
@@ -399,33 +431,32 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
     public List<Acceptor<?>> acceptors() {
         try {
             if (acceptors == null) {
-                acceptors =
-                    api
-                        .getDefinition()
-                        .getProxy()
-                        .getVirtualHosts()
-                        .stream()
-                        .map(virtualHost -> {
-                            if (virtualHost.getHost() != null) {
-                                return httpAcceptorFactory.create(
-                                    virtualHost.getHost(),
-                                    virtualHost.getPath(),
-                                    this,
-                                    api.getDefinition().getProxy().getServers()
-                                );
-                            } else {
-                                return new AccessPointHttpAcceptor(
-                                    eventManager,
-                                    httpAcceptorFactory,
-                                    api.getEnvironmentId(),
-                                    accessPointManager.getByEnvironmentId(api.getEnvironmentId()),
-                                    virtualHost.getPath(),
-                                    this,
-                                    api.getDefinition().getProxy().getServers()
-                                );
-                            }
-                        })
-                        .collect(Collectors.toList());
+                acceptors = api
+                    .getDefinition()
+                    .getProxy()
+                    .getVirtualHosts()
+                    .stream()
+                    .map(virtualHost -> {
+                        if (virtualHost.getHost() != null) {
+                            return httpAcceptorFactory.create(
+                                virtualHost.getHost(),
+                                virtualHost.getPath(),
+                                this,
+                                api.getDefinition().getProxy().getServers()
+                            );
+                        } else {
+                            return new AccessPointHttpAcceptor(
+                                eventManager,
+                                httpAcceptorFactory,
+                                api.getEnvironmentId(),
+                                accessPointManager.getByEnvironmentId(api.getEnvironmentId()),
+                                virtualHost.getPath(),
+                                this,
+                                api.getDefinition().getProxy().getServers()
+                            );
+                        }
+                    })
+                    .collect(Collectors.toList());
             }
 
             return acceptors;
@@ -450,15 +481,17 @@ public class SyncApiReactor extends AbstractLifecycleComponent<ReactorHandler> i
         this.httpSecurityChain = new HttpSecurityChain(api.getDefinition(), policyManager, REQUEST);
 
         tracingContext.start();
-        this.analyticsContext =
-            AnalyticsUtils.createAnalyticsContext(api.getDefinition(), loggingMaxSize, loggingExcludedResponseType, tracingContext);
+        this.analyticsContext = AnalyticsUtils.createAnalyticsContext(
+            api.getDefinition(),
+            loggingMaxSize,
+            loggingExcludedResponseType,
+            tracingContext,
+            logGuardService
+        );
         if (analyticsContext.isLoggingEnabled()) {
             invokerHooks.add(new LoggingHook());
         }
         if (analyticsContext.isTracingEnabled()) {
-            if (analyticsContext.getTracingContext().isVerbose()) {
-                processorChainHooks.add(new TracingHook("Processor chain"));
-            }
             invokerHooks.add(new InvokerTracingHook("Invoker"));
             httpSecurityChain.addHooks(new TracingHook("Security plan"));
         }

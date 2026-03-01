@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import { IScope } from 'angular';
-
 import { ActivatedRoute, Router } from '@angular/router';
 
 import DictionaryService from '../../../services/dictionary.service';
@@ -31,7 +30,7 @@ class DictionariesController {
   }
 
   $onInit() {
-    this.DictionaryService.list().then((response) => (this.dictionaries = response.data));
+    this.DictionaryService.list().then(response => (this.dictionaries = response.data));
   }
 
   goTo(dictionaryId: string) {

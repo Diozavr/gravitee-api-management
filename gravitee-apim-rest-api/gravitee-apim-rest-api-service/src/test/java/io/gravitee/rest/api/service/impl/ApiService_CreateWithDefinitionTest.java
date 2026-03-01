@@ -200,8 +200,9 @@ public class ApiService_CreateWithDefinitionTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.getPrincipal()).thenReturn(new UserDetails(USERNAME, "", emptyList()));
         SecurityContextHolder.setContext(securityContext);
-        when(verifyApiPathDomainService.validateAndSanitize(any()))
-            .thenAnswer(invocation -> Validator.Result.ofValue(invocation.getArgument(0)));
+        when(verifyApiPathDomainService.validateAndSanitize(any())).thenAnswer(invocation ->
+            Validator.Result.ofValue(invocation.getArgument(0))
+        );
     }
 
     @Test
@@ -227,7 +228,7 @@ public class ApiService_CreateWithDefinitionTest {
 
         when(apiRepository.create(any())).thenReturn(new io.gravitee.repository.management.model.Api());
 
-        when(apiConverter.toApiEntity(any(), any(), any(), anyBoolean())).thenReturn(new ApiEntity());
+        when(apiConverter.toApiEntity(any(), any(), any(), anyBoolean(), eq(true), eq(true))).thenReturn(new ApiEntity());
 
         when(apiMetadataService.fetchMetadataForApi(any(), any())).thenReturn(new ApiEntity());
 
@@ -269,7 +270,7 @@ public class ApiService_CreateWithDefinitionTest {
 
         when(apiRepository.create(any())).thenReturn(new io.gravitee.repository.management.model.Api());
 
-        when(apiConverter.toApiEntity(any(), any(), any(), anyBoolean())).thenReturn(new ApiEntity());
+        when(apiConverter.toApiEntity(any(), any(), any(), anyBoolean(), eq(true), eq(true))).thenReturn(new ApiEntity());
 
         when(apiMetadataService.fetchMetadataForApi(any(), any())).thenReturn(new ApiEntity());
 
@@ -302,7 +303,7 @@ public class ApiService_CreateWithDefinitionTest {
 
         when(apiRepository.create(any())).thenReturn(new io.gravitee.repository.management.model.Api());
 
-        when(apiConverter.toApiEntity(any(), any(), any(), anyBoolean())).thenReturn(new ApiEntity());
+        when(apiConverter.toApiEntity(any(), any(), any(), anyBoolean(), anyBoolean(), eq(true))).thenReturn(new ApiEntity());
 
         when(apiMetadataService.fetchMetadataForApi(any(), any())).thenReturn(new ApiEntity());
 
@@ -333,9 +334,8 @@ public class ApiService_CreateWithDefinitionTest {
             .when(tagService)
             .checkTagsExist(Set.of("unit-tests"), GraviteeContext.getCurrentEnvironment(), TagReferenceType.ORGANIZATION);
 
-        assertThrows(
-            TagNotFoundException.class,
-            () -> apiService.createWithApiDefinition(GraviteeContext.getExecutionContext(), api, USERNAME, definition)
+        assertThrows(TagNotFoundException.class, () ->
+            apiService.createWithApiDefinition(GraviteeContext.getExecutionContext(), api, USERNAME, definition)
         );
         verify(apiRepository, never()).create(any());
         verify(alertService, never()).createDefaults(any(ExecutionContext.class), eq(AlertReferenceType.API), any());
@@ -365,17 +365,21 @@ public class ApiService_CreateWithDefinitionTest {
 
         when(apiRepository.create(any())).thenReturn(new io.gravitee.repository.management.model.Api());
 
-        when(apiConverter.toApiEntity(any(), any(), any(), anyBoolean())).thenReturn(new ApiEntity());
+        when(apiConverter.toApiEntity(any(), any(), any(), anyBoolean(), eq(true), eq(true))).thenReturn(new ApiEntity());
 
         when(apiMetadataService.fetchMetadataForApi(any(), any())).thenReturn(new ApiEntity());
 
-        when(tagService.findByUser(USERNAME, GraviteeContext.getCurrentEnvironment(), TagReferenceType.ORGANIZATION))
-            .thenReturn(Set.of("a-tag", "unit-tests"));
+        when(tagService.findByUser(USERNAME, GraviteeContext.getCurrentEnvironment(), TagReferenceType.ORGANIZATION)).thenReturn(
+            Set.of("a-tag", "unit-tests")
+        );
 
         apiService.createWithApiDefinition(GraviteeContext.getExecutionContext(), api, USERNAME, definition);
 
-        verify(tagService, times(1))
-            .checkTagsExist(Set.of("unit-tests"), GraviteeContext.getCurrentEnvironment(), TagReferenceType.ORGANIZATION);
+        verify(tagService, times(1)).checkTagsExist(
+            Set.of("unit-tests"),
+            GraviteeContext.getCurrentEnvironment(),
+            TagReferenceType.ORGANIZATION
+        );
 
         verify(apiRepository, times(1)).create(argThat(arg -> arg.getId().equals(definition.get("id").asText())));
         verify(alertService, times(1)).createDefaults(any(ExecutionContext.class), eq(AlertReferenceType.API), any());
@@ -398,12 +402,12 @@ public class ApiService_CreateWithDefinitionTest {
         api.setDescription("tag test basic example");
         api.setTags(Set.of("unit-tests"));
 
-        when(tagService.findByUser(USERNAME, GraviteeContext.getCurrentEnvironment(), TagReferenceType.ORGANIZATION))
-            .thenReturn(Set.of("a-tag"));
+        when(tagService.findByUser(USERNAME, GraviteeContext.getCurrentEnvironment(), TagReferenceType.ORGANIZATION)).thenReturn(
+            Set.of("a-tag")
+        );
 
-        assertThrows(
-            TagNotAllowedException.class,
-            () -> apiService.createWithApiDefinition(GraviteeContext.getExecutionContext(), api, USERNAME, definition)
+        assertThrows(TagNotAllowedException.class, () ->
+            apiService.createWithApiDefinition(GraviteeContext.getExecutionContext(), api, USERNAME, definition)
         );
         verify(apiRepository, never()).create(any());
         verify(alertService, never()).createDefaults(any(ExecutionContext.class), eq(AlertReferenceType.API), any());
@@ -435,8 +439,7 @@ public class ApiService_CreateWithDefinitionTest {
         EndpointGroup endpointGroup = EndpointGroup.builder().name("endpointGroupName").endpoints(singleton(endpoint)).build();
         Endpoint endpoint2 = Endpoint.builder().name("endpointGroupName").build();
         EndpointGroup endpointGroup2 = EndpointGroup.builder().name("endpointName").endpoints(singleton(endpoint2)).build();
-        Proxy proxy = Proxy
-            .builder()
+        Proxy proxy = Proxy.builder()
             .groups(Set.of(endpointGroup, endpointGroup2))
             .virtualHosts(singletonList(new VirtualHost("/context")))
             .build();

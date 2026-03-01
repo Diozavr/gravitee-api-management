@@ -60,6 +60,7 @@ import {
   ApiType,
   PlanStatus,
   ApiFederated,
+  McpSelector,
 } from '../../../../entities/management-api-v2';
 import { isApiV2FromMAPIV2 } from '../../../../util';
 import { PlanFormType, PlanMenuItemVM } from '../../../../services-ngx/constants.service';
@@ -356,7 +357,7 @@ export class ApiPlanFormComponent implements OnInit, AfterViewInit, OnDestroy, C
       .pipe(
         map(() => this.getPlanFormValue()),
         distinctUntilChanged(isEqual),
-        tap((plan) => {
+        tap(plan => {
           this._onChange(plan);
           this._onTouched();
         }),
@@ -395,9 +396,9 @@ const planToInternalFormValue = (
   const restriction: InternalPlanFormValue['restriction'] = {};
   if (mode === 'create' && plan.flows?.length > 0) {
     if (isV2Api) {
-      const flow = plan.flows.map((flow) => flow as FlowV2)[0];
+      const flow = plan.flows.map(flow => flow as FlowV2)[0];
       if (flow.enabled) {
-        flow.pre.forEach((step) => {
+        flow.pre.forEach(step => {
           if (step.policy === 'rate-limit' && step.enabled) {
             restriction.rateLimitEnabled = true;
             restriction.rateLimitConfig = step.configuration;
@@ -413,9 +414,9 @@ const planToInternalFormValue = (
         });
       }
     } else {
-      const flow = plan.flows.map((flow) => flow as FlowV4)[0];
+      const flow = plan.flows.map(flow => flow as FlowV4)[0];
       if (flow.enabled) {
-        flow.request.forEach((step) => {
+        flow.request.forEach(step => {
           if (step.policy === 'rate-limit' && step.enabled) {
             restriction.rateLimitEnabled = true;
             restriction.rateLimitConfig = step.configuration;
@@ -577,13 +578,27 @@ const internalFormValueToPlanV4 = (
         ]
       : [];
 
+    // If no policy to add. do not create empty flow
+    if (isEmpty(restrictionPolicies)) {
+      return [];
+    }
+
+    const defaultSelectors = [];
+    switch (apiType) {
+      case 'LLM_PROXY':
+      case 'PROXY':
+        defaultSelectors.push({ type: 'HTTP', path: '/', pathOperator: 'STARTS_WITH' });
+        break;
+      case 'MESSAGE':
+        defaultSelectors.push({ type: 'CHANNEL', channel: '/', channelOperator: 'STARTS_WITH' });
+        break;
+      case 'MCP_PROXY':
+        defaultSelectors.push({ type: 'MCP', methods: [] } satisfies McpSelector);
+    }
+
     return [
       {
-        selectors: [
-          apiType === 'PROXY'
-            ? { type: 'HTTP', path: '/', pathOperator: 'STARTS_WITH' }
-            : { type: 'CHANNEL', channel: '/', channelOperator: 'STARTS_WITH' },
-        ],
+        selectors: defaultSelectors,
         enabled: true,
         request: [...restrictionPolicies],
       },

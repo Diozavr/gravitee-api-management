@@ -18,6 +18,7 @@ package io.gravitee.rest.api.model;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.gravitee.definition.model.Rule;
 import io.gravitee.definition.model.flow.Flow;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.sanitizer.HtmlSanitizer;
 import jakarta.validation.constraints.NotNull;
 import java.util.*;
@@ -35,6 +36,7 @@ public class NewPlanEntity {
      * Plans promoted between environments will share the same crossId.
      */
     private String crossId;
+    private String hrid;
 
     @NotNull
     private String name;
@@ -51,12 +53,17 @@ public class NewPlanEntity {
     private String securityDefinition;
 
     @NotNull
+    @Deprecated
     private PlanType type = PlanType.API;
 
     @NotNull
     private PlanStatus status = PlanStatus.STAGING;
 
+    @Deprecated
     private String api;
+
+    private String referenceId;
+    private GenericPlanEntity.ReferenceType referenceType;
 
     @JsonProperty(value = "paths", required = true)
     private Map<String, List<Rule>> paths = new HashMap<>();
@@ -117,10 +124,12 @@ public class NewPlanEntity {
         this.validation = validation;
     }
 
+    @Deprecated
     public PlanType getType() {
         return type;
     }
 
+    @Deprecated
     public void setType(PlanType type) {
         this.type = type;
     }
@@ -133,10 +142,12 @@ public class NewPlanEntity {
         this.status = status;
     }
 
+    @Deprecated
     public String getApi() {
         return api;
     }
 
+    @Deprecated
     public void setApi(String api) {
         this.api = api;
     }
@@ -243,6 +254,30 @@ public class NewPlanEntity {
 
     public void setCrossId(String crossId) {
         this.crossId = crossId;
+    }
+
+    public String getHrid() {
+        return hrid;
+    }
+
+    public void setHrid(String hrid) {
+        this.hrid = hrid;
+    }
+
+    public String getReferenceId() {
+        return referenceId;
+    }
+
+    public void setReferenceId(String referenceId) {
+        this.referenceId = referenceId;
+    }
+
+    public GenericPlanEntity.ReferenceType getReferenceType() {
+        return referenceType;
+    }
+
+    public void setReferenceType(GenericPlanEntity.ReferenceType referenceType) {
+        this.referenceType = referenceType;
     }
 
     @Override

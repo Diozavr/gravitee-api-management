@@ -135,17 +135,16 @@ public class ApiImportExportServiceImplTest {
 
     @BeforeEach
     public void setUp() {
-        cut =
-            new ApiImportExportServiceImpl(
-                apiMetadataService,
-                apiSearchService,
-                mediaService,
-                membershipService,
-                pageService,
-                permissionService,
-                planService,
-                roleService
-            );
+        cut = new ApiImportExportServiceImpl(
+            apiMetadataService,
+            apiSearchService,
+            mediaService,
+            membershipService,
+            pageService,
+            permissionService,
+            planService,
+            roleService
+        );
         reset(
             apiMetadataService,
             apiService,
@@ -161,17 +160,20 @@ public class ApiImportExportServiceImplTest {
 
     @Test
     public void should_not_export_v2_apis() {
-        doReturn(this.fakeApiEntityV2()).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
-        assertThrows(
-            ApiDefinitionVersionNotSupportedException.class,
-            () -> cut.exportApi(GraviteeContext.getExecutionContext(), API_ID, USER_ID, EXCLUDE_ADDITIONAL_DATA)
+        doReturn(this.fakeApiEntityV2())
+            .when(apiSearchService)
+            .findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
+        assertThrows(ApiDefinitionVersionNotSupportedException.class, () ->
+            cut.exportApi(GraviteeContext.getExecutionContext(), API_ID, USER_ID, EXCLUDE_ADDITIONAL_DATA)
         );
     }
 
     @Test
     public void should_export_only_api_when_only_definition_permission() {
         mockPermissions(false, false, false, false);
-        doReturn(this.fakeApiEntityV4()).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        doReturn(this.fakeApiEntityV4())
+            .when(apiSearchService)
+            .findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
 
         final ExportApiEntity export = cut.exportApi(GraviteeContext.getExecutionContext(), API_ID, USER_ID, EXCLUDE_ADDITIONAL_DATA);
         assertNull(export.getMembers());
@@ -180,7 +182,7 @@ public class ApiImportExportServiceImplTest {
         assertNull(export.getPages());
         assertNotNull(export.getApiEntity());
 
-        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
         verify(apiMetadataService, never()).findAllByApi(GraviteeContext.getExecutionContext(), API_ID);
         verify(planService, never()).findByApi(GraviteeContext.getExecutionContext(), API_ID);
         verify(pageService, never()).findByApi(GraviteeContext.getCurrentEnvironment(), API_ID);
@@ -190,7 +192,9 @@ public class ApiImportExportServiceImplTest {
     @Test
     public void should_export_members_and_api_when_member_and_definition_permission() {
         mockPermissions(true, false, false, false);
-        doReturn(this.fakeApiEntityV4()).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        doReturn(this.fakeApiEntityV4())
+            .when(apiSearchService)
+            .findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
         doReturn(this.fakeApiMembers())
             .when(membershipService)
             .getMembersByReference(GraviteeContext.getExecutionContext(), MembershipReferenceType.API, API_ID);
@@ -202,7 +206,7 @@ public class ApiImportExportServiceImplTest {
         assertNull(export.getPages());
         assertNotNull(export.getApiEntity());
 
-        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
         verify(membershipService).getMembersByReference(GraviteeContext.getExecutionContext(), MembershipReferenceType.API, API_ID);
         verify(apiMetadataService, never()).findAllByApi(GraviteeContext.getExecutionContext(), API_ID);
         verify(planService, never()).findByApi(GraviteeContext.getExecutionContext(), API_ID);
@@ -213,7 +217,9 @@ public class ApiImportExportServiceImplTest {
     @Test
     public void should_export_metadata_and_api_when_metadata_and_definition_permission() {
         mockPermissions(false, true, false, false);
-        doReturn(this.fakeApiEntityV4()).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        doReturn(this.fakeApiEntityV4())
+            .when(apiSearchService)
+            .findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
         doReturn(new ArrayList<>(this.fakeApiMetadata()))
             .when(apiMetadataService)
             .findAllByApi(GraviteeContext.getExecutionContext(), API_ID);
@@ -225,9 +231,12 @@ public class ApiImportExportServiceImplTest {
         assertNull(export.getPages());
         assertNotNull(export.getApiEntity());
 
-        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
-        verify(membershipService, never())
-            .getMembersByReference(GraviteeContext.getExecutionContext(), MembershipReferenceType.API, API_ID);
+        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
+        verify(membershipService, never()).getMembersByReference(
+            GraviteeContext.getExecutionContext(),
+            MembershipReferenceType.API,
+            API_ID
+        );
         verify(apiMetadataService).findAllByApi(GraviteeContext.getExecutionContext(), API_ID);
         verify(planService, never()).findByApi(GraviteeContext.getExecutionContext(), API_ID);
         verify(pageService, never()).findByApi(GraviteeContext.getCurrentEnvironment(), API_ID);
@@ -238,7 +247,9 @@ public class ApiImportExportServiceImplTest {
     public void should_export_plans_and_api_when_plan_and_definition_permission() {
         mockPermissions(false, false, true, false);
 
-        doReturn(this.fakeApiEntityV4()).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        doReturn(this.fakeApiEntityV4())
+            .when(apiSearchService)
+            .findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
         doReturn(this.fakeApiPlans()).when(planService).findByApi(GraviteeContext.getExecutionContext(), API_ID);
 
         final ExportApiEntity export = cut.exportApi(GraviteeContext.getExecutionContext(), API_ID, USER_ID, EXCLUDE_ADDITIONAL_DATA);
@@ -248,9 +259,12 @@ public class ApiImportExportServiceImplTest {
         assertNull(export.getPages());
         assertNotNull(export.getApiEntity());
 
-        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
-        verify(membershipService, never())
-            .getMembersByReference(GraviteeContext.getExecutionContext(), MembershipReferenceType.API, API_ID);
+        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
+        verify(membershipService, never()).getMembersByReference(
+            GraviteeContext.getExecutionContext(),
+            MembershipReferenceType.API,
+            API_ID
+        );
         verify(apiMetadataService, never()).findAllByApi(GraviteeContext.getExecutionContext(), API_ID);
         verify(planService).findByApi(GraviteeContext.getExecutionContext(), API_ID);
         verify(pageService, never()).findByApi(GraviteeContext.getCurrentEnvironment(), API_ID);
@@ -261,7 +275,9 @@ public class ApiImportExportServiceImplTest {
     public void should_export_pages_and_api_when_documentation_and_definition_permission() {
         mockPermissions(false, false, false, true);
 
-        doReturn(this.fakeApiEntityV4()).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        doReturn(this.fakeApiEntityV4())
+            .when(apiSearchService)
+            .findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
         doReturn(this.fakeApiPages()).when(pageService).findByApi(GraviteeContext.getCurrentEnvironment(), API_ID);
         doReturn(this.fakeApiMedia()).when(mediaService).findAllByApiId(API_ID);
 
@@ -272,9 +288,12 @@ public class ApiImportExportServiceImplTest {
         assertNotNull(export.getPages());
         assertNotNull(export.getApiEntity());
 
-        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
-        verify(membershipService, never())
-            .getMembersByReference(GraviteeContext.getExecutionContext(), MembershipReferenceType.API, API_ID);
+        verify(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
+        verify(membershipService, never()).getMembersByReference(
+            GraviteeContext.getExecutionContext(),
+            MembershipReferenceType.API,
+            API_ID
+        );
         verify(apiMetadataService, never()).findAllByApi(GraviteeContext.getExecutionContext(), API_ID);
         verify(planService, never()).findByApi(GraviteeContext.getExecutionContext(), API_ID);
         verify(pageService).findByApi(GraviteeContext.getCurrentEnvironment(), API_ID);
@@ -283,7 +302,9 @@ public class ApiImportExportServiceImplTest {
 
     @Test
     public void should_export_api_and_exclude_all_additional_data() {
-        doReturn(this.fakeApiEntityV4()).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        doReturn(this.fakeApiEntityV4())
+            .when(apiSearchService)
+            .findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
 
         var EXCLUDE_ALL_ADDITIONAL_DATA = Set.of("members", "metadata", "plans", "pages", "groups");
         final ExportApiEntity export = cut.exportApi(GraviteeContext.getExecutionContext(), API_ID, USER_ID, EXCLUDE_ALL_ADDITIONAL_DATA);
@@ -297,7 +318,9 @@ public class ApiImportExportServiceImplTest {
 
     @Test
     public void should_export_native_api_and_exclude_all_additional_data() {
-        doReturn(this.fakeNativeApiEntityV4()).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        doReturn(this.fakeNativeApiEntityV4())
+            .when(apiSearchService)
+            .findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
 
         var EXCLUDE_ALL_ADDITIONAL_DATA = Set.of("members", "metadata", "plans", "pages", "groups");
         final ExportApiEntity export = cut.exportApi(GraviteeContext.getExecutionContext(), API_ID, USER_ID, EXCLUDE_ALL_ADDITIONAL_DATA);
@@ -312,7 +335,9 @@ public class ApiImportExportServiceImplTest {
     @Test
     public void should_export_native_api_with_members_metadata_nativePlans_pages() {
         mockPermissions(true, true, true, true);
-        doReturn(this.fakeNativeApiEntityV4()).when(apiSearchService).findGenericById(GraviteeContext.getExecutionContext(), API_ID);
+        doReturn(this.fakeNativeApiEntityV4())
+            .when(apiSearchService)
+            .findGenericById(GraviteeContext.getExecutionContext(), API_ID, true, false, true);
         doReturn(this.fakeApiMembers())
             .when(membershipService)
             .getMembersByReference(GraviteeContext.getExecutionContext(), MembershipReferenceType.API, API_ID);
@@ -342,8 +367,7 @@ public class ApiImportExportServiceImplTest {
 
         var defaultRole = RoleEntity.builder().id("default-role-id").scope(RoleScope.API).name("USER").build();
 
-        var member = MemberEntity
-            .builder()
+        var member = MemberEntity.builder()
             .id("member-id")
             .type(MembershipMemberType.USER)
             .referenceType(MembershipReferenceType.API)
@@ -355,23 +379,28 @@ public class ApiImportExportServiceImplTest {
 
         when(roleService.findDefaultRoleByScopes(executionContext.getOrganizationId(), RoleScope.API)).thenReturn(List.of(defaultRole));
 
-        when(roleService.findByScopeAndName(RoleScope.API, "OWNER", executionContext.getOrganizationId()))
-            .thenReturn(Optional.of(memberRole));
+        when(roleService.findByScopeAndName(RoleScope.API, "OWNER", executionContext.getOrganizationId())).thenReturn(
+            Optional.of(memberRole)
+        );
 
         cut.createMembers(executionContext, API_ID, Set.of(member));
 
-        verify(membershipService, times(1))
-            .deleteReferenceMember(executionContext, MembershipReferenceType.API, API_ID, MembershipMemberType.USER, member.getId());
+        verify(membershipService, times(1)).deleteReferenceMember(
+            executionContext,
+            MembershipReferenceType.API,
+            API_ID,
+            MembershipMemberType.USER,
+            member.getId()
+        );
 
-        verify(membershipService, times(1))
-            .addRoleToMemberOnReference(
-                executionContext,
-                MembershipReferenceType.API,
-                API_ID,
-                MembershipMemberType.USER,
-                member.getId(),
-                memberRole.getId()
-            );
+        verify(membershipService, times(1)).addRoleToMemberOnReference(
+            executionContext,
+            MembershipReferenceType.API,
+            API_ID,
+            MembershipMemberType.USER,
+            member.getId(),
+            memberRole.getId()
+        );
     }
 
     @Test
@@ -384,8 +413,7 @@ public class ApiImportExportServiceImplTest {
 
         var defaultRole = RoleEntity.builder().id("default-role-id").scope(RoleScope.API).name("USER").build();
 
-        var member = MemberEntity
-            .builder()
+        var member = MemberEntity.builder()
             .id("member-id")
             .type(MembershipMemberType.USER)
             .referenceType(MembershipReferenceType.API)
@@ -401,18 +429,22 @@ public class ApiImportExportServiceImplTest {
 
         cut.createMembers(executionContext, API_ID, Set.of(member));
 
-        verify(membershipService, times(1))
-            .deleteReferenceMember(executionContext, MembershipReferenceType.API, API_ID, MembershipMemberType.USER, member.getId());
+        verify(membershipService, times(1)).deleteReferenceMember(
+            executionContext,
+            MembershipReferenceType.API,
+            API_ID,
+            MembershipMemberType.USER,
+            member.getId()
+        );
 
-        verify(membershipService, times(1))
-            .addRoleToMemberOnReference(
-                executionContext,
-                MembershipReferenceType.API,
-                API_ID,
-                MembershipMemberType.USER,
-                member.getId(),
-                memberRole.getId()
-            );
+        verify(membershipService, times(1)).addRoleToMemberOnReference(
+            executionContext,
+            MembershipReferenceType.API,
+            API_ID,
+            MembershipMemberType.USER,
+            member.getId(),
+            memberRole.getId()
+        );
     }
 
     @Test
@@ -423,8 +455,7 @@ public class ApiImportExportServiceImplTest {
 
         var defaultRole = RoleEntity.builder().id("default-role-id").scope(RoleScope.API).name("USER").build();
 
-        var member = MemberEntity
-            .builder()
+        var member = MemberEntity.builder()
             .id("member-id")
             .type(MembershipMemberType.USER)
             .referenceType(MembershipReferenceType.API)
@@ -437,18 +468,22 @@ public class ApiImportExportServiceImplTest {
 
         cut.createMembers(executionContext, API_ID, Set.of(member));
 
-        verify(membershipService, times(1))
-            .deleteReferenceMember(executionContext, MembershipReferenceType.API, API_ID, MembershipMemberType.USER, member.getId());
+        verify(membershipService, times(1)).deleteReferenceMember(
+            executionContext,
+            MembershipReferenceType.API,
+            API_ID,
+            MembershipMemberType.USER,
+            member.getId()
+        );
 
-        verify(membershipService, times(1))
-            .addRoleToMemberOnReference(
-                executionContext,
-                MembershipReferenceType.API,
-                API_ID,
-                MembershipMemberType.USER,
-                member.getId(),
-                defaultRole.getId()
-            );
+        verify(membershipService, times(1)).addRoleToMemberOnReference(
+            executionContext,
+            MembershipReferenceType.API,
+            API_ID,
+            MembershipMemberType.USER,
+            member.getId(),
+            defaultRole.getId()
+        );
     }
 
     @Test
@@ -461,8 +496,7 @@ public class ApiImportExportServiceImplTest {
 
         var defaultRole = RoleEntity.builder().id("default-role-id").scope(RoleScope.API).name("USER").build();
 
-        var member = MemberEntity
-            .builder()
+        var member = MemberEntity.builder()
             .id("member-id")
             .type(MembershipMemberType.USER)
             .referenceType(MembershipReferenceType.API)
@@ -478,18 +512,22 @@ public class ApiImportExportServiceImplTest {
 
         cut.createMembers(executionContext, API_ID, Set.of(member));
 
-        verify(membershipService, times(1))
-            .deleteReferenceMember(executionContext, MembershipReferenceType.API, API_ID, MembershipMemberType.USER, member.getId());
+        verify(membershipService, times(1)).deleteReferenceMember(
+            executionContext,
+            MembershipReferenceType.API,
+            API_ID,
+            MembershipMemberType.USER,
+            member.getId()
+        );
 
-        verify(membershipService, times(1))
-            .addRoleToMemberOnReference(
-                executionContext,
-                MembershipReferenceType.API,
-                API_ID,
-                MembershipMemberType.USER,
-                member.getId(),
-                defaultRole.getId()
-            );
+        verify(membershipService, times(1)).addRoleToMemberOnReference(
+            executionContext,
+            MembershipReferenceType.API,
+            API_ID,
+            MembershipMemberType.USER,
+            member.getId(),
+            defaultRole.getId()
+        );
     }
 
     private void mockPermissions(boolean member, boolean metadata, boolean plan, boolean documentation) {
@@ -552,20 +590,20 @@ public class ApiImportExportServiceImplTest {
         endpoint.setType("http-get");
         endpoint.setConfiguration(
             """
-                        {
-                                                "bootstrapServers": "kafka:9092",
-                                                "topics": [
-                                                    "demo"
-                                                ],
-                                                "producer": {
-                                                    "enabled": false
-                                                },
-                                                "consumer": {
-                                                    "encodeMessageId": true,
-                                                    "enabled": true,
-                                                    "autoOffsetReset": "earliest"
-                                                }
-                                            }"""
+            {
+                                    "bootstrapServers": "kafka:9092",
+                                    "topics": [
+                                        "demo"
+                                    ],
+                                    "producer": {
+                                        "enabled": false
+                                    },
+                                    "consumer": {
+                                        "encodeMessageId": true,
+                                        "enabled": true,
+                                        "autoOffsetReset": "earliest"
+                                    }
+                                }"""
         );
         endpointGroup.setEndpoints(List.of(endpoint));
         apiEntity.setEndpointGroups(List.of(endpointGroup));

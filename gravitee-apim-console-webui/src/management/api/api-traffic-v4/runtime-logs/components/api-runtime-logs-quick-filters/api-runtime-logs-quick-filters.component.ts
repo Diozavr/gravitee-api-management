@@ -32,7 +32,7 @@ import {
   PERIODS,
 } from '../../models';
 import { QuickFiltersStoreService } from '../../services';
-import { Plan } from '../../../../../../entities/management-api-v2';
+import { ApiType, Plan } from '../../../../../../entities/management-api-v2';
 
 @Component({
   selector: 'api-runtime-logs-quick-filters',
@@ -47,8 +47,75 @@ export class ApiRuntimeLogsQuickFiltersComponent implements OnInit, OnDestroy {
   @Input() initialValues: LogFiltersInitialValues;
   @Input() plans: Plan[];
   @Input() entrypoints: { id: string; name: string }[];
+  @Input() apiType: ApiType;
   @Output() refresh = new EventEmitter<void>();
   @Output() resetFilters = new EventEmitter<void>();
+
+  MCP_METHODS: {
+    groupLabel: string;
+    groupOptions: { value: string; label: string }[];
+  }[] = [
+    {
+      groupLabel: 'Lifecycle Methods',
+      groupOptions: [
+        { value: 'initialize', label: 'initialize' },
+        { value: 'notifications/initialized', label: 'notifications/initialized' },
+        { value: 'ping', label: 'ping' },
+        { value: 'notifications/progress', label: 'notifications/progress' },
+      ],
+    },
+    {
+      groupLabel: 'Tool Methods',
+      groupOptions: [
+        { value: 'tools/list', label: 'tools/list' },
+        { value: 'tools/call', label: 'tools/call' },
+        { value: 'notifications/tools/list_changed', label: 'notifications/tools/list_changed' },
+      ],
+    },
+    {
+      groupLabel: 'Resources Methods',
+      groupOptions: [
+        { value: 'resources/list', label: 'resources/list' },
+        { value: 'resources/read', label: 'resources/read' },
+        { value: 'notifications/resources/list_changed', label: 'notifications/resources/list_changed' },
+        { value: 'notifications/resources/updated', label: 'notifications/resources/updated' },
+        { value: 'resources/templates/list', label: 'resources/templates/list' },
+        { value: 'resources/subscribe', label: 'resources/subscribe' },
+        { value: 'resources/unsubscribe', label: 'resources/unsubscribe' },
+      ],
+    },
+    {
+      groupLabel: 'Prompt Methods',
+      groupOptions: [
+        { value: 'prompts/list', label: 'prompts/list' },
+        { value: 'prompts/get', label: 'prompts/get' },
+        { value: 'notifications/prompts/list_changed', label: 'notifications/prompts/list_changed' },
+        { value: 'completion/complete', label: 'completion/complete' },
+      ],
+    },
+    {
+      groupLabel: 'Logging Methods',
+      groupOptions: [
+        { value: 'logging/setLevel', label: 'logging/setLevel' },
+        { value: 'notifications/message', label: 'notifications/message' },
+      ],
+    },
+    {
+      groupLabel: 'Roots Methods',
+      groupOptions: [
+        { value: 'roots/list', label: 'roots/list' },
+        { value: 'notifications/roots/list_changed', label: 'notifications/roots/list_changed' },
+      ],
+    },
+    {
+      groupLabel: 'Sampling Methods',
+      groupOptions: [{ value: 'sampling/createMessage', label: 'sampling/createMessage' }],
+    },
+    {
+      groupLabel: 'Elicitation Methods',
+      groupOptions: [{ value: 'elicitation/create', label: 'elicitation/create' }],
+    },
+  ];
 
   readonly periods = PERIODS;
   readonly defaultFilters = DEFAULT_FILTERS;
@@ -73,10 +140,11 @@ export class ApiRuntimeLogsQuickFiltersComponent implements OnInit, OnDestroy {
       period: new UntypedFormControl({ value: DEFAULT_PERIOD, disabled: true }),
       entrypoints: new UntypedFormControl({ value: this.initialValues.entrypoints, disabled: true }),
       plans: new UntypedFormControl({
-        value: this.initialValues.plans?.map((plan) => plan.value) ?? DEFAULT_FILTERS.plans,
+        value: this.initialValues.plans?.map(plan => plan.value) ?? DEFAULT_FILTERS.plans,
         disabled: true,
       }),
       methods: new UntypedFormControl({ value: this.initialValues.methods, disabled: true }),
+      mcpMethods: new UntypedFormControl({ value: this.initialValues.mcpMethods, disabled: true }),
     });
     this.onValuesChanges();
   }
@@ -130,7 +198,7 @@ export class ApiRuntimeLogsQuickFiltersComponent implements OnInit, OnDestroy {
   }
 
   private onQuickFiltersFormChanges() {
-    this.quickFiltersForm.valueChanges.pipe(distinctUntilChanged(isEqual), takeUntil(this.unsubscribe$)).subscribe((values) => {
+    this.quickFiltersForm.valueChanges.pipe(distinctUntilChanged(isEqual), takeUntil(this.unsubscribe$)).subscribe(values => {
       if (values.period && values.period === DEFAULT_PERIOD) {
         this.moreFiltersValues = { ...this.moreFiltersValues, period: values.period };
       } else {
@@ -149,12 +217,13 @@ export class ApiRuntimeLogsQuickFiltersComponent implements OnInit, OnDestroy {
     };
   }
 
-  private mapQuickFiltersFormValues({ period, entrypoints, plans, methods }: LogFiltersForm) {
+  private mapQuickFiltersFormValues({ period, entrypoints, plans, methods, mcpMethods }: LogFiltersForm) {
     return {
       period,
       entrypoints,
       plans: this.plansFromValues(plans),
       methods: methods?.length > 0 ? methods : undefined,
+      mcpMethods: mcpMethods?.length > 0 ? mcpMethods : undefined,
     };
   }
 
@@ -164,8 +233,8 @@ export class ApiRuntimeLogsQuickFiltersComponent implements OnInit, OnDestroy {
 
   private plansFromValues(ids: string[]): MultiFilter {
     return ids?.length > 0
-      ? ids.map((id) => {
-          const plan = this.plans.find((p) => p.id === id);
+      ? ids.map(id => {
+          const plan = this.plans.find(p => p.id === id);
           return { label: plan.name, value: plan.id };
         })
       : DEFAULT_FILTERS.plans;

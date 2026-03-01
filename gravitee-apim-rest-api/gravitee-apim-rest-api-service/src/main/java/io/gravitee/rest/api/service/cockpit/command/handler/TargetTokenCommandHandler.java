@@ -42,12 +42,13 @@ import io.gravitee.rest.api.service.UserService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.reactivex.rxjava3.core.Single;
 import java.util.Collections;
+import java.util.Set;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class TargetTokenCommandHandler implements CommandHandler<TargetTokenCommand, TargetTokenReply> {
 
@@ -83,7 +84,6 @@ public class TargetTokenCommandHandler implements CommandHandler<TargetTokenComm
             }
 
             if (!assignEnvironmentRole(context, payload, user)) {
-                rollbackMemberships(context, user);
                 rollbackUserCreation(context, user);
                 return Single.just(new TargetTokenReply(command.getId(), "Failed to assign environment role."));
             }
@@ -92,8 +92,6 @@ public class TargetTokenCommandHandler implements CommandHandler<TargetTokenComm
             return Single.just(new TargetTokenReply(command.getId(), CommandStatus.SUCCEEDED, tokenEntity.getToken()));
         } catch (Exception e) {
             log.error("Rolling back due to failure in handling target token command.", e);
-            rollbackTokenCreation(context, tokenEntity);
-            rollbackMemberships(context, user);
             rollbackUserCreation(context, user);
 
             String errorDetails = String.format(
@@ -122,9 +120,11 @@ public class TargetTokenCommandHandler implements CommandHandler<TargetTokenComm
     }
 
     private boolean assignOrganizationRole(ExecutionContext context, TargetTokenCommandPayload payload, UserEntity user) {
-        String roleName = payload.scope() == TargetTokenCommandPayload.Scope.GKO
-            ? SystemRole.ADMIN.name()
-            : DEFAULT_ROLE_ORGANIZATION_USER.getName();
+        Set<TargetTokenCommandPayload.Scope> adminScopes = Set.of(
+            TargetTokenCommandPayload.Scope.GKO,
+            TargetTokenCommandPayload.Scope.AUTOMATION
+        );
+        String roleName = adminScopes.contains(payload.scope()) ? SystemRole.ADMIN.name() : DEFAULT_ROLE_ORGANIZATION_USER.getName();
         if (roleService.findByScopeAndName(RoleScope.ORGANIZATION, roleName, payload.organizationId()).isEmpty()) {
             log.error("Couldn't find {} role for organization with id [{}]", roleName, payload.organizationId());
             return false;
@@ -192,20 +192,6 @@ public class TargetTokenCommandHandler implements CommandHandler<TargetTokenComm
         if (user != null) {
             userService.delete(context, user.getId());
             log.info("Rolled back user creation with id [{}].", user.getId());
-        }
-    }
-
-    private void rollbackMemberships(ExecutionContext context, UserEntity user) {
-        if (user != null) {
-            membershipService.removeMemberMemberships(context, MembershipMemberType.USER, user.getId());
-            log.info("Rolled back memberships for user [{}].", user.getId());
-        }
-    }
-
-    private void rollbackTokenCreation(ExecutionContext context, TokenEntity tokenEntity) {
-        if (tokenEntity != null) {
-            tokenService.revoke(context, tokenEntity.getId());
-            log.info("Revoked token with id [{}].", tokenEntity.getId());
         }
     }
 }

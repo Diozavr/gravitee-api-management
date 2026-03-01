@@ -8,6 +8,17 @@ APIM Console is a client-side only Angular application and can be deployed on an
 
 For more information about installation and usage, see https://documentation.gravitee.io/apim/getting-started/install-guides[Gravitee.io Documentation Website].
 
+== Architecture
+
+This project is part of an **Nx workspace** at the repository root.
+
+- **Intelligent caching**: Nx caches build and test results
+- **Affected commands**: Only test/build what changed
+- **Dependency graph**: Visualize project dependencies with `yarn graph`
+- **Unified configuration**: All dependencies managed at the root
+
+Learn more about Nx at https://nx.dev[nx.dev]
+
 == Contributing
 
 === Install
@@ -15,39 +26,41 @@ For more information about installation and usage, see https://documentation.gra
 Prerequisites:
 
 - Install https://github.com/nvm-sh/nvm[nvm]
-- Use with `nvm use` or install with `nvm install` the version of Node.js declared in `.nvmrc`
+- Use with `nvm use` or install with `nvm install` the version of Node.js declared in `.nvmrc` (at repository root)
 
-- Then install dependencies with:
+- Then install dependencies from the **repository root**:
 [source,bash]
 ----
-npm install
+# Go to repository root
+yarn install
 ----
 
 === Getting started
 
-Here are the useful NPM scripts available when developing in APIM Console:
+All commands must be run from the **repository root** (not from this directory).
 
- - `serve`: Start the app in dev mode (with hot reload) and proxy backend calls to `http://localhost:8083`
- - `serve:nightly`: Start the app in dev mode (with hot reload) and proxy backend calls to `https://nightly.gravitee.io`
- - `lint:eslint`: Run ESLint and Prettier
- - `lint:eslint:fix`: Run ESLint in auto fix mode and Prettier in write mode
- - `test`: Run unit tests with Jest
- - `build:prod`: Build the app in production mode and output the result to `dist`
- - `serve:prod`: Start the built app (from `dist` folder) and proxy backend calls to `http://localhost:8083`. Don't forget to run `npm run build:prod` to build the app before starting serving it.
+Here are the useful commands available when developing APIM Console:
 
+Development::
+ - `yarn console:serve` - Start the app in dev mode (with hot reload) and proxy backend calls to `http://localhost:8083`
+ - `yarn console:serve:apim-master` - Start the app and proxy backend calls to `https://apim-master-api.team-apim.gravitee.dev`
+ - `yarn console:serve:apim-gko` - Start the app and proxy backend calls to `https://apim-master-gko-api.team-apim.gravitee.dev`
 
-=== About WIP dependencies
+Testing & Quality::
+ - `yarn console:test` or `nx test console` - Run unit tests with Jest
+ - `yarn console:lint` or `nx lint console` - Run ESLint
+ - `yarn console:storybook` - Start Storybook on port 9008
 
-This project uses https://github.com/gravitee-io/gravitee-ui-components[Gravitee UI Components] library and sometimes changes need to be done in both projects at the same time. If you want to develop in parallel, you can clone the repository and link to the project.
+Build::
+ - `yarn console:build` or `nx build console` - Build the app in development mode
+ - `yarn console:build:prod` or `nx build:prod console` - Build the app in production mode
 
-[source,bash]
-----
-git clone git@github.com:gravitee-io/gravitee-ui-components.git
-cd gravitee-ui-components
-npm link
+=== About gravitee-markdown and gravitee-dashboard libraries
 
-# Go to gravitee-apim-console-webui folder
-npm link @gravitee/ui-components
-----
+This project uses the `@gravitee/gravitee-markdown` and `@gravitee/gravitee-dashboard` libraries.
 
-⚠️ The npm link will be removed if you run `npm install`, and so you will need to rerun the previous snippet to link the library.
+These libraries are now located in `gravitee-apim-webui-libs/` (moved from `portal-webui-next/projects/`).
+
+Building libraries::
+The libraries are automatically built by Nx when needed.
+

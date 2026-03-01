@@ -24,9 +24,9 @@ import io.gravitee.repository.healthcheck.v4.model.AvailabilityResponse;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Map;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 public class AvailabilityQueryMapper implements QueryResponseAdapter<ApiFieldPeriod, AvailabilityResponse> {
 
     private static final String BY_FIELD_AGGS = "by_field";
@@ -40,11 +40,7 @@ public class AvailabilityQueryMapper implements QueryResponseAdapter<ApiFieldPer
     private ObjectNode query(ApiFieldPeriod query) {
         JsonNode termFilter = json().set("term", json().put("api", query.apiId()));
 
-        ObjectNode timestamp = json()
-            .put("from", query.from().toEpochMilli())
-            .put("to", query.to().toEpochMilli())
-            .put("include_lower", true)
-            .put("include_upper", true);
+        ObjectNode timestamp = json().put("gte", query.from().toEpochMilli()).put("lte", query.to().toEpochMilli());
         JsonNode rangeFilter = json().set("range", json().set("@timestamp", timestamp));
 
         return json().set("bool", json().set("filter", array().add(termFilter).add(rangeFilter)));
@@ -69,7 +65,11 @@ public class AvailabilityQueryMapper implements QueryResponseAdapter<ApiFieldPer
 
         // Did it this way because of 10.000 hits results per query limit for ElasticSearchQuery
         // https://www.elastic.co/guide/en/app-search/8.12/limits.html
-        var total = entrypointsAggregation.getBuckets().stream().map(jsonNode -> jsonNode.get("doc_count").asLong()).reduce(0L, Long::sum);
+        var total = entrypointsAggregation
+            .getBuckets()
+            .stream()
+            .map(jsonNode -> jsonNode.get("doc_count").asLong())
+            .reduce(0L, Long::sum);
 
         final var byFieldValue = entrypointsAggregation
             .getBuckets()
@@ -100,6 +100,6 @@ public class AvailabilityQueryMapper implements QueryResponseAdapter<ApiFieldPer
     private static float round(long num, long denum) {
         int precision = 4;
         var value = ((Double) Math.pow(10, precision)).floatValue();
-        return Math.round(num * value / denum) / value;
+        return Math.round((num * value) / denum) / value;
     }
 }

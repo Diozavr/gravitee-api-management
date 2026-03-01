@@ -17,11 +17,14 @@ package io.gravitee.apim.infra.domain_service.application;
 
 import io.gravitee.apim.core.application.domain_service.ImportApplicationCRDDomainService;
 import io.gravitee.apim.core.audit.model.AuditInfo;
+import io.gravitee.repository.management.model.ApplicationStatus;
+import io.gravitee.rest.api.model.ApplicationEntity;
 import io.gravitee.rest.api.model.BaseApplicationEntity;
 import io.gravitee.rest.api.model.NewApplicationEntity;
 import io.gravitee.rest.api.model.UpdateApplicationEntity;
 import io.gravitee.rest.api.service.ApplicationService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
+import io.gravitee.rest.api.service.exceptions.AbstractManagementException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -46,6 +49,23 @@ public class ImportApplicationCRDDomainServiceLegacyWrapper implements ImportApp
     @Override
     public BaseApplicationEntity update(String applicationId, UpdateApplicationEntity updateApplicationEntity, AuditInfo auditInfo) {
         var executionContext = new ExecutionContext(auditInfo.organizationId(), auditInfo.environmentId());
-        return applicationService.update(executionContext, applicationId, updateApplicationEntity);
+        ApplicationEntity existing = applicationService.findById(executionContext, applicationId);
+        boolean restored = false;
+        if (
+            ApplicationStatus.ARCHIVED.name().equals(existing.getStatus()) &&
+            ApplicationStatus.ACTIVE.name().equals(updateApplicationEntity.getStatus())
+        ) {
+            applicationService.restore(executionContext, applicationId);
+            restored = true;
+        }
+        try {
+            return applicationService.update(executionContext, applicationId, updateApplicationEntity);
+        } catch (AbstractManagementException ame) {
+            if (restored) {
+                // manual rollback to avoid a commit on AbstractManagementException that can happened on a restored apps
+                applicationService.archive(executionContext, applicationId);
+            }
+            throw ame;
+        }
     }
 }

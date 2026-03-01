@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 The Gravitee team (http://gravitee.io)
+ * Copyright (C) 2024 The Gravitee team (http://gravitee.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ import { Observable, of } from 'rxjs';
 import { map, startWith, tap } from 'rxjs/operators';
 
 import { FormHeaderFieldMapper, HEADER_NAMES } from './consumer-configuration-headers.model';
+import { MobileClassDirective } from '../../../../directives/mobile-class.directive';
 import { Header } from '../../../../entities/subscription';
 import { AccordionModule } from '../../../accordion/accordion.module';
 
@@ -76,10 +77,12 @@ import { AccordionModule } from '../../../accordion/accordion.module';
     AsyncPipe,
     MatTableModule,
     AccordionModule,
+    MobileClassDirective,
   ],
 })
 export class ConsumerConfigurationHeadersComponent implements OnInit, ControlValueAccessor, Validator {
   @ViewChild(MatTable) table!: MatTable<Header>;
+
   public headerFieldMapper: InputSignal<FormHeaderFieldMapper> = input<FormHeaderFieldMapper>({
     keyName: 'name',
     valueName: 'value',

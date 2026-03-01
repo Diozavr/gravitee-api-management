@@ -1,0 +1,77 @@
+<!--
+
+    Copyright (C) 2025 The Gravitee team (http://gravitee.io)
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+
+<gridster [options]="options()" class="grid">
+  @for (item of items()!; track item.id) {
+    <gridster-item [item]="item.layout">
+      <gd-widget [isDraggable]="options().draggable?.enabled ?? false">
+        <gd-widget-title [matTooltip]="item.description">
+          {{ item.title }}
+        </gd-widget-title>
+
+        <gd-widget-body>
+          @if (item.response) {
+            @if (item.response.metrics?.length) {
+              @switch (item.type) {
+                @case ('pie') {
+                  @if (isFacetsWidget(item)) {
+                    <gd-pie-chart type="pie" [data]="item.response" />
+                  }
+                }
+                @case ('polarArea') {
+                  @if (isFacetsWidget(item)) {
+                    <gd-pie-chart type="polarArea" [data]="item.response" />
+                  }
+                }
+                @case ('doughnut') {
+                  @if (isFacetsWidget(item)) {
+                    <gd-pie-chart type="doughnut" [data]="item.response" />
+                  }
+                }
+                @case ('stats') {
+                  @if (isMeasuresWidget(item)) {
+                    <gd-stats [data]="item.response" />
+                  }
+                }
+                @case ('line') {
+                  @if (isTimeSeriesWidget(item)) {
+                    <gd-line-chart [data]="item.response" />
+                  }
+                }
+                @case ('bar') {
+                  @if (isTimeSeriesWidget(item)) {
+                    <gd-bar-chart [data]="item.response" />
+                  }
+                }
+                @default {
+                  <div>Not yet Formatted - Type: {{ item.type }}</div>
+                }
+              }
+            } @else {
+              <gd-empty-state />
+            }
+          } @else {
+            <div class="spinner-container">
+              <mat-spinner diameter="60" matTooltip="Loading..." />
+            </div>
+          }
+        </gd-widget-body>
+      </gd-widget>
+    </gridster-item>
+  }
+</gridster>

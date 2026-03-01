@@ -29,6 +29,7 @@ import lombok.With;
 public class PageCRD {
 
     private String id;
+    private String hrid;
     private String crossId;
     private String name;
     private Type type;
@@ -36,6 +37,7 @@ public class PageCRD {
     private boolean published;
     private Visibility visibility;
     private String parentId;
+    private String parentHrid;
     private PageSource source;
     private Map<String, String> configuration;
 

@@ -32,6 +32,7 @@ import inmemory.PlanCrudServiceInMemory;
 import inmemory.SubscriptionCrudServiceInMemory;
 import io.gravitee.apim.core.membership.domain_service.ApplicationPrimaryOwnerDomainService;
 import io.gravitee.apim.core.plan.model.Plan;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.apim.core.subscription.use_case.RejectSubscriptionUseCase;
 import io.gravitee.common.http.HttpStatusCode;
 import io.gravitee.definition.model.v4.plan.PlanMode;
@@ -130,15 +131,13 @@ public class ApiSubscriptionResourceTest extends AbstractResourceTest {
         when(planService.findById(any(), any())).thenReturn(fakePlanEntity);
         when(applicationService.findById(eq(GraviteeContext.getExecutionContext()), any())).thenReturn(fakeApplicationEntity);
         when(permissionService.hasPermission(any(), any(), any(), any())).thenReturn(true);
-        when(applicationPrimaryOwnerDomainService.getApplicationPrimaryOwner(any(), any()))
-            .thenReturn(
-                io.gravitee.apim.core.membership.model.PrimaryOwnerEntity
-                    .builder()
-                    .id(fakeUserEntity.getId())
-                    .displayName(fakeUserEntity.getDisplayName())
-                    .email(fakeUserEntity.getEmail())
-                    .build()
-            );
+        when(applicationPrimaryOwnerDomainService.getApplicationPrimaryOwner(any(), any())).thenReturn(
+            io.gravitee.apim.core.membership.model.PrimaryOwnerEntity.builder()
+                .id(fakeUserEntity.getId())
+                .displayName(fakeUserEntity.getDisplayName())
+                .email(fakeUserEntity.getEmail())
+                .build()
+        );
     }
 
     @Test
@@ -146,11 +145,12 @@ public class ApiSubscriptionResourceTest extends AbstractResourceTest {
         // Given
         var plan = givenExistingPlan(PlanFixtures.aPlanHttpV4().toBuilder().id(PLAN_ID).build().setPlanStatus(PlanStatus.PUBLISHED));
         var subscription = givenExistingSubscription(
-            SubscriptionFixtures
-                .aSubscription()
+            SubscriptionFixtures.aSubscription()
                 .toBuilder()
                 .id(SUBSCRIPTION_ID)
                 .apiId(API_NAME)
+                .referenceId(API_NAME)
+                .referenceType(SubscriptionReferenceType.API)
                 .subscribedBy("subscriber")
                 .planId(plan.getId())
                 .status(io.gravitee.apim.core.subscription.model.SubscriptionEntity.Status.PENDING)
@@ -165,7 +165,11 @@ public class ApiSubscriptionResourceTest extends AbstractResourceTest {
 
         Response response = envTarget(SUBSCRIPTION_ID + "/_process").request().post(Entity.json(processSubscriptionEntity));
 
-        MAPIAssertions.assertThat(response).hasStatus(OK_200).asJson().extracting(json -> json.getString("status")).isEqualTo("REJECTED");
+        MAPIAssertions.assertThat(response)
+            .hasStatus(OK_200)
+            .asJson()
+            .extracting(json -> json.getString("status"))
+            .isEqualTo("REJECTED");
     }
 
     @Test
@@ -173,11 +177,12 @@ public class ApiSubscriptionResourceTest extends AbstractResourceTest {
         // Given
         var plan = givenExistingPlan(PlanFixtures.aPlanHttpV4().toBuilder().id(PLAN_ID).build().setPlanStatus(PlanStatus.PUBLISHED));
         var subscription = givenExistingSubscription(
-            SubscriptionFixtures
-                .aSubscription()
+            SubscriptionFixtures.aSubscription()
                 .toBuilder()
                 .id(SUBSCRIPTION_ID)
                 .apiId(API_NAME)
+                .referenceId(API_NAME)
+                .referenceType(SubscriptionReferenceType.API)
                 .subscribedBy("subscriber")
                 .planId(plan.getId())
                 .status(io.gravitee.apim.core.subscription.model.SubscriptionEntity.Status.PENDING)
@@ -193,7 +198,11 @@ public class ApiSubscriptionResourceTest extends AbstractResourceTest {
 
         Response response = envTarget(SUBSCRIPTION_ID + "/_process").request().post(Entity.json(processSubscriptionEntity));
 
-        MAPIAssertions.assertThat(response).hasStatus(OK_200).asJson().extracting(json -> json.getString("status")).isEqualTo("ACCEPTED");
+        MAPIAssertions.assertThat(response)
+            .hasStatus(OK_200)
+            .asJson()
+            .extracting(json -> json.getString("status"))
+            .isEqualTo("ACCEPTED");
     }
 
     @Test

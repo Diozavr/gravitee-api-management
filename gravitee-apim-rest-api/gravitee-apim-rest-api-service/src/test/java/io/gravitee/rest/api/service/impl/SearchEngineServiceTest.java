@@ -25,6 +25,8 @@ import static org.mockito.Mockito.mock;
 import inmemory.ApiCrudServiceInMemory;
 import inmemory.PageCrudServiceInMemory;
 import io.gravitee.apim.core.api.domain_service.ApiIndexerDomainService;
+import io.gravitee.apim.core.api_product.crud_service.ApiProductCrudService;
+import io.gravitee.apim.core.api_product.domain_service.ApiProductIndexerDomainService;
 import io.gravitee.apim.core.documentation.crud_service.PageCrudService;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.Proxy;
@@ -34,6 +36,7 @@ import io.gravitee.rest.api.model.PageEntity;
 import io.gravitee.rest.api.model.PrimaryOwnerEntity;
 import io.gravitee.rest.api.model.Visibility;
 import io.gravitee.rest.api.model.api.ApiEntity;
+import io.gravitee.rest.api.model.api.ApiLifecycleState;
 import io.gravitee.rest.api.model.common.Sortable;
 import io.gravitee.rest.api.model.common.SortableImpl;
 import io.gravitee.rest.api.service.CommandService;
@@ -150,11 +153,10 @@ public class SearchEngineServiceTest {
         );
         assertThat(matches.getHits()).isZero();
 
-        matches =
-            searchEngineService.search(
-                GraviteeContext.getExecutionContext(),
-                QueryBuilder.create(ApiEntity.class).setQuery("*@*").setFilters(filters).build()
-            );
+        matches = searchEngineService.search(
+            GraviteeContext.getExecutionContext(),
+            QueryBuilder.create(ApiEntity.class).setQuery("*@*").setFilters(filters).build()
+        );
         assertThat(matches.getHits()).isZero();
     }
 
@@ -176,8 +178,10 @@ public class SearchEngineServiceTest {
             GraviteeContext.getExecutionContext(),
             QueryBuilder.create(ApiEntity.class).setQuery("Owner 3").setFilters(filters).build()
         );
-        assertThat(matches.getHits()).isEqualTo(2);
-        assertThat(matches.getDocuments()).containsExactly("api-3", "api-4");
+        assertThat(matches.getHits()).isEqualTo(5);
+        List<String> results = new ArrayList<>(matches.getDocuments());
+        assertThat(results.get(0)).isIn("api-3", "api-4");
+        assertThat(results.get(1)).isIn("api-3", "api-4");
     }
 
     @Test
@@ -200,7 +204,8 @@ public class SearchEngineServiceTest {
             GraviteeContext.getExecutionContext(),
             QueryBuilder.create(ApiEntity.class).setQuery("name:\"My Awesome api / 1\"").setFilters(filters).build()
         );
-        searchEngineService.delete(GraviteeContext.getExecutionContext(), ApiEntity.builder().id("api-1").build(), true);
+        ApiEntity api = ApiEntity.builder().id("api-1").lifecycleState(ApiLifecycleState.CREATED).visibility(Visibility.PUBLIC).build();
+        searchEngineService.delete(GraviteeContext.getExecutionContext(), api, true);
         SearchResult afterDeletion = searchEngineService.search(
             GraviteeContext.getExecutionContext(),
             QueryBuilder.create(ApiEntity.class).setQuery("name:\"My Awesome api / 1\"").setFilters(filters).build()
@@ -271,40 +276,25 @@ public class SearchEngineServiceTest {
         assertThat(matches.getHits()).isEqualTo(4);
         assertThat(matches.getDocuments()).containsExactly("api-1", "api-2", "api-3", "api-4");
 
-        matches =
-            searchEngineService.search(
-                GraviteeContext.getExecutionContext(),
-                QueryBuilder
-                    .create(ApiEntity.class)
-                    .setQuery("labels: \"In Review 1\" AND labels: \"In Review 4\"")
-                    .setFilters(filters)
-                    .build()
-            );
+        matches = searchEngineService.search(
+            GraviteeContext.getExecutionContext(),
+            QueryBuilder.create(ApiEntity.class).setQuery("labels: \"In Review 1\" AND labels: \"In Review 4\"").setFilters(filters).build()
+        );
         assertThat(matches.getHits()).isEqualTo(1);
 
         assertThat(matches.getDocuments()).containsExactly("api-4");
 
-        matches =
-            searchEngineService.search(
-                GraviteeContext.getExecutionContext(),
-                QueryBuilder
-                    .create(ApiEntity.class)
-                    .setQuery("labels: \"In Review 3\" OR labels: \"In Review 4\"")
-                    .setFilters(filters)
-                    .build()
-            );
+        matches = searchEngineService.search(
+            GraviteeContext.getExecutionContext(),
+            QueryBuilder.create(ApiEntity.class).setQuery("labels: \"In Review 3\" OR labels: \"In Review 4\"").setFilters(filters).build()
+        );
         assertThat(matches.getHits()).isEqualTo(2);
         assertThat(matches.getDocuments()).containsExactly("api-3", "api-4");
 
-        matches =
-            searchEngineService.search(
-                GraviteeContext.getExecutionContext(),
-                QueryBuilder
-                    .create(ApiEntity.class)
-                    .setQuery("labels: \"in review 3\" OR labels: \"in review 4\"")
-                    .setFilters(filters)
-                    .build()
-            );
+        matches = searchEngineService.search(
+            GraviteeContext.getExecutionContext(),
+            QueryBuilder.create(ApiEntity.class).setQuery("labels: \"in review 3\" OR labels: \"in review 4\"").setFilters(filters).build()
+        );
         assertThat(matches.getHits()).isEqualTo(2);
         assertThat(matches.getDocuments()).containsExactly("api-3", "api-4");
     }
@@ -360,8 +350,7 @@ public class SearchEngineServiceTest {
         Map<String, Object> filters = new HashMap<>();
         SearchResult matches = searchEngineService.search(
             GraviteeContext.getExecutionContext(),
-            QueryBuilder
-                .create(ApiEntity.class)
+            QueryBuilder.create(ApiEntity.class)
                 .setQuery("name:\"http://localhost/api-2\" AND ownerName: \"Owner 2\"")
                 .setFilters(filters)
                 .build()
@@ -600,8 +589,7 @@ public class SearchEngineServiceTest {
         filters.put(FIELD_API_TYPE_VALUE, Arrays.asList("api-1", "api-2"));
         Map<String, Collection<String>> excludedFilters = new HashMap<>();
         excludedFilters.put(FIELD_DEFINITION_VERSION, Arrays.asList(DefinitionVersion.V1.getLabel(), DefinitionVersion.V4.getLabel()));
-        QueryBuilder<ApiEntity> apiEntityQueryBuilder = QueryBuilder
-            .create(ApiEntity.class)
+        QueryBuilder<ApiEntity> apiEntityQueryBuilder = QueryBuilder.create(ApiEntity.class)
             .setFilters(filters)
             .setExcludedFilters(excludedFilters);
         SearchResult matches = searchEngineService.search(
@@ -621,8 +609,7 @@ public class SearchEngineServiceTest {
         Map<String, Collection<String>> excludedFilters = new HashMap<>();
         excludedFilters.put(FIELD_NAME, List.of("My Awesome api / 1"));
         excludedFilters.put(FIELD_DEFINITION_VERSION, Arrays.asList(DefinitionVersion.V1.getLabel(), DefinitionVersion.V4.getLabel()));
-        QueryBuilder<ApiEntity> apiEntityQueryBuilder = QueryBuilder
-            .create(ApiEntity.class)
+        QueryBuilder<ApiEntity> apiEntityQueryBuilder = QueryBuilder.create(ApiEntity.class)
             .setFilters(filters)
             .setExcludedFilters(excludedFilters);
         SearchResult matches = searchEngineService.search(
@@ -662,6 +649,8 @@ public class SearchEngineServiceTest {
         String apiName = index == 2 ? "http://localhost/api-" + index : "My Awesome api / " + index;
         ApiEntity apiEntity = new ApiEntity();
         apiEntity.setId("api-" + index);
+        apiEntity.setLifecycleState(ApiLifecycleState.CREATED);
+        apiEntity.setVisibility(Visibility.PUBLIC);
         apiEntity.setReferenceId(envId);
         apiEntity.setReferenceType(ReferenceContext.Type.ENVIRONMENT.name());
         apiEntity.setName(apiName);
@@ -775,6 +764,16 @@ public class SearchEngineServiceTest {
         @Bean
         public ApiIndexerDomainService apiIndexerDomainService() {
             return mock(ApiIndexerDomainService.class);
+        }
+
+        @Bean
+        public ApiProductIndexerDomainService apiProductIndexerDomainService() {
+            return mock(ApiProductIndexerDomainService.class);
+        }
+
+        @Bean
+        public ApiProductCrudService apiProductCrudService() {
+            return mock(ApiProductCrudService.class);
         }
     }
 

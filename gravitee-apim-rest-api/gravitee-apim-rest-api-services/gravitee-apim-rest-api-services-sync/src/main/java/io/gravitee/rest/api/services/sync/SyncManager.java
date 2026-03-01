@@ -44,7 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 
@@ -52,7 +52,7 @@ import org.springframework.context.annotation.Lazy;
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class SyncManager {
 
     private static final int TIMEFRAME_BEFORE_DELAY = 10 * 60 * 1000;
@@ -125,8 +125,7 @@ public class SyncManager {
     }
 
     private void synchronizeApis(long nextLastRefreshAt) {
-        final EventCriteria eventCriteria = EventCriteria
-            .builder()
+        final EventCriteria eventCriteria = EventCriteria.builder()
             .types(Set.of(EventType.PUBLISH_API, EventType.UNPUBLISH_API, EventType.START_API, EventType.STOP_API))
             .from(lastRefreshAt - TIMEFRAME_BEFORE_DELAY)
             .to(nextLastRefreshAt + TIMEFRAME_AFTER_DELAY)
@@ -142,8 +141,7 @@ public class SyncManager {
     }
 
     private void synchronizeDictionaries(long nextLastRefreshAt) throws Exception {
-        final EventCriteria eventCriteria = EventCriteria
-            .builder()
+        final EventCriteria eventCriteria = EventCriteria.builder()
             .types(Set.of(EventType.START_DICTIONARY, EventType.STOP_DICTIONARY))
             .from(lastRefreshAt - TIMEFRAME_BEFORE_DELAY)
             .to(nextLastRefreshAt + TIMEFRAME_AFTER_DELAY)
@@ -158,8 +156,7 @@ public class SyncManager {
     }
 
     private void synchronizeLicenses(long nextLastRefreshAt) throws TechnicalException {
-        final LicenseCriteria licenseCriteria = LicenseCriteria
-            .builder()
+        final LicenseCriteria licenseCriteria = LicenseCriteria.builder()
             .referenceType(License.ReferenceType.ORGANIZATION)
             .from(lastRefreshAt - TIMEFRAME_BEFORE_DELAY)
             .to(nextLastRefreshAt + TIMEFRAME_AFTER_DELAY)
@@ -205,7 +202,12 @@ public class SyncManager {
             };
 
             ForkJoinPool customThreadPool = new ForkJoinPool(parallelism, factory, null, false);
-            customThreadPool.submit(() -> apiEvents.entrySet().parallelStream().forEach(e -> processApiEvent(e.getKey(), e.getValue())));
+            customThreadPool.submit(() ->
+                apiEvents
+                    .entrySet()
+                    .parallelStream()
+                    .forEach(e -> processApiEvent(e.getKey(), e.getValue()))
+            );
             customThreadPool.shutdown();
         } else {
             apiEvents.forEach(this::processApiEvent);
@@ -214,11 +216,10 @@ public class SyncManager {
 
     protected void processApiEvent(String apiId, Event apiEvent) {
         switch (apiEvent.getType()) {
-            case UNPUBLISH_API, STOP_API:
-                {
-                    apiManager.undeploy(apiId);
-                    break;
-                }
+            case UNPUBLISH_API, STOP_API: {
+                apiManager.undeploy(apiId);
+                break;
+            }
             case START_API, PUBLISH_API:
                 try {
                     // Read API definition from event

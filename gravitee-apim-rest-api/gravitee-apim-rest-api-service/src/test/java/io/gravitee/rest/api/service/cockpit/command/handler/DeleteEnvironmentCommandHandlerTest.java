@@ -16,6 +16,7 @@
 package io.gravitee.rest.api.service.cockpit.command.handler;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,13 +33,16 @@ import io.gravitee.repository.management.api.AccessPointRepository;
 import io.gravitee.repository.management.api.ApiCategoryOrderRepository;
 import io.gravitee.repository.management.api.ApiHeaderRepository;
 import io.gravitee.repository.management.api.ApiKeyRepository;
+import io.gravitee.repository.management.api.ApiProductsRepository;
 import io.gravitee.repository.management.api.ApiQualityRuleRepository;
 import io.gravitee.repository.management.api.ApiRepository;
 import io.gravitee.repository.management.api.ApplicationRepository;
 import io.gravitee.repository.management.api.AsyncJobRepository;
 import io.gravitee.repository.management.api.AuditRepository;
 import io.gravitee.repository.management.api.CategoryRepository;
+import io.gravitee.repository.management.api.ClientCertificateRepository;
 import io.gravitee.repository.management.api.ClientRegistrationProviderRepository;
+import io.gravitee.repository.management.api.ClusterRepository;
 import io.gravitee.repository.management.api.CommandRepository;
 import io.gravitee.repository.management.api.CustomUserFieldsRepository;
 import io.gravitee.repository.management.api.DashboardRepository;
@@ -56,7 +60,11 @@ import io.gravitee.repository.management.api.PageRevisionRepository;
 import io.gravitee.repository.management.api.ParameterRepository;
 import io.gravitee.repository.management.api.PlanRepository;
 import io.gravitee.repository.management.api.PortalMenuLinkRepository;
+import io.gravitee.repository.management.api.PortalNavigationItemRepository;
 import io.gravitee.repository.management.api.PortalNotificationConfigRepository;
+import io.gravitee.repository.management.api.PortalPageContentRepository;
+import io.gravitee.repository.management.api.PortalPageContextRepository;
+import io.gravitee.repository.management.api.PortalPageRepository;
 import io.gravitee.repository.management.api.PromotionRepository;
 import io.gravitee.repository.management.api.QualityRuleRepository;
 import io.gravitee.repository.management.api.RatingAnswerRepository;
@@ -67,14 +75,17 @@ import io.gravitee.repository.management.api.ScoringReportRepository;
 import io.gravitee.repository.management.api.ScoringRulesetRepository;
 import io.gravitee.repository.management.api.SharedPolicyGroupHistoryRepository;
 import io.gravitee.repository.management.api.SharedPolicyGroupRepository;
+import io.gravitee.repository.management.api.SubscriptionFormRepository;
 import io.gravitee.repository.management.api.SubscriptionRepository;
 import io.gravitee.repository.management.api.ThemeRepository;
 import io.gravitee.repository.management.api.TicketRepository;
+import io.gravitee.repository.management.api.UserRepository;
 import io.gravitee.repository.management.api.WorkflowRepository;
 import io.gravitee.repository.management.api.search.ApiCriteria;
 import io.gravitee.repository.management.api.search.ApiFieldFilter;
 import io.gravitee.repository.management.model.AccessPointReferenceType;
 import io.gravitee.repository.management.model.Api;
+import io.gravitee.repository.management.model.ApiProduct;
 import io.gravitee.repository.management.model.Audit;
 import io.gravitee.repository.management.model.CustomUserFieldReferenceType;
 import io.gravitee.repository.management.model.DashboardReferenceType;
@@ -85,10 +96,12 @@ import io.gravitee.repository.management.model.MetadataReferenceType;
 import io.gravitee.repository.management.model.NotificationReferenceType;
 import io.gravitee.repository.management.model.PageReferenceType;
 import io.gravitee.repository.management.model.ParameterReferenceType;
+import io.gravitee.repository.management.model.PortalNavigationItem;
 import io.gravitee.repository.management.model.QualityRule;
 import io.gravitee.repository.management.model.RatingReferenceType;
 import io.gravitee.repository.management.model.RoleReferenceType;
 import io.gravitee.repository.management.model.ThemeReferenceType;
+import io.gravitee.repository.management.model.User;
 import io.gravitee.repository.management.model.flow.FlowReferenceType;
 import io.gravitee.repository.media.api.MediaRepository;
 import io.gravitee.rest.api.model.EnvironmentEntity;
@@ -110,6 +123,7 @@ import io.gravitee.rest.api.service.v4.ApiStateService;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
@@ -123,7 +137,9 @@ public class DeleteEnvironmentCommandHandlerTest {
     private static final String EMPTY_ENV_ID = "env#1";
 
     private static final String ENV_ID = "env#2";
-    private static final String USER_ID = "user#1";
+    private static final String COCKPIT_SOURCE = "cockpit";
+    private static final String COCKPIT_USER_ID = "cockpitUser#1";
+    private static final String RESOLVED_APIM_USER_ID = "user#1";
     private static final String API_ID_1 = "api#1";
     private static final String API_ID_2 = "api#2";
     private static final String APP_ID_1 = "app#1";
@@ -139,6 +155,9 @@ public class DeleteEnvironmentCommandHandlerTest {
     private static final String ERROR_ENV_ID = "error";
     private static final String SUBSCRIPTION_ID_1 = "subscription#1";
     private static final String SUBSCRIPTION_ID_2 = "subscription#2";
+    private static final String PAGE_CONTENT_ID = "page-content-id";
+    private static final String API_PRODUCT_ID_1 = "api-product#1";
+    private static final String API_PRODUCT_ID_2 = "api-product#2";
 
     @Mock
     private AccessPointRepository accessPointRepository;
@@ -157,6 +176,9 @@ public class DeleteEnvironmentCommandHandlerTest {
 
     @Mock
     private ApiKeyRepository apiKeyRepository;
+
+    @Mock
+    private ApiProductsRepository apiProductsRepository;
 
     @Mock
     private PlanRepository planRepository;
@@ -270,6 +292,18 @@ public class DeleteEnvironmentCommandHandlerTest {
     private PortalMenuLinkRepository portalMenuLinkRepository;
 
     @Mock
+    private PortalPageRepository portalPageRepository;
+
+    @Mock
+    private PortalPageContextRepository portalPageContextRepository;
+
+    @Mock
+    private PortalPageContentRepository portalPageContentRepository;
+
+    @Mock
+    private PortalNavigationItemRepository portalNavigationItemRepository;
+
+    @Mock
     private PromotionRepository promotionRepository;
 
     @Mock
@@ -296,6 +330,18 @@ public class DeleteEnvironmentCommandHandlerTest {
     @Mock
     private TicketRepository ticketRepository;
 
+    @Mock
+    private ClusterRepository clusterRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private ClientCertificateRepository clientCertificateRepository;
+
+    @Mock
+    private SubscriptionFormRepository subscriptionFormRepository;
+
     private DeleteEnvironmentCommandHandler cut;
 
     @Before
@@ -311,16 +357,16 @@ public class DeleteEnvironmentCommandHandlerTest {
                 new ApiCriteria.Builder().state(LifecycleState.STARTED).environmentId(EMPTY_ENV_ID).build(),
                 new ApiFieldFilter.Builder().excludeDefinition().excludePicture().build()
             )
-        )
-            .thenReturn(List.of());
+        ).thenReturn(List.of());
 
         EnvironmentEntity environment = new EnvironmentEntity();
         environment.setId(ENV_ID);
         environment.setName("Environment to delete");
         environment.setOrganizationId(ORG_ID);
         when(environmentService.findByCockpitId(ENV_ID)).thenReturn(environment);
-        when(dictionaryService.findAll(new ExecutionContext(ORG_ID, ENV_ID)))
-            .thenReturn(Set.of(DictionaryEntity.builder().id(DICTIONARY_ID).build()));
+        when(dictionaryService.findAll(new ExecutionContext(ORG_ID, ENV_ID))).thenReturn(
+            Set.of(DictionaryEntity.builder().id(DICTIONARY_ID).build())
+        );
 
         Api api1 = Api.builder().id(API_ID_1).build();
         Api api2 = Api.builder().id(API_ID_2).build();
@@ -330,16 +376,19 @@ public class DeleteEnvironmentCommandHandlerTest {
                 new ApiCriteria.Builder().state(LifecycleState.STARTED).environmentId(ENV_ID).build(),
                 new ApiFieldFilter.Builder().excludeDefinition().excludePicture().build()
             )
-        )
-            .thenReturn(List.of(api1, api2));
+        ).thenReturn(List.of(api1, api2));
 
+        when(apiProductsRepository.findByEnvironmentId(anyString())).thenReturn(Collections.emptySet());
         when(apiRepository.deleteByEnvironmentId(ENV_ID)).thenReturn(List.of(API_ID_1, API_ID_2));
-        when(pageRepository.deleteByReferenceIdAndReferenceType(ENV_ID, PageReferenceType.ENVIRONMENT))
-            .thenReturn(Map.of(ENV_ID, Collections.emptyList()));
-        when(pageRepository.deleteByReferenceIdAndReferenceType(API_ID_1, PageReferenceType.API))
-            .thenReturn(Map.of(API_ID_1, Collections.emptyList()));
-        when(pageRepository.deleteByReferenceIdAndReferenceType(API_ID_2, PageReferenceType.API))
-            .thenReturn(Map.of(API_ID_2, Collections.emptyList()));
+        when(pageRepository.deleteByReferenceIdAndReferenceType(ENV_ID, PageReferenceType.ENVIRONMENT)).thenReturn(
+            Map.of(ENV_ID, Collections.emptyList())
+        );
+        when(pageRepository.deleteByReferenceIdAndReferenceType(API_ID_1, PageReferenceType.API)).thenReturn(
+            Map.of(API_ID_1, Collections.emptyList())
+        );
+        when(pageRepository.deleteByReferenceIdAndReferenceType(API_ID_2, PageReferenceType.API)).thenReturn(
+            Map.of(API_ID_2, Collections.emptyList())
+        );
         when(ratingRepository.deleteByReferenceIdAndReferenceType(API_ID_1, RatingReferenceType.API)).thenReturn(List.of(API_ID_1));
         when(ratingRepository.deleteByReferenceIdAndReferenceType(API_ID_2, RatingReferenceType.API)).thenReturn(List.of(API_ID_2));
         when(applicationRepository.deleteByEnvironmentId(ENV_ID)).thenReturn(List.of(APP_ID_1, APP_ID_2));
@@ -349,67 +398,97 @@ public class DeleteEnvironmentCommandHandlerTest {
         when(alertService.findByReference(AlertReferenceType.ENVIRONMENT, ENV_ID)).thenReturn(List.of(alert));
         when(groupRepository.deleteByEnvironmentId(ENV_ID)).thenReturn(List.of(GROUP_ID_1, GROUP_ID_2));
         when(subscriptionRepository.deleteByEnvironmentId(ENV_ID)).thenReturn(List.of(SUBSCRIPTION_ID_1, SUBSCRIPTION_ID_2));
-        cut =
-            new DeleteEnvironmentCommandHandler(
-                accessPointRepository,
-                apiCategoryOrderRepository,
-                apiHeaderRepository,
-                apiKeyRepository,
-                apiQualityRuleRepository,
-                apiRepository,
-                applicationRepository,
-                asyncJobRepository,
-                auditRepository,
-                categoryRepository,
-                clientRegistrationProviderRepository,
-                commandRepository,
-                customUserFieldsRepository,
-                dashboardRepository,
-                dictionaryRepository,
-                flowRepository,
-                genericNotificationConfigRepository,
-                groupRepository,
-                identityProviderActivationRepository,
-                integrationRepository,
-                invitationRepository,
-                mediaRepository,
-                membershipRepository,
-                metadataRepository,
-                pageRepository,
-                pageRevisionRepository,
-                parameterRepository,
-                planRepository,
-                portalMenuLinkRepository,
-                portalNotificationConfigRepository,
-                promotionRepository,
-                qualityRuleRepository,
-                ratingAnswerRepository,
-                ratingRepository,
-                roleRepository,
-                scoringReportRepository,
-                scoringRulesetRepository,
-                scoringFunctionRepository,
-                sharedPolicyGroupRepository,
-                sharedPolicyGroupHistoryRepository,
-                subscriptionRepository,
-                themeRepository,
-                ticketRepository,
-                workflowRepository,
-                accessPointService,
-                alertService,
-                apiStateService,
-                applicationAlertService,
-                dictionaryService,
-                environmentService,
-                identityProviderActivationService,
-                searchEngineService
-            );
+        when(userRepository.findBySource(COCKPIT_SOURCE, COCKPIT_USER_ID, ORG_ID)).thenReturn(
+            Optional.ofNullable(User.builder().id(RESOLVED_APIM_USER_ID).build())
+        );
+        when(portalNavigationItemRepository.findAllByOrganizationIdAndEnvironmentId(ORG_ID, ENV_ID)).thenReturn(
+            List.of(
+                new PortalNavigationItem(
+                    "portal-nav-item-id",
+                    ORG_ID,
+                    ENV_ID,
+                    "title",
+                    PortalNavigationItem.Type.PAGE,
+                    PortalNavigationItem.Area.HOMEPAGE,
+                    null,
+                    13,
+                    "{\"pageId\":\"" + PAGE_CONTENT_ID + "\"}",
+                    true,
+                    PortalNavigationItem.Visibility.PUBLIC,
+                    null
+                )
+            )
+        );
+
+        cut = new DeleteEnvironmentCommandHandler(
+            accessPointRepository,
+            apiCategoryOrderRepository,
+            apiHeaderRepository,
+            apiKeyRepository,
+            apiProductsRepository,
+            apiQualityRuleRepository,
+            apiRepository,
+            applicationRepository,
+            asyncJobRepository,
+            auditRepository,
+            categoryRepository,
+            clientCertificateRepository,
+            clientRegistrationProviderRepository,
+            commandRepository,
+            customUserFieldsRepository,
+            dashboardRepository,
+            dictionaryRepository,
+            flowRepository,
+            genericNotificationConfigRepository,
+            groupRepository,
+            identityProviderActivationRepository,
+            integrationRepository,
+            invitationRepository,
+            mediaRepository,
+            membershipRepository,
+            metadataRepository,
+            pageRepository,
+            pageRevisionRepository,
+            parameterRepository,
+            planRepository,
+            portalMenuLinkRepository,
+            portalNotificationConfigRepository,
+            portalPageRepository,
+            portalPageContextRepository,
+            portalNavigationItemRepository,
+            portalPageContentRepository,
+            promotionRepository,
+            qualityRuleRepository,
+            ratingAnswerRepository,
+            ratingRepository,
+            roleRepository,
+            scoringReportRepository,
+            scoringRulesetRepository,
+            scoringFunctionRepository,
+            sharedPolicyGroupRepository,
+            sharedPolicyGroupHistoryRepository,
+            subscriptionFormRepository,
+            subscriptionRepository,
+            themeRepository,
+            ticketRepository,
+            workflowRepository,
+            clusterRepository,
+            accessPointService,
+            alertService,
+            apiStateService,
+            applicationAlertService,
+            dictionaryService,
+            environmentService,
+            identityProviderActivationService,
+            searchEngineService,
+            userRepository
+        );
     }
 
     @Test
     public void should_delete_empty_environment() {
         DeleteEnvironmentReply reply = cut
-            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-empty-env", EMPTY_ENV_ID, USER_ID)))
+            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-empty-env", EMPTY_ENV_ID, COCKPIT_USER_ID)))
             .blockingGet();
 
         verify(environmentService).delete(EMPTY_ENV_ID);
@@ -419,7 +498,9 @@ public class DeleteEnvironmentCommandHandlerTest {
     @Test
     public void should_reply_succeeded_if_environment_not_found() {
         DeleteEnvironmentReply reply = cut
-            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-empty-env", NOT_FOUND_ENV_ID, USER_ID)))
+            .handle(
+                new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-empty-env", NOT_FOUND_ENV_ID, COCKPIT_USER_ID))
+            )
             .blockingGet();
 
         assertEquals(CommandStatus.SUCCEEDED, reply.getCommandStatus());
@@ -428,7 +509,7 @@ public class DeleteEnvironmentCommandHandlerTest {
     @Test
     public void should_reply_error_if_throw_an_error() {
         DeleteEnvironmentReply reply = cut
-            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-empty-env", ERROR_ENV_ID, USER_ID)))
+            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-empty-env", ERROR_ENV_ID, COCKPIT_USER_ID)))
             .blockingGet();
 
         assertEquals(CommandStatus.ERROR, reply.getCommandStatus());
@@ -437,7 +518,7 @@ public class DeleteEnvironmentCommandHandlerTest {
     @Test
     public void should_delete_environment() throws TechnicalException {
         DeleteEnvironmentReply reply = cut
-            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-env", ENV_ID, USER_ID)))
+            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-env", ENV_ID, COCKPIT_USER_ID)))
             .blockingGet();
 
         ExecutionContext executionContext = new ExecutionContext(ORG_ID, ENV_ID);
@@ -475,19 +556,100 @@ public class DeleteEnvironmentCommandHandlerTest {
         verify(sharedPolicyGroupRepository).deleteByEnvironmentId(ENV_ID);
         verify(sharedPolicyGroupHistoryRepository).deleteByEnvironmentId(ENV_ID);
         verify(themeRepository).deleteByReferenceIdAndReferenceType(ENV_ID, ThemeReferenceType.ENVIRONMENT);
-        verify(identityProviderActivationRepository)
-            .deleteByReferenceIdAndReferenceType(
-                ENV_ID,
-                io.gravitee.repository.management.model.IdentityProviderActivationReferenceType.ENVIRONMENT
-            );
+        verify(identityProviderActivationRepository).deleteByReferenceIdAndReferenceType(
+            ENV_ID,
+            io.gravitee.repository.management.model.IdentityProviderActivationReferenceType.ENVIRONMENT
+        );
         verify(commandRepository).deleteByEnvironmentId(ENV_ID);
         verify(mediaRepository).deleteByEnvironment(ENV_ID);
         verify(portalMenuLinkRepository).deleteByEnvironmentId(ENV_ID);
+        verify(portalPageRepository).deleteByEnvironmentId(ENV_ID);
+        verify(portalPageContextRepository).deleteByEnvironmentId(ENV_ID);
+
+        verify(portalPageContentRepository).delete(PAGE_CONTENT_ID);
+        verify(portalNavigationItemRepository).deleteByEnvironmentId(ENV_ID);
+
         verify(metadataRepository).deleteByReferenceIdAndReferenceType(ENV_ID, MetadataReferenceType.ENVIRONMENT);
         verify(scoringRulesetRepository).deleteByReferenceId(ENV_ID, "ENVIRONMENT");
         verify(environmentService).delete(ENV_ID);
         verify(clientRegistrationProviderRepository).deleteByEnvironmentId(ENV_ID);
         verify(qualityRuleRepository).deleteByReferenceIdAndReferenceType(ENV_ID, QualityRule.ReferenceType.ENVIRONMENT);
+        verify(clusterRepository).deleteByEnvironmentId(ENV_ID);
+        verify(subscriptionFormRepository).deleteByEnvironmentId(ENV_ID);
+    }
+
+    @Test
+    public void should_delete_all_api_products_in_environment() throws TechnicalException {
+        ApiProduct apiProduct1 = ApiProduct.builder().id(API_PRODUCT_ID_1).environmentId(ENV_ID).name("Product 1").build();
+        ApiProduct apiProduct2 = ApiProduct.builder().id(API_PRODUCT_ID_2).environmentId(ENV_ID).name("Product 2").build();
+        when(apiProductsRepository.findByEnvironmentId(ENV_ID)).thenReturn(Set.of(apiProduct1, apiProduct2));
+
+        DeleteEnvironmentReply reply = cut
+            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-env", ENV_ID, COCKPIT_USER_ID)))
+            .blockingGet();
+
+        assertEquals(CommandStatus.SUCCEEDED, reply.getCommandStatus());
+        verify(apiProductsRepository).findByEnvironmentId(ENV_ID);
+        verify(apiProductsRepository).delete(API_PRODUCT_ID_1);
+        verify(apiProductsRepository).delete(API_PRODUCT_ID_2);
+    }
+
+    @Test
+    public void should_fail_when_delete_api_product_throws() throws TechnicalException {
+        ApiProduct apiProduct = ApiProduct.builder().id(API_PRODUCT_ID_1).environmentId(ENV_ID).name("Product 1").build();
+        when(apiProductsRepository.findByEnvironmentId(ENV_ID)).thenReturn(Set.of(apiProduct));
+        org.mockito.Mockito.doThrow(new TechnicalException("delete failed")).when(apiProductsRepository).delete(API_PRODUCT_ID_1);
+
+        DeleteEnvironmentReply reply = cut
+            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-env", ENV_ID, COCKPIT_USER_ID)))
+            .blockingGet();
+
+        assertEquals(CommandStatus.ERROR, reply.getCommandStatus());
+    }
+
+    @Test
+    public void should_fail_when_portal_page_content_delete_throws() throws Exception {
+        org.mockito.Mockito.doThrow(new TechnicalException("delete failed")).when(portalPageContentRepository).delete(PAGE_CONTENT_ID);
+
+        DeleteEnvironmentReply reply = cut
+            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-env", ENV_ID, COCKPIT_USER_ID)))
+            .blockingGet();
+
+        assertEquals(CommandStatus.ERROR, reply.getCommandStatus());
+    }
+
+    @Test
+    public void should_skip_portal_page_content_delete_when_pageId_cannot_be_extracted() throws Exception {
+        // override navigation items to provide an item without pageId in configuration
+        when(portalNavigationItemRepository.findAllByOrganizationIdAndEnvironmentId(ORG_ID, ENV_ID)).thenReturn(
+            List.of(
+                new PortalNavigationItem(
+                    "portal-nav-item-id",
+                    ORG_ID,
+                    ENV_ID,
+                    "title",
+                    PortalNavigationItem.Type.PAGE,
+                    PortalNavigationItem.Area.HOMEPAGE,
+                    null,
+                    13,
+                    "{}",
+                    true,
+                    PortalNavigationItem.Visibility.PUBLIC,
+                    null
+                )
+            )
+        );
+
+        DeleteEnvironmentReply reply = cut
+            .handle(new DeleteEnvironmentCommand(new DeleteEnvironmentCommandPayload("delete-env", ENV_ID, COCKPIT_USER_ID)))
+            .blockingGet();
+
+        assertEquals(CommandStatus.SUCCEEDED, reply.getCommandStatus());
+
+        // page delete should not be invoked because no pageId could be extracted
+        org.mockito.Mockito.verify(portalPageContentRepository, org.mockito.Mockito.never()).delete(org.mockito.Mockito.anyString());
+        // navigation items should still be deleted
+        verify(portalNavigationItemRepository).deleteByEnvironmentId(ENV_ID);
     }
 
     private void verifyDeleteApplications(ExecutionContext executionContext) throws TechnicalException {
@@ -506,6 +668,7 @@ public class DeleteEnvironmentCommandHandlerTest {
         verify(invitationRepository).deleteByReferenceIdAndReferenceType(appId, InvitationReferenceType.APPLICATION);
         verify(workflowRepository).deleteByReferenceIdAndReferenceType(appId, Workflow.ReferenceType.APPLICATION.name());
         verify(ticketRepository).deleteByApplicationId(appId);
+        verify(clientCertificateRepository).deleteByApplicationId(appId);
     }
 
     private void verifyDeleteApis(ExecutionContext executionContext) throws TechnicalException {
@@ -540,17 +703,16 @@ public class DeleteEnvironmentCommandHandlerTest {
     }
 
     private void verifyDisableEnvironment(ExecutionContext executionContext) {
-        verify(apiStateService).stop(executionContext, API_ID_1, USER_ID);
-        verify(apiStateService).stop(executionContext, API_ID_2, USER_ID);
+        verify(apiStateService).stopWithoutNotification(executionContext, API_ID_1, RESOLVED_APIM_USER_ID);
+        verify(apiStateService).stopWithoutNotification(executionContext, API_ID_2, RESOLVED_APIM_USER_ID);
         verify(dictionaryService).stop(executionContext, DICTIONARY_ID);
-        verify(identityProviderActivationService)
-            .removeAllIdpsFromTarget(
-                executionContext,
-                new IdentityProviderActivationService.ActivationTarget(
-                    executionContext.getEnvironmentId(),
-                    IdentityProviderActivationReferenceType.ENVIRONMENT
-                )
-            );
+        verify(identityProviderActivationService).removeAllIdpsFromTarget(
+            executionContext,
+            new IdentityProviderActivationService.ActivationTarget(
+                executionContext.getEnvironmentId(),
+                IdentityProviderActivationReferenceType.ENVIRONMENT
+            )
+        );
     }
 
     @Test

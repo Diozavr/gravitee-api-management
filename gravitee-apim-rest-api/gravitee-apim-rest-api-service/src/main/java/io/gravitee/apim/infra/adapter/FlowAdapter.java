@@ -20,28 +20,29 @@ import io.gravitee.definition.model.v4.flow.AbstractFlow;
 import io.gravitee.definition.model.v4.flow.selector.ChannelSelector;
 import io.gravitee.definition.model.v4.flow.selector.ConditionSelector;
 import io.gravitee.definition.model.v4.flow.selector.HttpSelector;
+import io.gravitee.definition.model.v4.flow.selector.McpSelector;
 import io.gravitee.definition.model.v4.flow.selector.Selector;
 import io.gravitee.definition.model.v4.nativeapi.NativeFlow;
+import io.gravitee.node.logging.NodeLoggerFactory;
 import io.gravitee.repository.management.model.flow.Flow;
 import io.gravitee.repository.management.model.flow.FlowReferenceType;
 import io.gravitee.repository.management.model.flow.selector.FlowChannelSelector;
 import io.gravitee.repository.management.model.flow.selector.FlowConditionSelector;
 import io.gravitee.repository.management.model.flow.selector.FlowHttpSelector;
+import io.gravitee.repository.management.model.flow.selector.FlowMcpSelector;
 import io.gravitee.repository.management.model.flow.selector.FlowSelector;
 import io.gravitee.rest.api.service.common.UuidString;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.factory.Mappers;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Mapper(imports = { UuidString.class, TimeProvider.class })
 public interface FlowAdapter {
     FlowAdapter INSTANCE = Mappers.getMapper(FlowAdapter.class);
-    Logger LOGGER = LoggerFactory.getLogger(FlowAdapter.class);
+    Logger log = NodeLoggerFactory.getLogger(FlowAdapter.class);
 
     @Mapping(target = "id", expression = "java(UuidString.generateRandom())")
     @Mapping(target = "createdAt", expression = "java(java.util.Date.from(TimeProvider.instantNow()))")
@@ -66,6 +67,10 @@ public interface FlowAdapter {
     @Mapping(target = "updatedAt", expression = "java(java.util.Date.from(TimeProvider.instantNow()))")
     Flow toRepository(io.gravitee.definition.model.flow.Flow source, FlowReferenceType referenceType, String referenceId, int order);
 
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "updatedAt", expression = "java(java.util.Date.from(TimeProvider.instantNow()))")
+    Flow toRepositoryUpdate(@MappingTarget Flow repository, io.gravitee.definition.model.flow.Flow source, int order);
+
     io.gravitee.definition.model.v4.flow.Flow toFlowV4(Flow source);
     List<io.gravitee.definition.model.v4.flow.Flow> toFlowV4(List<Flow> source);
 
@@ -83,6 +88,8 @@ public interface FlowAdapter {
             return toRepository((ChannelSelector) source);
         } else if (source instanceof ConditionSelector) {
             return toRepository((ConditionSelector) source);
+        } else if (source instanceof McpSelector) {
+            return toRepository((McpSelector) source);
         } else {
             throw new IllegalArgumentException("Unknown selector type: " + source.getClass());
         }
@@ -95,6 +102,8 @@ public interface FlowAdapter {
             return toModel((FlowChannelSelector) source);
         } else if (source instanceof FlowConditionSelector) {
             return toModel((FlowConditionSelector) source);
+        } else if (source instanceof FlowMcpSelector) {
+            return toModel((FlowMcpSelector) source);
         } else {
             throw new IllegalArgumentException("Unknown selector type: " + source.getClass());
         }
@@ -111,6 +120,10 @@ public interface FlowAdapter {
     FlowConditionSelector toRepository(ConditionSelector source);
 
     ConditionSelector toModel(FlowConditionSelector source);
+
+    FlowMcpSelector toRepository(McpSelector source);
+
+    McpSelector toModel(FlowMcpSelector source);
 
     default Flow toRepositoryFromAbstract(AbstractFlow flow, FlowReferenceType referenceType, String referenceId, int order) {
         if (flow instanceof io.gravitee.definition.model.v4.flow.Flow) {

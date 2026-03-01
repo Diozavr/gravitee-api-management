@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 The Gravitee team (http://gravitee.io)
+ * Copyright (C) 2024 The Gravitee team (http://gravitee.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { tap } from 'rxjs';
 
 import { KEYSTORE_TYPE_LABELS, SslKeyStoreFormValue } from './ssl-key-store.model';
+import { MobileClassDirective } from '../../../../../../directives/mobile-class.directive';
 import { JKSKeyStore, PEMKeyStore, PKCS12KeyStore, SslKeyStore } from '../../../../../../entities/ssl';
 import { pathOrContentRequired } from '../validators/ssl-trust-store.validators';
 
@@ -54,7 +55,7 @@ import { pathOrContentRequired } from '../validators/ssl-trust-store.validators'
     },
   ],
   standalone: true,
-  imports: [MatFormFieldModule, ReactiveFormsModule, MatInputModule, MatSelectModule],
+  imports: [MatFormFieldModule, ReactiveFormsModule, MatInputModule, MatSelectModule, MobileClassDirective],
 })
 export class SslKeyStoreComponent implements OnInit, ControlValueAccessor, Validator {
   public types = KEYSTORE_TYPE_LABELS;

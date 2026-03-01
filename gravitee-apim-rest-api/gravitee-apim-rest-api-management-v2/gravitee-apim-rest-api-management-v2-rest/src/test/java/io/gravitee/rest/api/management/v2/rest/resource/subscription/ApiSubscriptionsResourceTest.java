@@ -29,6 +29,7 @@ import io.gravitee.apim.core.api.model.Api;
 import io.gravitee.apim.core.membership.domain_service.ApplicationPrimaryOwnerDomainService;
 import io.gravitee.apim.core.plan.model.Plan;
 import io.gravitee.apim.core.subscription.model.SubscriptionEntity;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.v4.plan.PlanSecurity;
 import io.gravitee.rest.api.management.v2.rest.resource.AbstractResourceTest;
@@ -103,15 +104,13 @@ class ApiSubscriptionsResourceTest extends AbstractResourceTest {
 
         when(environmentService.findById(ENVIRONMENT)).thenReturn(environment);
         when(environmentService.findByOrgAndIdOrHrid(ORGANIZATION, ENVIRONMENT)).thenReturn(environment);
-        when(applicationPrimaryOwnerDomainService.getApplicationPrimaryOwner(any(), any()))
-            .thenReturn(
-                io.gravitee.apim.core.membership.model.PrimaryOwnerEntity
-                    .builder()
-                    .id(userEntity.getId())
-                    .displayName(userEntity.getDisplayName())
-                    .email(userEntity.getEmail())
-                    .build()
-            );
+        when(applicationPrimaryOwnerDomainService.getApplicationPrimaryOwner(any(), any())).thenReturn(
+            io.gravitee.apim.core.membership.model.PrimaryOwnerEntity.builder()
+                .id(userEntity.getId())
+                .displayName(userEntity.getDisplayName())
+                .email(userEntity.getEmail())
+                .build()
+        );
     }
 
     @Nested
@@ -123,32 +122,36 @@ class ApiSubscriptionsResourceTest extends AbstractResourceTest {
         void setUp() {
             target = rootTarget().path("/spec/_import");
 
-            when(subscriptionService.create(any(ExecutionContext.class), any(), isNull(), eq("subscription-id")))
-                .thenReturn(
-                    io.gravitee.rest.api.model.SubscriptionEntity
-                        .builder()
-                        .id(SUBSCRIPTION_ID)
-                        .api(API_ID)
-                        .plan(PLAN_ID)
-                        .application(APPLICATION_ID)
-                        .build()
-                );
+            when(subscriptionService.create(any(ExecutionContext.class), any(), isNull(), eq("subscription-id"))).thenReturn(
+                io.gravitee.rest.api.model.SubscriptionEntity.builder()
+                    .id(SUBSCRIPTION_ID)
+                    .referenceId(API_ID)
+                    .referenceType("API")
+                    .plan(PLAN_ID)
+                    .application(APPLICATION_ID)
+                    .build()
+            );
 
             subscriptionCrudService.initWith(
                 List.of(
-                    builder().id(SUBSCRIPTION_ID).apiId(API_ID).planId(PLAN_ID).applicationId(APPLICATION_ID).status(Status.PENDING).build()
+                    builder()
+                        .id(SUBSCRIPTION_ID)
+                        .planId(PLAN_ID)
+                        .applicationId(APPLICATION_ID)
+                        .status(Status.PENDING)
+                        .referenceId(API_ID)
+                        .referenceType(SubscriptionReferenceType.API)
+                        .build()
                 )
             );
 
             planCrudService.initWith(
                 List.of(
-                    Plan
-                        .builder()
+                    Plan.builder()
                         .id(PLAN_ID)
                         .definitionVersion(DefinitionVersion.V4)
                         .planDefinitionHttpV4(
-                            io.gravitee.definition.model.v4.plan.Plan
-                                .builder()
+                            io.gravitee.definition.model.v4.plan.Plan.builder()
                                 .id(PLAN_ID)
                                 .security(PlanSecurity.builder().type("JWT").build())
                                 .build()
@@ -171,19 +174,18 @@ class ApiSubscriptionsResourceTest extends AbstractResourceTest {
 
         @Test
         void should_update_end_date() {
-            when(subscriptionService.findById(SUBSCRIPTION_ID))
-                .thenReturn(
-                    io.gravitee.rest.api.model.SubscriptionEntity
-                        .builder()
-                        .id(SUBSCRIPTION_ID)
-                        .api(API_ID)
-                        .plan(PLAN_ID)
-                        .application(APPLICATION_ID)
-                        .status(SubscriptionStatus.ACCEPTED)
-                        .startingAt(Date.from(ZonedDateTime.parse("2025-01-01T00:00:00Z").toInstant()))
-                        .endingAt(Date.from(ZonedDateTime.parse("2025-08-01T00:00:00Z").toInstant()))
-                        .build()
-                );
+            when(subscriptionService.findById(SUBSCRIPTION_ID)).thenReturn(
+                io.gravitee.rest.api.model.SubscriptionEntity.builder()
+                    .id(SUBSCRIPTION_ID)
+                    .referenceId(API_ID)
+                    .referenceType("API")
+                    .plan(PLAN_ID)
+                    .application(APPLICATION_ID)
+                    .status(SubscriptionStatus.ACCEPTED)
+                    .startingAt(Date.from(ZonedDateTime.parse("2025-01-01T00:00:00Z").toInstant()))
+                    .endingAt(Date.from(ZonedDateTime.parse("2025-08-01T00:00:00Z").toInstant()))
+                    .build()
+            );
 
             var crdStatus = doImport();
 
@@ -211,32 +213,36 @@ class ApiSubscriptionsResourceTest extends AbstractResourceTest {
         void setUp() {
             target = rootTarget().path("/spec/" + SUBSCRIPTION_ID);
 
-            when(subscriptionService.create(any(ExecutionContext.class), any(), isNull(), eq("subscription-id")))
-                .thenReturn(
-                    io.gravitee.rest.api.model.SubscriptionEntity
-                        .builder()
-                        .id(SUBSCRIPTION_ID)
-                        .api(API_ID)
-                        .plan(PLAN_ID)
-                        .application(APPLICATION_ID)
-                        .build()
-                );
+            when(subscriptionService.create(any(ExecutionContext.class), any(), isNull(), eq("subscription-id"))).thenReturn(
+                io.gravitee.rest.api.model.SubscriptionEntity.builder()
+                    .id(SUBSCRIPTION_ID)
+                    .referenceId(API_ID)
+                    .referenceType("API")
+                    .plan(PLAN_ID)
+                    .application(APPLICATION_ID)
+                    .build()
+            );
 
             subscriptionCrudService.initWith(
                 List.of(
-                    builder().id(SUBSCRIPTION_ID).apiId(API_ID).planId(PLAN_ID).applicationId(APPLICATION_ID).status(Status.PENDING).build()
+                    builder()
+                        .id(SUBSCRIPTION_ID)
+                        .referenceId(API_ID)
+                        .referenceType(SubscriptionReferenceType.API)
+                        .planId(PLAN_ID)
+                        .applicationId(APPLICATION_ID)
+                        .status(Status.PENDING)
+                        .build()
                 )
             );
 
             planCrudService.initWith(
                 List.of(
-                    Plan
-                        .builder()
+                    Plan.builder()
                         .id(PLAN_ID)
                         .definitionVersion(DefinitionVersion.V4)
                         .planDefinitionHttpV4(
-                            io.gravitee.definition.model.v4.plan.Plan
-                                .builder()
+                            io.gravitee.definition.model.v4.plan.Plan.builder()
                                 .id(PLAN_ID)
                                 .security(PlanSecurity.builder().type("JWT").build())
                                 .build()

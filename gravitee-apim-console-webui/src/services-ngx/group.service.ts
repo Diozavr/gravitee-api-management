@@ -24,7 +24,7 @@ import { Constants } from '../entities/Constants';
 import { Group } from '../entities/group/group';
 import { GroupMembership } from '../entities/group/groupMember';
 import { Invitation } from '../entities/invitation/invitation';
-import { Member } from '../entities/management-api-v2';
+import { Member } from '../management/settings/groups/group/membershipState';
 
 @Injectable({
   providedIn: 'root',
@@ -49,16 +49,16 @@ export class GroupService {
     return this.http.get<Group[]>(`${this.constants.org.baseURL}/groups`);
   }
 
-  addOrUpdateMemberships(groupId: string, groupMemberships: GroupMembership[]): Observable<void> {
+  addOrUpdateMemberships(groupId: string, groupMemberships: GroupMembership[], environmentId?: string): Observable<void> {
     // Remove Membership with empty roles
-    const filterEmptyMembershipRoles = (groupMembership: GroupMembership[]) => groupMembership.filter((m) => !isEmpty(m.roles));
+    const filterEmptyMembershipRoles = (groupMembership: GroupMembership[]) => groupMembership.filter(m => !isEmpty(m.roles));
 
     const groupMembershipToSend = filterEmptyMembershipRoles(groupMemberships);
     if (isEmpty(groupMembershipToSend)) {
       return of(void 0);
     }
-
-    return this.http.post<void>(`${this.constants.env.baseURL}/configuration/groups/${groupId}/members`, groupMembershipToSend);
+    const environmentUrl = environmentId ? `${this.constants.org.baseURL}/environments/${environmentId}` : this.constants.env.baseURL;
+    return this.http.post<void>(`${environmentUrl}/configuration/groups/${groupId}/members`, groupMembershipToSend);
   }
 
   delete(id: string) {
@@ -91,8 +91,9 @@ export class GroupService {
     });
   }
 
-  deleteMember(groupId: string, memberId: string): Observable<void> {
-    return this.http.delete<void>(`${this.constants.env.baseURL}/configuration/groups/${groupId}/members/${memberId}`);
+  deleteMember(groupId: string, memberId: string, environmentId?: string): Observable<void> {
+    const environmentUrl = environmentId ? `${this.constants.org.baseURL}/environments/${environmentId}` : this.constants.env.baseURL;
+    return this.http.delete<void>(`${environmentUrl}/configuration/groups/${groupId}/members/${memberId}`);
   }
 
   getInvitations(groupId: string): Observable<Invitation[]> {

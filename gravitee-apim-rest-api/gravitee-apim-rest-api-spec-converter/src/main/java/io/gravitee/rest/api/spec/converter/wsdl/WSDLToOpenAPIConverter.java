@@ -38,17 +38,15 @@ import java.util.Map.Entry;
 import javax.wsdl.*;
 import javax.wsdl.extensions.schema.Schema;
 import javax.xml.namespace.QName;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.w3c.dom.Element;
 import org.xml.sax.InputSource;
 
 /**
  * @author GraviteeSource Team
  */
+@CustomLog
 public class WSDLToOpenAPIConverter implements OpenAPIConverter {
-
-    public static final Logger LOGGER = LoggerFactory.getLogger(WSDLToOpenAPIConverter.class);
 
     public static final String SOAP_EXTENSION_ENVELOPE = "x-graviteeio-soap-envelope";
     public static final String SOAP_EXTENSION_ACTION = "x-graviteeio-soap-action";
@@ -86,6 +84,7 @@ public class WSDLToOpenAPIConverter implements OpenAPIConverter {
             reader.setFeature("javax.wsdl.importDocuments", true);
             return reader.readWSDL(null, new InputSource(stream));
         } catch (WSDLException e) {
+            log.error("Unable to read WSDL from input stream.", e);
             throw new WsdlDescriptorException("Unable to read WSDL");
         }
     }
@@ -159,8 +158,9 @@ public class WSDLToOpenAPIConverter implements OpenAPIConverter {
                 Input input = operation.getInput();
                 if (input != null) {
                     extractSOAPAction(bindingOperation).ifPresent(action -> openApiOperation.addExtension(SOAP_EXTENSION_ACTION, action));
-                    this.soapBuilder.generateSoapEnvelop(wsdlDefinition, binding, bindingOperation)
-                        .ifPresent(envelope -> openApiOperation.addExtension(SOAP_EXTENSION_ENVELOPE, envelope));
+                    this.soapBuilder.generateSoapEnvelop(wsdlDefinition, binding, bindingOperation).ifPresent(envelope ->
+                        openApiOperation.addExtension(SOAP_EXTENSION_ENVELOPE, envelope)
+                    );
                 }
 
                 // create an empty Content definition used by each response description

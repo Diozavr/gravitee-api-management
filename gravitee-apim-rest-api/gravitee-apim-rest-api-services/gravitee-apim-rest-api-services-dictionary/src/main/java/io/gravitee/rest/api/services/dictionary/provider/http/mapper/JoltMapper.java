@@ -22,16 +22,14 @@ import io.gravitee.rest.api.services.dictionary.model.DynamicProperty;
 import java.io.InputStream;
 import java.util.*;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class JoltMapper {
-
-    private final Logger logger = LoggerFactory.getLogger(JoltMapper.class);
 
     private final Chainr chainr;
 

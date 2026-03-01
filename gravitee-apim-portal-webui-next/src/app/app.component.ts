@@ -22,7 +22,7 @@ import { FooterComponent } from '../components/footer/footer.component';
 import { NavBarComponent } from '../components/nav-bar/nav-bar.component';
 import { ConfigService } from '../services/config.service';
 import { CurrentUserService } from '../services/current-user.service';
-import { PortalMenuLinksService } from '../services/portal-menu-links.service';
+import { PortalNavigationItemsService } from '../services/portal-navigation-items.service';
 import { ThemeService } from '../services/theme.service';
 
 @Component({
@@ -35,8 +35,8 @@ export class AppComponent {
   currentUser = inject(CurrentUserService).user;
   logo = inject(ThemeService).logo;
   favicon = inject(ThemeService).favicon;
-  customLinks = inject(PortalMenuLinksService).links;
-  siteTitle: string;
+  topBarNavigationItems = inject(PortalNavigationItemsService).topNavbarItems;
+  private siteTitle: string;
 
   constructor(
     private configService: ConfigService,
@@ -51,6 +51,10 @@ export class AppComponent {
         this.updateFavicon();
       }
     });
+  }
+
+  forceLogin(): boolean {
+    return this.configService.configuration.authentication?.forceLogin?.enabled ?? false;
   }
 
   private updateFavicon() {

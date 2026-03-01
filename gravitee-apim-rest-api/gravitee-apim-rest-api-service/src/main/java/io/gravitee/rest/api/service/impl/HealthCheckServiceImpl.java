@@ -58,8 +58,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -69,13 +68,9 @@ import org.springframework.stereotype.Component;
  * @author Azize ELAMRANI (azize.elamrani at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class HealthCheckServiceImpl implements HealthCheckService {
-
-    /**
-     * Logger.
-     */
-    private final Logger logger = LoggerFactory.getLogger(HealthCheckServiceImpl.class);
 
     @Lazy
     @Autowired
@@ -90,8 +85,7 @@ public class HealthCheckServiceImpl implements HealthCheckService {
     @Override
     public Analytics query(final ExecutionContext executionContext, final DateHistogramQuery query) {
         try {
-            final DateHistogramQueryBuilder queryBuilder = QueryBuilders
-                .dateHistogram()
+            final DateHistogramQueryBuilder queryBuilder = QueryBuilders.dateHistogram()
                 .query(query.getQuery())
                 .timeRange(DateRangeBuilder.between(query.getFrom(), query.getTo()), IntervalBuilder.interval(query.getInterval()))
                 .root(query.getRootField(), query.getRootIdentifier());
@@ -111,7 +105,7 @@ public class HealthCheckServiceImpl implements HealthCheckService {
             );
             return response != null ? convert(response) : null;
         } catch (AnalyticsException ae) {
-            logger.error("Unable to calculate analytics: ", ae);
+            log.error("Unable to calculate analytics: ", ae);
             throw new AnalyticsCalculateException("Unable to calculate analytics");
         }
     }
@@ -179,10 +173,10 @@ public class HealthCheckServiceImpl implements HealthCheckService {
 
     @Override
     public ApiMetrics getAvailability(ExecutionContext executionContext, String api, String field) {
-        logger.debug("Run health availability query for API '{}'", api);
+        log.debug("Run health availability query for API '{}'", api);
 
         try {
-            GenericApiEntity apiEntity = apiSearchService.findGenericById(executionContext, api);
+            GenericApiEntity apiEntity = apiSearchService.findGenericById(executionContext, api, false, false, false);
 
             AvailabilityResponse response = healthCheckRepository.query(
                 new QueryContext(executionContext.getOrganizationId(), executionContext.getEnvironmentId()),
@@ -191,17 +185,17 @@ public class HealthCheckServiceImpl implements HealthCheckService {
 
             return response != null ? convert(executionContext, apiEntity, response.getEndpointAvailabilities(), field) : null;
         } catch (Exception ex) {
-            logger.error("An unexpected error occurs while searching for health data.", ex);
+            log.error("An unexpected error occurs while searching for health data.", ex);
             return null;
         }
     }
 
     @Override
     public ApiMetrics getResponseTime(ExecutionContext executionContext, String api, String field) {
-        logger.debug("Run health response-time query for API '{}'", api);
+        log.debug("Run health response-time query for API '{}'", api);
 
         try {
-            GenericApiEntity apiEntity = apiSearchService.findGenericById(executionContext, api);
+            GenericApiEntity apiEntity = apiSearchService.findGenericById(executionContext, api, false, false, false);
 
             AverageResponseTimeResponse response = healthCheckRepository.query(
                 new QueryContext(executionContext.getOrganizationId(), executionContext.getEnvironmentId()),
@@ -210,20 +204,19 @@ public class HealthCheckServiceImpl implements HealthCheckService {
 
             return response != null ? convert(executionContext, apiEntity, response.getEndpointResponseTimes(), field) : null;
         } catch (Exception ex) {
-            logger.error("An unexpected error occurs while searching for health data.", ex);
+            log.error("An unexpected error occurs while searching for health data.", ex);
             return null;
         }
     }
 
     @Override
     public SearchLogResponse findByApi(ExecutionContext executionContext, String api, LogQuery query, Boolean transition) {
-        logger.debug("Run health logs query for API '{}'", api);
+        log.debug("Run health logs query for API '{}'", api);
 
         try {
             LogsResponse response = healthCheckRepository.query(
                 new QueryContext(executionContext.getOrganizationId(), executionContext.getEnvironmentId()),
-                QueryBuilders
-                    .logs()
+                QueryBuilders.logs()
                     .api(api)
                     .page(query.getPage())
                     .size(query.getSize())
@@ -236,7 +229,7 @@ public class HealthCheckServiceImpl implements HealthCheckService {
 
             return response != null ? convert(executionContext, response) : null;
         } catch (Exception ex) {
-            logger.error("An unexpected error occurs while searching for health data.", ex);
+            log.error("An unexpected error occurs while searching for health data.", ex);
             return null;
         }
     }
@@ -250,7 +243,7 @@ public class HealthCheckServiceImpl implements HealthCheckService {
             );
             return (log != null && api.equalsIgnoreCase(log.getApi())) ? toLog(log) : null;
         } catch (AnalyticsException ae) {
-            logger.error("An unexpected error occurs while searching for health data.", ae);
+            log.error("An unexpected error occurs while searching for health data.", ae);
             return null;
         }
     }
@@ -431,7 +424,7 @@ public class HealthCheckServiceImpl implements HealthCheckService {
                 .flatMap(group -> group.getEndpoints().stream())
                 .filter(endpoint -> endpoint.getName().equalsIgnoreCase(endpointName))
                 .findFirst()
-                .map(endpoint -> Map.of("target", endpoint.getType()))
+                .map(endpoint -> Map.of("target", endpoint.getTarget()))
                 .orElse(Map.of("deleted", "true"));
             case FEDERATED, FEDERATED_AGENT -> Map.of();
             case null -> Map.of();

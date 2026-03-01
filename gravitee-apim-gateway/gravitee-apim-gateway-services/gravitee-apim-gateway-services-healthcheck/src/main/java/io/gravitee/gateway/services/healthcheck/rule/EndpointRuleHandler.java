@@ -34,7 +34,6 @@ import io.gravitee.gateway.services.healthcheck.http.el.EvaluableHttpResponse;
 import io.gravitee.node.api.Node;
 import io.gravitee.node.api.utils.NodeUtils;
 import io.gravitee.plugin.alert.AlertEventProducer;
-import io.gravitee.reporter.api.Reportable;
 import io.gravitee.reporter.api.common.Request;
 import io.gravitee.reporter.api.common.Response;
 import io.gravitee.reporter.api.health.EndpointStatus;
@@ -49,11 +48,9 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.slf4j.MDC;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.support.CronTrigger;
@@ -64,9 +61,8 @@ import org.springframework.scheduling.support.SimpleTriggerContext;
  * @author Azize ELAMRANI (azize.elamrani at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler<Long> {
-
-    private final Logger logger = LoggerFactory.getLogger(EndpointRuleHandler.class);
 
     // Pattern reuse for duplicate slash removal
     private static final Pattern DUPLICATE_SLASH_REMOVER = Pattern.compile("(?<!(grpc:|grpcs:|http:|https:|wss:|ws:))[//]+");
@@ -124,7 +120,7 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
         try {
             MDC.put("api", rule.api().getId());
             T endpoint = rule.endpoint();
-            logger.debug("Running health-check for endpoint: {} [{}]", endpoint.getName(), endpoint.getTarget());
+            log.debug("Running API '{}' health-check for endpoint: {} [{}]", rule.api().getId(), endpoint.getName(), endpoint.getTarget());
 
             // We only allow one step per rule. To support more than one step implement healthCheckResponseHandler accordingly
             runStep(endpoint, rule.steps().get(0));
@@ -136,9 +132,13 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
     protected abstract HttpClientOptions createHttpClientOptions(final T endpoint, final URL requestUrl) throws Exception;
 
     protected Future<HttpClientRequest> createHttpClientRequest(final HttpClient httpClient, URL request, HealthCheckStep step) {
-        logger.debug("Health-check Request host {}", request.getHost());
+        log.debug("Health-check Request for API '{}' host {}", rule.api().getId(), request.getHost());
         RequestOptions options = prepareHttpClientRequest(request, step);
-        logger.debug("Health-check create HttpClient Request with options {}", options.toJson().encodePrettily());
+        log.debug(
+            "Health-check create HttpClient Request for API '{}' with options {}",
+            rule.api().getId(),
+            options.toJson().encodePrettily()
+        );
         return httpClient.request(options);
     }
 
@@ -165,7 +165,7 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
                     try {
                         resolvedHeader = templateEngine.getValue(httpHeader.getValue(), String.class);
                     } catch (ExpressionEvaluationException e) {
-                        logger.warn("Expression {} cannot be evaluated", httpHeader.getValue());
+                        log.warn("Expression {} cannot be evaluated for healthcheck of API {}", httpHeader.getValue(), rule.api().getId());
                     }
 
                     options.putHeader(httpHeader.getName(), resolvedHeader == null ? "" : resolvedHeader);
@@ -177,7 +177,7 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
 
     protected URL createRequest(T endpoint, HealthCheckStep step) throws MalformedURLException {
         URL targetURL = new URL(null, templateEngine.getValue(endpoint.getTarget(), String.class));
-        logger.debug("Health-check step request{}", step.getRequest());
+        log.debug("Health-check step request for API '{}' {}", rule.api().getId(), step.getRequest());
         if (step.getRequest().isFromRoot()) {
             targetURL = new URL(targetURL.getProtocol(), targetURL.getHost(), targetURL.getPort(), "/");
         }
@@ -196,7 +196,7 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
         }
 
         URL resultURL = new URL(null, DUPLICATE_SLASH_REMOVER.matcher(url).replaceAll("/"));
-        logger.debug("Health-check URL {}", resultURL);
+        log.debug("Health-check URL for API '{}' {}", rule.api().getId(), resultURL);
         return resultURL;
     }
 
@@ -207,9 +207,11 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
 
             healthRequestPromise.onComplete(requestPreparationEvent -> {
                 HttpClientRequest healthRequest = requestPreparationEvent.result();
-                final EndpointStatus.Builder healthBuilder = EndpointStatus
-                    .forEndpoint(rule.api().getId(), rule.api().getName(), endpoint.getName())
-                    .on(currentTimeMillis());
+                final EndpointStatus.Builder healthBuilder = EndpointStatus.forEndpoint(
+                    rule.api().getId(),
+                    rule.api().getName(),
+                    endpoint.getName()
+                ).on(currentTimeMillis());
 
                 long startTime = currentTimeMillis();
 
@@ -226,7 +228,11 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
                             HttpClientResponse response = healthRequestEvent.result();
                             response.bodyHandler(buffer -> {
                                 long endTime = currentTimeMillis();
-                                logger.debug("Health-check endpoint returns a response with a {} status code", response.statusCode());
+                                log.debug(
+                                    "Health-check endpoint for API '{}' returns a response with a {} status code",
+                                    rule.api().getId(),
+                                    response.statusCode()
+                                );
 
                                 String body = buffer.toString();
 
@@ -239,11 +245,19 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
                                 report(healthBuilder.build());
                             });
                             response.exceptionHandler(throwable -> {
-                                logger.error("An error has occurred during Health check response handler", throwable);
+                                log.error(
+                                    "An error has occurred during Health check response handler for API '{}'",
+                                    rule.api().getId(),
+                                    throwable
+                                );
                                 rescheduleHandler.handle(null);
                             });
                         } else {
-                            logger.error("An error has occurred during Health check request", healthRequestEvent.cause());
+                            log.error(
+                                "An error has occurred during Health check request for API '{}'",
+                                rule.api().getId(),
+                                healthRequestEvent.cause()
+                            );
                             rescheduleHandler.handle(null);
                             reportThrowable(healthRequestEvent.cause(), step, healthBuilder, startTime, request);
                         }
@@ -255,7 +269,7 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
                     });
 
                     // Send request
-                    logger.debug("Execute health-check request: {}", healthRequest);
+                    log.debug("Execute health-check request for API '{}': {}", rule.api().getId(), healthRequest);
                     if (step.getRequest().getBody() != null && !step.getRequest().getBody().isEmpty()) {
                         healthRequest.end(step.getRequest().getBody());
                     } else {
@@ -264,7 +278,7 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
                 }
             });
         } catch (Exception ex) {
-            logger.error("An unexpected error has occurred while configuring Healthcheck for API : {}", rule.api().getId(), ex);
+            log.error("An unexpected error has occurred while configuring Healthcheck for API : {}", rule.api().getId(), ex);
         }
     }
 
@@ -336,7 +350,7 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
             healthResponse.setStatus(HttpStatusCode.BAD_GATEWAY_502);
         }
 
-        logger.debug("Health-check failing step because", throwable);
+        log.debug("Health-check failing step for API '{}' because", rule.api().getId(), throwable);
 
         stepBuilder.response(healthResponse);
         return stepBuilder.build();
@@ -344,7 +358,10 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
 
     private io.gravitee.gateway.api.http.HttpHeaders getHttpHeaders(HealthCheckStep step) {
         io.gravitee.gateway.api.http.HttpHeaders reqHeaders = io.gravitee.gateway.api.http.HttpHeaders.create();
-        step.getRequest().getHeaders().forEach(httpHeader -> reqHeaders.add(httpHeader.getName(), httpHeader.getValue()));
+        step
+            .getRequest()
+            .getHeaders()
+            .forEach(httpHeader -> reqHeaders.add(httpHeader.getName(), httpHeader.getValue()));
         return reqHeaders;
     }
 
@@ -397,8 +414,7 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
         endpointStatus.setTransition(transition);
 
         if (transition && alertEventProducer != null && !alertEventProducer.isEmpty()) {
-            final Event event = Event
-                .at(currentTimeMillis())
+            final Event event = Event.at(currentTimeMillis())
                 .context(CONTEXT_NODE_ID, node.id())
                 .context(CONTEXT_NODE_HOSTNAME, node.hostname())
                 .context(CONTEXT_NODE_APPLICATION, node.application())
@@ -413,6 +429,7 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
                 .property(PROP_MESSAGE, endpointStatus.getSteps().get(0).getMessage())
                 .organization(rule.api().getOrganizationId())
                 .environment(rule.api().getEnvironmentId())
+                .installation((String) node.metadata().get(Node.META_INSTALLATION))
                 .build();
             alertEventProducer.send(event);
         }
@@ -439,7 +456,8 @@ public abstract class EndpointRuleHandler<T extends Endpoint> implements Handler
     public long getDelayMillis() {
         CronTrigger expression = new CronTrigger(rule.schedule());
         Date nextExecutionDate = expression.nextExecutionTime(new SimpleTriggerContext());
-        if (nextExecutionDate == null) { // NOSONAR nextExecutionDate is null if the trigger won't fire anymore
+        if (nextExecutionDate == null) {
+            // NOSONAR nextExecutionDate is null if the trigger won't fire anymore
             return -1;
         }
 

@@ -18,8 +18,13 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { ConfigService } from './config.service';
-import { CreateSubscription, Subscription, SubscriptionStatusEnum, UpdateSubscription } from '../entities/subscription/subscription';
-import { SubscriptionsResponse } from '../entities/subscription/subscriptions-response';
+import {
+  CreateSubscription,
+  Subscription,
+  SubscriptionsResponse,
+  SubscriptionStatusEnum,
+  UpdateSubscription,
+} from '../entities/subscription';
 
 @Injectable({
   providedIn: 'root',
@@ -31,16 +36,18 @@ export class SubscriptionService {
   ) {}
 
   list(queryParams: {
-    apiId?: string;
-    applicationId?: string;
+    apiIds?: string[];
+    applicationIds?: string[];
     statuses: SubscriptionStatusEnum[] | null;
     size?: number;
+    page?: number;
   }): Observable<SubscriptionsResponse> {
     const params = {
-      ...(queryParams.apiId ? { apiId: queryParams.apiId } : {}),
-      ...(queryParams.applicationId ? { applicationId: queryParams.applicationId } : {}),
-      ...(queryParams.statuses ? { statuses: queryParams.statuses } : { statuses: [] }),
-      ...(queryParams.size ? { size: queryParams.size } : {}),
+      ...(queryParams.apiIds?.length ? { apiIds: queryParams.apiIds } : {}),
+      ...(queryParams.applicationIds?.length ? { applicationIds: queryParams.applicationIds } : {}),
+      ...(queryParams.statuses?.length ? { statuses: queryParams.statuses } : {}),
+      ...(queryParams.size != null ? { size: queryParams.size } : {}),
+      ...(queryParams.page != null ? { page: queryParams.page } : {}),
     };
     return this.http.get<SubscriptionsResponse>(`${this.configService.baseURL}/subscriptions`, {
       params,
@@ -59,6 +66,10 @@ export class SubscriptionService {
 
   update(subscriptionId: string, updatedSubscription: UpdateSubscription) {
     return this.http.put<Subscription>(`${this.configService.baseURL}/subscriptions/${subscriptionId}`, updatedSubscription);
+  }
+
+  close(subscriptionId: string) {
+    return this.http.post<void>(`${this.configService.baseURL}/subscriptions/${subscriptionId}/_close`, null);
   }
 
   resumeConsumerStatus(subscriptionId: string): Observable<Subscription> {

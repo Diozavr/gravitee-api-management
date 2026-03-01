@@ -35,7 +35,7 @@ import java.util.TreeSet;
 
 public class SearchResponseStatusOverTimeAdapter {
 
-    private static final List<String> FILTERED_ENTRYPOINT_TYPES = List.of("http-post", "http-get", "http-proxy");
+    private static final List<String> FILTERED_ENTRYPOINT_TYPES = List.of("http-post", "http-get", "http-proxy", "llm-proxy");
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static final String AGGREGATION_BY_DATE = "by_date";
@@ -107,11 +107,7 @@ public class SearchResponseStatusOverTimeAdapter {
         Instant from = query.from().minus(query.interval());
         Instant to = query.to().plus(query.interval());
 
-        ObjectNode timestamp = json()
-            .put("from", from.toEpochMilli())
-            .put("to", to.toEpochMilli())
-            .put("include_lower", true)
-            .put("include_upper", true);
+        ObjectNode timestamp = json().put("gte", from.toEpochMilli()).put("lte", to.toEpochMilli());
         JsonNode rangeFilter = json().set("range", json().set(TIME_FIELD, timestamp));
 
         var v2orv4 = json().put("minimum_should_match", 1).set("should", apiFilter);

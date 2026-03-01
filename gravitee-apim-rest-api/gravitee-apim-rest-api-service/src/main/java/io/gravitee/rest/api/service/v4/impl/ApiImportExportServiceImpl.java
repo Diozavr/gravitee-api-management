@@ -53,10 +53,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 
-@Slf4j
+@CustomLog
 @Component
 public class ApiImportExportServiceImpl implements ApiImportExportService {
 
@@ -91,7 +91,7 @@ public class ApiImportExportServiceImpl implements ApiImportExportService {
 
     @Override
     public ExportApiEntity exportApi(ExecutionContext executionContext, String apiId, String userId, Set<String> excludeAdditionalData) {
-        final var apiEntity = apiSearchService.findGenericById(executionContext, apiId);
+        final var apiEntity = apiSearchService.findGenericById(executionContext, apiId, true, false, true);
         if (apiEntity.getDefinitionVersion() != DefinitionVersion.V4) {
             throw new ApiDefinitionVersionNotSupportedException(apiEntity.getDefinitionVersion().getLabel());
         }

@@ -85,6 +85,8 @@ import java.util.stream.Stream;
  */
 public class ApiPlansResource extends AbstractResource {
 
+    private static final String FLOW = "flow";
+
     private final PlanMapper planMapper = PlanMapper.INSTANCE;
     private final FlowMapper flowMapper = FlowMapper.INSTANCE;
 
@@ -123,11 +125,16 @@ public class ApiPlansResource extends AbstractResource {
         @QueryParam("securities") @Nonnull Set<PlanSecurityType> securities,
         @QueryParam("mode") PlanMode planMode,
         @QueryParam("subscribableBy") String subscribableBy,
+        @QueryParam("fields") Set<String> fields,
         @BeanParam @Valid PaginationParam paginationParam
     ) {
-        var planQuery = PlanQuery
-            .builder()
-            .apiId(apiId)
+        if (fields == null || fields.isEmpty()) {
+            fields = Set.of(FLOW);
+        }
+
+        var planQuery = PlanQuery.builder()
+            .referenceType(GenericPlanEntity.ReferenceType.API)
+            .referenceId(apiId)
             .securityType(
                 securities
                     .stream()
@@ -142,8 +149,10 @@ public class ApiPlansResource extends AbstractResource {
             )
             .mode(planMode);
 
+        boolean withFlow = fields.contains(FLOW);
+
         Stream<GenericPlanEntity> plansStream = planSearchService
-            .search(GraviteeContext.getExecutionContext(), planQuery.build(), getAuthenticatedUser(), isAdmin())
+            .search(GraviteeContext.getExecutionContext(), planQuery.build(), getAuthenticatedUser(), isAdmin(), withFlow)
             .stream()
             .sorted(comparingInt(GenericPlanEntity::getOrder))
             .map(this::filterSensitiveData);
@@ -152,19 +161,15 @@ public class ApiPlansResource extends AbstractResource {
             var subscriptions = subscriptionQueryService.findActiveByApplicationIdAndApiId(subscribableBy, apiId);
             var subscribedPlans = subscriptions.stream().map(SubscriptionEntity::getPlanId).toList();
 
-            plansStream =
-                plansStream.filter(plan ->
-                    (
-                        plan.getPlanSecurity() == null ||
-                        !List
-                            .of(
-                                io.gravitee.rest.api.model.v4.plan.PlanSecurityType.KEY_LESS.getLabel(),
-                                PlanSecurityType.KEY_LESS.getValue()
-                            )
-                            .contains(plan.getPlanSecurity().getType())
-                    ) &&
+            plansStream = plansStream.filter(
+                plan ->
+                    (plan.getPlanSecurity() == null ||
+                        !List.of(
+                            io.gravitee.rest.api.model.v4.plan.PlanSecurityType.KEY_LESS.getLabel(),
+                            PlanSecurityType.KEY_LESS.getValue()
+                        ).contains(plan.getPlanSecurity().getType())) &&
                     (subscribedPlans.isEmpty() || !subscribedPlans.contains(plan.getId()))
-                );
+            );
         }
 
         List<GenericPlanEntity> plans = plansStream.toList();
@@ -191,13 +196,11 @@ public class ApiPlansResource extends AbstractResource {
                     apiId,
                     api -> planMapper.map(planV4, api),
                     api -> flowMapper.map(planV4.getFlows(), api),
-                    AuditInfo
-                        .builder()
+                    AuditInfo.builder()
                         .organizationId(executionContext.getOrganizationId())
                         .environmentId(executionContext.getEnvironmentId())
                         .actor(
-                            AuditActor
-                                .builder()
+                            AuditActor.builder()
                                 .userId(userDetails.getUsername())
                                 .userSource(userDetails.getSource())
                                 .userSourceId(userDetails.getSourceId())
@@ -210,8 +213,8 @@ public class ApiPlansResource extends AbstractResource {
             return Response.created(this.getLocationHeader(output.id())).entity(planMapper.map(output.plan())).build();
         } else if (createPlan.getDefinitionVersion() == DefinitionVersion.V2) {
             final io.gravitee.rest.api.model.NewPlanEntity newPlanEntity = planMapper.map((CreatePlanV2) createPlan);
-            newPlanEntity.setApi(apiId);
-            newPlanEntity.setType(io.gravitee.rest.api.model.PlanType.API);
+            newPlanEntity.setReferenceId(apiId);
+            newPlanEntity.setReferenceType(GenericPlanEntity.ReferenceType.API);
 
             final io.gravitee.rest.api.model.PlanEntity planEntity = planServiceV2.create(
                 GraviteeContext.getExecutionContext(),
@@ -231,7 +234,10 @@ public class ApiPlansResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final GenericPlanEntity planEntity = planSearchService.findById(executionContext, planId);
 
-        if (!planEntity.getApiId().equals(apiId)) {
+        if (
+            GenericPlanEntity.ReferenceType.API.equals(planEntity.getReferenceType()) &&
+            !java.util.Objects.equals(apiId, planEntity.getReferenceId())
+        ) {
             return Response.status(Response.Status.NOT_FOUND).entity(planNotFoundError(planId)).build();
         }
 
@@ -247,7 +253,10 @@ public class ApiPlansResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final GenericPlanEntity planEntity = planSearchService.findById(executionContext, planId);
 
-        if (!planEntity.getApiId().equals(apiId)) {
+        if (
+            GenericPlanEntity.ReferenceType.API.equals(planEntity.getReferenceType()) &&
+            !java.util.Objects.equals(apiId, planEntity.getReferenceId())
+        ) {
             return Response.status(Response.Status.NOT_FOUND).entity(planNotFoundError(planId)).build();
         }
 
@@ -265,13 +274,11 @@ public class ApiPlansResource extends AbstractResource {
                             updatePlanEntity,
                             api -> flowMapper.map(updatePlanV4.getFlows(), api),
                             apiId,
-                            AuditInfo
-                                .builder()
+                            AuditInfo.builder()
                                 .organizationId(executionContext.getOrganizationId())
                                 .environmentId(executionContext.getEnvironmentId())
                                 .actor(
-                                    AuditActor
-                                        .builder()
+                                    AuditActor.builder()
                                         .userId(userDetails.getUsername())
                                         .userSource(userDetails.getSource())
                                         .userSourceId(userDetails.getSourceId())
@@ -316,7 +323,10 @@ public class ApiPlansResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final GenericPlanEntity planEntity = planSearchService.findById(executionContext, planId);
 
-        if (!planEntity.getApiId().equals(apiId)) {
+        if (
+            GenericPlanEntity.ReferenceType.API.equals(planEntity.getReferenceType()) &&
+            !java.util.Objects.equals(apiId, planEntity.getReferenceId())
+        ) {
             return Response.status(Response.Status.NOT_FOUND).entity(planNotFoundError(planId)).build();
         }
 
@@ -333,7 +343,10 @@ public class ApiPlansResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final GenericPlanEntity planEntity = planSearchService.findById(executionContext, planId);
 
-        if (!planEntity.getApiId().equals(apiId)) {
+        if (
+            GenericPlanEntity.ReferenceType.API.equals(planEntity.getReferenceType()) &&
+            !java.util.Objects.equals(apiId, planEntity.getReferenceId())
+        ) {
             return Response.status(Response.Status.NOT_FOUND).entity(planNotFoundError(planId)).build();
         }
 
@@ -348,7 +361,10 @@ public class ApiPlansResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final GenericPlanEntity planEntity = planSearchService.findById(executionContext, planId);
 
-        if (!planEntity.getApiId().equals(apiId)) {
+        if (
+            GenericPlanEntity.ReferenceType.API.equals(planEntity.getReferenceType()) &&
+            !java.util.Objects.equals(apiId, planEntity.getReferenceId())
+        ) {
             return Response.status(Response.Status.NOT_FOUND).entity(planNotFoundError(planId)).build();
         }
 
@@ -367,7 +383,10 @@ public class ApiPlansResource extends AbstractResource {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final GenericPlanEntity planEntity = planSearchService.findById(executionContext, planId);
 
-        if (!planEntity.getApiId().equals(apiId)) {
+        if (
+            GenericPlanEntity.ReferenceType.API.equals(planEntity.getReferenceType()) &&
+            !java.util.Objects.equals(apiId, planEntity.getReferenceId())
+        ) {
             return Response.status(Response.Status.NOT_FOUND).entity(planNotFoundError(planId)).build();
         }
 
@@ -383,10 +402,15 @@ public class ApiPlansResource extends AbstractResource {
             hasPermission(
                 GraviteeContext.getExecutionContext(),
                 RolePermission.API_GATEWAY_DEFINITION,
-                entity.getApiId(),
+                entity.getReferenceId(),
                 RolePermissionAction.READ
             ) &&
-            hasPermission(GraviteeContext.getExecutionContext(), RolePermission.API_PLAN, entity.getApiId(), RolePermissionAction.READ)
+            hasPermission(
+                GraviteeContext.getExecutionContext(),
+                RolePermission.API_PLAN,
+                entity.getReferenceId(),
+                RolePermissionAction.READ
+            )
         ) {
             // Return complete information if user has permission.
             return entity;
@@ -406,6 +430,9 @@ public class ApiPlansResource extends AbstractResource {
         filtered.setCommentRequired(entity.isCommentRequired());
         filtered.setCommentMessage(entity.getCommentMessage());
         filtered.setGeneralConditions(entity.getGeneralConditions());
+        filtered.setStatus(entity.getPlanStatus());
+        filtered.setReferenceId(entity.getReferenceId());
+        filtered.setReferenceType(entity.getReferenceType());
 
         return filtered;
     }

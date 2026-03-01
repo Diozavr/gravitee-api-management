@@ -15,93 +15,13 @@
  */
 package inmemory.spring;
 
-import inmemory.A2aAgentFetcherInMemory;
-import inmemory.AccessPointQueryServiceInMemory;
-import inmemory.ApiAuthorizationDomainServiceInMemory;
-import inmemory.ApiCRDExportDomainServiceInMemory;
-import inmemory.ApiCategoryOrderQueryServiceInMemory;
-import inmemory.ApiCategoryQueryServiceInMemory;
-import inmemory.ApiCrudServiceInMemory;
-import inmemory.ApiExposedEntrypointDomainServiceInMemory;
-import inmemory.ApiKeyCrudServiceInMemory;
-import inmemory.ApiKeyQueryServiceInMemory;
-import inmemory.ApiMetadataQueryServiceInMemory;
-import inmemory.ApiQueryServiceInMemory;
-import inmemory.ApiSpecGenCrudServiceInMemory;
-import inmemory.ApiSpecGenQueryServiceInMemory;
-import inmemory.ApplicationCrudServiceInMemory;
-import inmemory.ApplicationMetadataCrudServiceInMemory;
-import inmemory.ApplicationMetadataQueryServiceInMemory;
-import inmemory.ApplicationQueryServiceInMemory;
-import inmemory.AsyncJobCrudServiceInMemory;
-import inmemory.AsyncJobQueryServiceInMemory;
-import inmemory.AuditCrudServiceInMemory;
-import inmemory.AuditMetadataQueryServiceInMemory;
-import inmemory.AuditQueryServiceInMemory;
-import inmemory.CategoryApiCrudServiceInMemory;
-import inmemory.CategoryQueryServiceInMemory;
-import inmemory.ConnectionLogsCrudServiceInMemory;
-import inmemory.EndpointPluginQueryServiceInMemory;
-import inmemory.EntrypointPluginQueryServiceInMemory;
-import inmemory.EnvironmentCrudServiceInMemory;
-import inmemory.EventCrudInMemory;
-import inmemory.EventQueryServiceInMemory;
-import inmemory.FlowCrudServiceInMemory;
-import inmemory.GroupQueryServiceInMemory;
-import inmemory.ImportApplicationCRDDomainServiceInMemory;
-import inmemory.IndexerInMemory;
-import inmemory.InstallationAccessQueryServiceInMemory;
-import inmemory.InstanceQueryServiceInMemory;
-import inmemory.IntegrationAgentInMemory;
-import inmemory.IntegrationCrudServiceInMemory;
-import inmemory.IntegrationQueryServiceInMemory;
-import inmemory.LicenseCrudServiceInMemory;
-import inmemory.MembershipCrudServiceInMemory;
-import inmemory.MembershipQueryServiceInMemory;
-import inmemory.MessageLogCrudServiceInMemory;
-import inmemory.MetadataCrudServiceInMemory;
-import inmemory.NoopSwaggerOpenApiResolver;
-import inmemory.NoopTemplateResolverDomainService;
-import inmemory.NotificationCRDDomainServiceInMemory;
-import inmemory.OasProviderInMemory;
-import inmemory.PageCrudServiceInMemory;
-import inmemory.PageQueryServiceInMemory;
-import inmemory.PageRevisionCrudServiceInMemory;
-import inmemory.ParametersDomainServiceInMemory;
-import inmemory.ParametersQueryServiceInMemory;
-import inmemory.PlanCrudServiceInMemory;
-import inmemory.PlanQueryServiceInMemory;
-import inmemory.PolicyPluginQueryServiceInMemory;
-import inmemory.PortalMenuLinkCrudServiceInMemory;
-import inmemory.PortalMenuLinkQueryServiceInMemory;
-import inmemory.PrimaryOwnerDomainServiceInMemory;
-import inmemory.ResourcePluginCrudServiceInMemory;
-import inmemory.ResourcePluginQueryServiceInMemory;
-import inmemory.RoleQueryServiceInMemory;
-import inmemory.ScoringFunctionCrudServiceInMemory;
-import inmemory.ScoringFunctionQueryServiceInMemory;
-import inmemory.ScoringProviderInMemory;
-import inmemory.ScoringReportCrudServiceInMemory;
-import inmemory.ScoringReportQueryServiceInMemory;
-import inmemory.ScoringRulesetCrudServiceInMemory;
-import inmemory.ScoringRulesetQueryServiceInMemory;
-import inmemory.SpecGenNotificationProviderInMemory;
-import inmemory.SpecGenProviderInMemory;
-import inmemory.SubscriptionCrudServiceInMemory;
-import inmemory.SubscriptionQueryServiceInMemory;
-import inmemory.TagQueryServiceInMemory;
-import inmemory.ThemeCrudServiceInMemory;
-import inmemory.ThemePortalNextAssetsDomainServiceInMemory;
-import inmemory.ThemeQueryServiceInMemory;
-import inmemory.ThemeServiceLegacyWrapperInMemory;
-import inmemory.TriggerNotificationDomainServiceInMemory;
-import inmemory.UpdateCategoryApiDomainServiceInMemory;
-import inmemory.UserCrudServiceInMemory;
-import inmemory.UserDomainServiceInMemory;
-import inmemory.ValidateResourceDomainServiceInMemory;
-import inmemory.WorkflowQueryServiceInMemory;
+import inmemory.*;
 import io.gravitee.apim.core.api.domain_service.NotificationCRDDomainService;
 import io.gravitee.apim.core.integration.service_provider.A2aAgentFetcher;
+import io.gravitee.apim.core.newtai.service_provider.NewtAIProvider;
+import io.gravitee.apim.core.portal_page.crud_service.PortalPageContentCrudService;
+import io.gravitee.apim.core.portal_page.query_service.PortalNavigationItemsQueryService;
+import io.gravitee.apim.core.portal_page.query_service.PortalPageContentQueryService;
 import io.gravitee.apim.core.specgen.crud_service.ApiSpecGenCrudService;
 import io.gravitee.apim.core.specgen.query_service.ApiSpecGenQueryService;
 import io.gravitee.apim.core.specgen.service_provider.OasProvider;
@@ -147,8 +67,11 @@ public class InMemoryConfiguration {
     }
 
     @Bean
-    public ApiKeyQueryServiceInMemory apiKeyQueryService(ApiKeyCrudServiceInMemory apiKeyCrudService) {
-        return new ApiKeyQueryServiceInMemory(apiKeyCrudService);
+    public ApiKeyQueryServiceInMemory apiKeyQueryService(
+        ApiKeyCrudServiceInMemory apiKeyCrudService,
+        SubscriptionCrudServiceInMemory subscriptionCrudService
+    ) {
+        return new ApiKeyQueryServiceInMemory(apiKeyCrudService, subscriptionCrudService);
     }
 
     @Bean
@@ -162,13 +85,23 @@ public class InMemoryConfiguration {
     }
 
     @Bean
+    public DashboardCrudServiceInMemory dashboardCrudService() {
+        return new DashboardCrudServiceInMemory();
+    }
+
+    @Bean
+    public MessageLogsCrudServiceInMemory messageLogsCrudService() {
+        return new MessageLogsCrudServiceInMemory();
+    }
+
+    @Bean
     public EnvironmentCrudServiceInMemory environmentCrudService() {
         return new EnvironmentCrudServiceInMemory();
     }
 
     @Bean
-    public MessageLogCrudServiceInMemory messageLogRepository() {
-        return new MessageLogCrudServiceInMemory();
+    public AggregatedMessageLogCrudServiceInMemory aggregatedMessageLogRepository() {
+        return new AggregatedMessageLogCrudServiceInMemory();
     }
 
     @Bean
@@ -244,6 +177,11 @@ public class InMemoryConfiguration {
     @Bean
     public EventCrudInMemory eventCrudService() {
         return new EventCrudInMemory();
+    }
+
+    @Bean
+    public EventLatestCrudInMemory eventLatestCrudService() {
+        return new EventLatestCrudInMemory();
     }
 
     @Bean
@@ -551,5 +489,70 @@ public class InMemoryConfiguration {
     @Bean
     public A2aAgentFetcher a2aAgentFetcher() {
         return new A2aAgentFetcherInMemory();
+    }
+
+    @Bean
+    public NewtAIProvider newtAIProvider() {
+        return new NewtAIProviderInMemory();
+    }
+
+    @Bean
+    public PromotionQueryServiceInMemory promotionQueryService() {
+        return new PromotionQueryServiceInMemory();
+    }
+
+    @Bean
+    public PromotionCrudServiceInMemory promotionCrudService() {
+        return new PromotionCrudServiceInMemory();
+    }
+
+    @Bean
+    public PortalPageContentCrudService portalPageContentCrudService() {
+        return new PortalPageContentCrudServiceInMemory();
+    }
+
+    @Bean
+    public PortalPageContentQueryService portalPageContentQueryService() {
+        return new PortalPageContentQueryServiceInMemory();
+    }
+
+    @Bean
+    public PortalNavigationItemsQueryService portalNavigationItemsQueryService() {
+        return new PortalNavigationItemsQueryServiceInMemory();
+    }
+
+    @Bean
+    public PortalNavigationItemsCrudServiceInMemory portalNavigationItemsCrudService() {
+        return new PortalNavigationItemsCrudServiceInMemory();
+    }
+
+    @Bean
+    public ApiProductCrudServiceInMemory apiProductCrudService() {
+        return new ApiProductCrudServiceInMemory();
+    }
+
+    @Bean
+    public ApiProductQueryServiceInMemory apiProductQueryService(ApiProductCrudServiceInMemory apiProductCrudServiceInMemory) {
+        return new ApiProductQueryServiceInMemory();
+    }
+
+    @Bean
+    public ApiProductSearchQueryServiceInMemory apiProductSearchQueryService() {
+        return new ApiProductSearchQueryServiceInMemory();
+    }
+
+    @Bean
+    public ClientCertificateCrudServiceInMemory clientCertificateCrudService() {
+        return new ClientCertificateCrudServiceInMemory();
+    }
+
+    @Bean
+    public SubscriptionFormCrudServiceInMemory subscriptionFormCrudService() {
+        return new SubscriptionFormCrudServiceInMemory();
+    }
+
+    @Bean
+    public SubscriptionFormQueryServiceInMemory subscriptionFormQueryService() {
+        return new SubscriptionFormQueryServiceInMemory();
     }
 }

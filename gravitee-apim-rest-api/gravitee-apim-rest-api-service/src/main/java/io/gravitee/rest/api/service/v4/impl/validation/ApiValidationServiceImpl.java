@@ -17,10 +17,10 @@ package io.gravitee.rest.api.service.v4.impl.validation;
 
 import static io.gravitee.rest.api.model.api.ApiLifecycleState.ARCHIVED;
 import static io.gravitee.rest.api.model.api.ApiLifecycleState.CREATED;
-import static io.gravitee.rest.api.model.api.ApiLifecycleState.DEPRECATED;
-import static io.gravitee.rest.api.model.api.ApiLifecycleState.UNPUBLISHED;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 
+import io.gravitee.apim.core.api_product.query_service.ApiProductQueryService;
+import io.gravitee.apim.core.flow.domain_service.FlowValidationDomainService;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.v4.ApiType;
 import io.gravitee.definition.model.v4.flow.Flow;
@@ -51,14 +51,14 @@ import io.gravitee.rest.api.service.v4.validation.EndpointGroupsValidationServic
 import io.gravitee.rest.api.service.v4.validation.FlowValidationService;
 import io.gravitee.rest.api.service.v4.validation.GroupValidationService;
 import io.gravitee.rest.api.service.v4.validation.ListenerValidationService;
-import io.gravitee.rest.api.service.v4.validation.PathParametersValidationService;
 import io.gravitee.rest.api.service.v4.validation.PlanValidationService;
 import io.gravitee.rest.api.service.v4.validation.ResourcesValidationService;
 import io.gravitee.rest.api.service.v4.validation.TagsValidationService;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 
 /**
@@ -66,7 +66,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class ApiValidationServiceImpl extends TransactionalService implements ApiValidationService {
 
     private final TagsValidationService tagsValidationService;
@@ -78,8 +78,9 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
     private final AnalyticsValidationService analyticsValidationService;
     private final PlanSearchService planSearchService;
     private final PlanValidationService planValidationService;
-    private final PathParametersValidationService pathParametersValidationService;
     private final ApiServicePluginService apiServicePluginService;
+    private final FlowValidationDomainService flowValidationDomainService;
+    private final ApiProductQueryService apiProductQueryService;
 
     public ApiValidationServiceImpl(
         final TagsValidationService tagsValidationService,
@@ -91,8 +92,9 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
         final AnalyticsValidationService loggingValidationService,
         final PlanSearchService planSearchService,
         final PlanValidationService planValidationService,
-        final PathParametersValidationService pathParametersValidationService,
-        ApiServicePluginService apiServicePluginService
+        ApiServicePluginService apiServicePluginService,
+        FlowValidationDomainService flowValidationDomainService,
+        ApiProductQueryService apiProductQueryService
     ) {
         this.tagsValidationService = tagsValidationService;
         this.groupValidationService = groupValidationService;
@@ -103,8 +105,9 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
         this.analyticsValidationService = loggingValidationService;
         this.planSearchService = planSearchService;
         this.planValidationService = planValidationService;
-        this.pathParametersValidationService = pathParametersValidationService;
         this.apiServicePluginService = apiServicePluginService;
+        this.flowValidationDomainService = flowValidationDomainService;
+        this.apiProductQueryService = apiProductQueryService;
     }
 
     @Override
@@ -121,7 +124,7 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
         newApiEntity.setTags(tagsValidationService.validateAndSanitize(executionContext, null, newApiEntity.getTags()));
         // Validate and clean groups
         newApiEntity.setGroups(
-            groupValidationService.validateAndSanitize(executionContext, null, newApiEntity.getGroups(), primaryOwnerEntity, true)
+            groupValidationService.validateAndSanitize(executionContext, null, newApiEntity.getGroups(), null, primaryOwnerEntity, true)
         );
         // Validate and clean listeners
         newApiEntity.setListeners(
@@ -143,7 +146,7 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
         // Validate and clean flow
         newApiEntity.setFlows(flowValidationService.validateAndSanitize(newApiEntity.getType(), newApiEntity.getFlows()));
 
-        pathParametersValidationService.validate(
+        flowValidationDomainService.validatePathParameters(
             newApiEntity.getType(),
             (newApiEntity.getFlows() != null ? newApiEntity.getFlows().stream() : Stream.empty()),
             Stream.empty()
@@ -175,6 +178,7 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
                 executionContext,
                 updateApiEntity.getId(),
                 updateApiEntity.getGroups(),
+                existingApiEntity.getGroups(),
                 primaryOwnerEntity,
                 existingApiEntity.getOriginContext().origin().equals(OriginContext.Origin.KUBERNETES)
             )
@@ -203,7 +207,7 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
         updateApiEntity.setPlans(planValidationService.validateAndSanitize(updateApiEntity.getType(), updateApiEntity.getPlans()));
 
         // Validate path parameters
-        pathParametersValidationService.validate(
+        flowValidationDomainService.validatePathParameters(
             updateApiEntity.getType(),
             (updateApiEntity.getFlows() != null ? updateApiEntity.getFlows().stream() : Stream.empty()),
             getPlansFlows(updateApiEntity.getPlans())
@@ -231,7 +235,7 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
         apiEntity.setTags(tagsValidationService.validateAndSanitize(executionContext, null, apiEntity.getTags()));
         // Validate and clean groups
         apiEntity.setGroups(
-            groupValidationService.validateAndSanitize(executionContext, null, apiEntity.getGroups(), primaryOwnerEntity, true)
+            groupValidationService.validateAndSanitize(executionContext, null, apiEntity.getGroups(), null, primaryOwnerEntity, true)
         );
         // Validate and clean listeners
         apiEntity.setListeners(
@@ -257,7 +261,7 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
         apiEntity.setPlans(planValidationService.validateAndSanitize(apiEntity.getType(), apiEntity.getPlans()));
 
         // Validate path parameters
-        pathParametersValidationService.validate(
+        flowValidationDomainService.validatePathParameters(
             apiEntity.getType(),
             (apiEntity.getFlows() != null ? apiEntity.getFlows().stream() : Stream.empty()),
             getPlansFlows(apiEntity.getPlans())
@@ -274,11 +278,31 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
 
     @Override
     public boolean canDeploy(ExecutionContext executionContext, String apiId) {
-        return planSearchService
-            .findByApi(executionContext, apiId)
+        boolean hasPublishedOrDeprecatedPlan = planSearchService
+            .findByApi(executionContext, apiId, false)
             .stream()
-            .anyMatch(planEntity ->
-                PlanStatus.PUBLISHED.equals(planEntity.getPlanStatus()) || PlanStatus.DEPRECATED.equals(planEntity.getPlanStatus())
+            .anyMatch(
+                planEntity ->
+                    PlanStatus.PUBLISHED.equals(planEntity.getPlanStatus()) || PlanStatus.DEPRECATED.equals(planEntity.getPlanStatus())
+            );
+        if (hasPublishedOrDeprecatedPlan) {
+            return true;
+        }
+        String environmentId = executionContext.getEnvironmentId();
+        return apiProductQueryService
+            .findByApiId(apiId)
+            .stream()
+            .filter(product -> Objects.equals(product.getEnvironmentId(), environmentId))
+            .anyMatch(product -> hasPublishedOrDeprecatedPlanForApiProduct(executionContext, product.getId()));
+    }
+
+    private boolean hasPublishedOrDeprecatedPlanForApiProduct(ExecutionContext executionContext, String apiProductId) {
+        return planSearchService
+            .findByApiProduct(executionContext, apiProductId)
+            .stream()
+            .anyMatch(
+                planEntity ->
+                    PlanStatus.PUBLISHED.equals(planEntity.getPlanStatus()) || PlanStatus.DEPRECATED.equals(planEntity.getPlanStatus())
             );
     }
 
@@ -328,21 +352,40 @@ public class ApiValidationServiceImpl extends TransactionalService implements Ap
     }
 
     private ApiLifecycleState validateAndSanitizeLifecycleState(final ApiEntity existingApiEntity, final UpdateApiEntity updateApiEntity) {
-        // if lifecycle state not provided, return the existing one
-        if (updateApiEntity.getLifecycleState() == null) {
-            return existingApiEntity.getLifecycleState();
-        } else if (DEPRECATED == existingApiEntity.getLifecycleState()) { //  Otherwise, we should first check that existingAPI and updateApi have the same lifecycleState and THEN check for deprecation status of the exiting API //  if we don't want a deprecated API to be updated, then we should have a specific check // TODO FCY: because of this, you can't update a deprecated API but the reason is not clear.
-            throw new LifecycleStateChangeNotAllowedException(updateApiEntity.getLifecycleState().name());
-        } else if (existingApiEntity.getLifecycleState() == updateApiEntity.getLifecycleState()) {
-            return existingApiEntity.getLifecycleState();
-        } else if (
-            (ARCHIVED == existingApiEntity.getLifecycleState() && (ARCHIVED != updateApiEntity.getLifecycleState())) ||
-            ((UNPUBLISHED == existingApiEntity.getLifecycleState()) && (CREATED == updateApiEntity.getLifecycleState())) ||
-            (CREATED == existingApiEntity.getLifecycleState()) &&
-            (WorkflowState.IN_REVIEW == existingApiEntity.getWorkflowState())
-        ) {
-            throw new LifecycleStateChangeNotAllowedException(updateApiEntity.getLifecycleState().name());
+        var existingState = existingApiEntity.getLifecycleState();
+        var newState = updateApiEntity.getLifecycleState();
+
+        if (newState == null) {
+            return existingState;
         }
-        return updateApiEntity.getLifecycleState();
+
+        if (existingState == newState) {
+            return existingState;
+        }
+
+        return switch (existingState) {
+            case DEPRECATED -> {
+                if (newState != ARCHIVED) {
+                    throw new LifecycleStateChangeNotAllowedException(newState.name());
+                }
+                yield newState;
+            }
+            case ARCHIVED -> {
+                throw new LifecycleStateChangeNotAllowedException(newState.name());
+            }
+            case UNPUBLISHED -> {
+                if (newState == CREATED) {
+                    throw new LifecycleStateChangeNotAllowedException(newState.name());
+                }
+                yield newState;
+            }
+            case CREATED -> {
+                if (existingApiEntity.getWorkflowState() == WorkflowState.IN_REVIEW) {
+                    throw new LifecycleStateChangeNotAllowedException(newState.name());
+                }
+                yield newState;
+            }
+            default -> newState;
+        };
     }
 }

@@ -32,7 +32,14 @@ import { ApiEndpointGroupCreateHarness } from './api-endpoint-group-create.harne
 
 import { ApiEndpointGroupModule } from '../api-endpoint-group.module';
 import { CONSTANTS_TESTING, GioTestingModule } from '../../../../../shared/testing';
-import { ApiV4, ConnectorPlugin, EndpointGroupV4, EndpointV4Default, fakeApiV4 } from '../../../../../entities/management-api-v2';
+import {
+  ApiV4,
+  ConnectorPlugin,
+  EndpointGroupV4,
+  EndpointV4Default,
+  fakeApiV4,
+  fakeNativeKafkaApiV4,
+} from '../../../../../entities/management-api-v2';
 import { fakeEndpointGroupV4 } from '../../../../../entities/management-api-v2/api/v4/endpointGroupV4.fixture';
 import { GioLicenseBannerModule } from '../../../../../shared/components/gio-license-banner/gio-license-banner.module';
 
@@ -107,7 +114,19 @@ const fakeHttpProxySchema = {
   additionalProperties: false,
   required: ['target'],
 };
-
+const fakeLlmProxySchema = {
+  $schema: 'http://json-schema.org/draft-07/schema#',
+  type: 'object',
+  properties: {
+    target: {
+      title: 'Target',
+      type: 'string',
+      description: 'Target',
+    },
+  },
+  additionalProperties: false,
+  required: ['target'],
+};
 const fakeHttpProxySharedSchema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   type: 'object',
@@ -121,7 +140,19 @@ const fakeHttpProxySharedSchema = {
   additionalProperties: false,
   required: ['proxyParam'],
 };
-
+const fakeLlmProxySharedSchema = {
+  $schema: 'http://json-schema.org/draft-07/schema#',
+  type: 'object',
+  properties: {
+    llmProxyParam: {
+      title: 'Llm Proxy Param',
+      type: 'string',
+      description: 'Some param for your Llm proxy',
+    },
+  },
+  additionalProperties: false,
+  required: ['llmProxyParam'],
+};
 const ENDPOINT_LIST = [
   {
     id: 'mock',
@@ -517,6 +548,87 @@ describe('ApiEndpointGroupCreateComponent', () => {
       });
     });
   });
+  describe('V4 API - LLM Proxy', () => {
+    beforeEach(async () => {
+      await initComponent(fakeApiV4({ id: API_ID, type: 'LLM_PROXY' }));
+      expectConfigurationSchemaGet('llm-proxy', fakeLlmProxySchema);
+      expectSharedConfigurationSchemaGet('llm-proxy', fakeLlmProxySharedSchema);
+    });
+
+    describe('Stepper', () => {
+      it('should go back to endpoint groups page on exit', async () => {
+        expect(await isStepActive(harness.getGeneralStep())).toEqual(true);
+        await harness.goBackToEndpointGroups();
+        expect(routerNavigationSpy).toHaveBeenCalledWith(['../'], { relativeTo: expect.anything() });
+      });
+    });
+
+    describe('When creating a llm-proxy endpoint group', () => {
+      it('should be possible', async () => {
+        await fillOutAndValidateGeneralInformation();
+        expect(await harness.canCreateEndpointGroup()).toEqual(false);
+        await harness.setConfigurationInputValue('llmProxyParam', 'my-llm-proxy-param');
+        await harness.setConfigurationInputValue('target', 'http://target.gio');
+        expect(await harness.isConfigurationStepValid()).toEqual(true);
+
+        await createEndpointGroup({
+          name: ENDPOINT_GROUP_NAME,
+          type: 'llm-proxy',
+          loadBalancer: { type: 'ROUND_ROBIN' },
+          endpoints: [
+            { ...EndpointV4Default.byTypeAndGroupName('llm-proxy', ENDPOINT_GROUP_NAME), configuration: { target: 'http://target.gio' } },
+          ],
+          sharedConfiguration: {
+            llmProxyParam: 'my-llm-proxy-param',
+          },
+        });
+      });
+    });
+  });
+
+  describe('V4 API - Native Kafka', () => {
+    beforeEach(async () => {
+      await initComponent(fakeNativeKafkaApiV4({ id: API_ID }));
+
+      expectConfigurationSchemaGet('native-kafka', fakeKafkaSchema);
+      expectSharedConfigurationSchemaGet('native-kafka', {
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'object',
+        properties: {},
+      });
+    });
+
+    describe('When creating a native-kafka endpoint group', () => {
+      it('should be possible', async () => {
+        // Fill General information
+        expect(await harness.isGeneralStepSelected()).toEqual(true);
+        await harness.setNameValue(ENDPOINT_GROUP_NAME);
+        await harness.validateGeneralInformation();
+        expect(await harness.isGeneralStepSelected()).toEqual(false);
+        expect(await isStepActive(harness.getConfigurationStep())).toEqual(true);
+
+        expect(await harness.canCreateEndpointGroup()).toEqual(false);
+        await harness.setConfigurationInputValue('bootstrapServers', 'bootstrap');
+        expect(await harness.isConfigurationStepValid()).toEqual(true);
+        expect(await harness.canCreateEndpointGroup()).toEqual(true);
+
+        await createEndpointGroup({
+          name: ENDPOINT_GROUP_NAME,
+          type: 'native-kafka',
+          loadBalancer: { type: null },
+          endpoints: [
+            {
+              ...EndpointV4Default.byTypeAndGroupName('native-kafka', ENDPOINT_GROUP_NAME),
+              configuration: {
+                bootstrapServers: 'bootstrap',
+              },
+            },
+          ],
+          sharedConfiguration: {},
+        });
+      });
+    });
+  });
 
   /**
    * Expect requests
@@ -574,7 +686,7 @@ describe('ApiEndpointGroupCreateComponent', () => {
    * Helpers
    */
   async function isStepActive(step: Promise<MatStepHarness>): Promise<boolean> {
-    return step.then((foundStep) => foundStep.isSelected());
+    return step.then(foundStep => foundStep.isSelected());
   }
 
   async function fillOutAndValidateEndpointSelection(type = 'kafka'): Promise<void> {
@@ -604,7 +716,7 @@ describe('ApiEndpointGroupCreateComponent', () => {
     sharedSchema: any = fakeKafkaSharedSchema,
   ): Promise<void> {
     // Choose endpoint type
-    await harness.getEndpointGroupTypeStep().then((step) => step.select());
+    await harness.getEndpointGroupTypeStep().then(step => step.select());
     await harness.selectEndpointGroup(type);
 
     if (type !== 'mock') {
@@ -638,9 +750,9 @@ describe('ApiEndpointGroupCreateComponent', () => {
     const updatedApi = cloneDeep(api);
     updatedApi.endpointGroups = [...api.endpointGroups, endpointGroup];
     updatedApi.listeners
-      .flatMap((listener) => listener.entrypoints)
-      .filter((entrypoint) => entrypoint.type === dlqEntrypoint)
-      .forEach((entrypoint) => (entrypoint.dlq = { endpoint: endpointGroup.name }));
+      .flatMap(listener => listener.entrypoints)
+      .filter(entrypoint => entrypoint.type === dlqEntrypoint)
+      .forEach(entrypoint => (entrypoint.dlq = { endpoint: endpointGroup.name }));
     expectApiGet();
     expectApiPut(updatedApi);
     expect(routerNavigationSpy).toHaveBeenCalledWith(['../../entrypoints/', dlqEntrypoint], { relativeTo: expect.anything() });

@@ -73,8 +73,8 @@ export class Step5SummaryComponent implements OnInit {
       }),
     );
 
-    this.paths = this.currentStepPayload.paths?.map((path) => path.path);
-    this.hosts = this.currentStepPayload.hosts?.map((host) => host.host);
+    this.paths = this.currentStepPayload.paths?.map(path => path.path);
+    this.hosts = this.currentStepPayload.hosts?.map(host => host.host);
     this.host = this.currentStepPayload.host?.host;
     this.port = this.currentStepPayload.port?.port;
     this.listenerTypes = [
@@ -101,7 +101,7 @@ export class Step5SummaryComponent implements OnInit {
   }
 
   createApi({ deploy, askForReview }: { deploy: boolean; askForReview: boolean }) {
-    this.stepService.validStep((payload) => ({ ...payload, deploy, askForReview }));
+    this.stepService.validStep(payload => ({ ...payload, deploy, askForReview }));
     this.stepService.finishStepper();
   }
 
@@ -112,6 +112,8 @@ export class Step5SummaryComponent implements OnInit {
   public onRequestUpgrade() {
     if (this.currentStepPayload.type === 'NATIVE') {
       this.licenseService.openDialog({ feature: ApimFeature.APIM_NATIVE_KAFKA_REACTOR, context: UTMTags.API_CREATION_MESSAGE_SUMMARY });
+    } else if (this.currentStepPayload.type === 'LLM_PROXY') {
+      this.licenseService.openDialog({ feature: ApimFeature.APIM_LLM_PROXY_REACTOR, context: UTMTags.API_CREATION_LLM_SUMMARY });
     } else {
       this.licenseService.openDialog({ feature: ApimFeature.APIM_EN_MESSAGE_REACTOR, context: UTMTags.API_CREATION_MESSAGE_SUMMARY });
     }

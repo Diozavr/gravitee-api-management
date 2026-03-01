@@ -170,8 +170,8 @@ public class SharedPolicyGroup {
     public enum FlowPhase {
         REQUEST,
         RESPONSE,
+        ENTRYPOINT_CONNECT,
         INTERACT,
-        CONNECT,
         PUBLISH,
         SUBSCRIBE,
     }

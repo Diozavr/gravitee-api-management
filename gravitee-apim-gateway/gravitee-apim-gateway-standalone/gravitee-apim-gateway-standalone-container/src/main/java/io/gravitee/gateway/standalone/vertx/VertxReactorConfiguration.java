@@ -34,7 +34,6 @@ import io.vertx.core.Vertx;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
@@ -48,6 +47,7 @@ import org.springframework.core.env.Environment;
 public class VertxReactorConfiguration {
 
     protected static final String SERVERS_PREFIX = "servers";
+    protected static final int HTTP_DEFAULT_PORT = 8082;
 
     @Bean
     public ServerManager serverManager(
@@ -64,10 +64,10 @@ public class VertxReactorConfiguration {
             while (getServerType(environment, prefix) != null) {
                 String property = getServerType(environment, prefix);
                 boolean isTcpServer = Objects.equals(property, TCP_PREFIX);
-                final VertxServerOptions options = VertxServerOptions
-                    .builder(environment, prefix)
-                    .defaultPort(isTcpServer ? TCP_DEFAULT_PORT : 8082)
-                    .build();
+
+                var defaultPort = isTcpServer ? TCP_DEFAULT_PORT : HTTP_DEFAULT_PORT;
+                var options = VertxServerOptions.builder().defaultPort(defaultPort).prefix(prefix).environment(environment).build();
+
                 if (isTcpServer) {
                     assertTcpOptions(options);
                 }
@@ -76,9 +76,8 @@ public class VertxReactorConfiguration {
             }
         } else {
             // No server list configured, fallback to single 'http' server configuration.
-            final VertxHttpServerOptions httpOptions = VertxHttpServerOptions
-                .builder()
-                .defaultPort(8082)
+            final VertxHttpServerOptions httpOptions = VertxHttpServerOptions.builder()
+                .defaultPort(HTTP_DEFAULT_PORT)
                 .prefix(HTTP_PREFIX)
                 .environment(environment)
                 .id("http")
@@ -89,8 +88,7 @@ public class VertxReactorConfiguration {
             boolean tcpEnabled = environment.getProperty("tcp.enabled", Boolean.class, false);
             if (tcpEnabled) {
                 // No server list configured, fallback to single 'tcp' server configuration.
-                VertxTcpServerOptions tcpOptions = VertxTcpServerOptions
-                    .builder()
+                VertxTcpServerOptions tcpOptions = VertxTcpServerOptions.builder()
                     .defaultPort(VertxServerOptions.TCP_DEFAULT_PORT)
                     .prefix(TCP_PREFIX)
                     .environment(environment)

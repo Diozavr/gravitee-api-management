@@ -17,50 +17,86 @@ package io.gravitee.repository.elasticsearch.v4.analytics;
 
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.elasticsearch.utils.Type;
+import io.gravitee.repository.analytics.engine.api.query.FacetsQuery;
+import io.gravitee.repository.analytics.engine.api.query.MeasuresQuery;
+import io.gravitee.repository.analytics.engine.api.query.TimeSeriesQuery;
+import io.gravitee.repository.analytics.engine.api.result.FacetsResult;
+import io.gravitee.repository.analytics.engine.api.result.MeasuresResult;
+import io.gravitee.repository.analytics.engine.api.result.TimeSeriesResult;
+import io.gravitee.repository.analytics.query.events.EventAnalyticsAggregate;
 import io.gravitee.repository.common.query.QueryContext;
 import io.gravitee.repository.elasticsearch.AbstractElasticsearchRepository;
 import io.gravitee.repository.elasticsearch.configuration.RepositoryConfiguration;
 import io.gravitee.repository.elasticsearch.utils.ClusterUtils;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.AggregateValueCountByFieldAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.adapter.EventMetricsQueryAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.adapter.EventMetricsResponseAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.adapter.FindApiMetricsDetailQueryAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.adapter.FindApiMetricsDetailResponseAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.adapter.GroupByQueryAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.ResponseTimeRangeQueryAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchAverageConnectionDurationQueryAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchAverageConnectionDurationResponseAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchAverageMessagesPerRequestQueryAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchAverageMessagesPerRequestResponseAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchHistogramQueryAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchRequestResponseTimeAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchRequestsCountByEventQueryAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchRequestsCountQueryAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchRequestsCountResponseAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchResponseStatusOverTimeAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchResponseStatusRangesAdapter;
 import io.gravitee.repository.elasticsearch.v4.analytics.adapter.SearchTopFailedApisAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.adapter.StatsQueryAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.engine.adapter.FacetsResponseAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.engine.adapter.HTTPFacetsQueryAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.engine.adapter.HTTPMeasuresQueryAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.engine.adapter.HTTPTimeSeriesQueryAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.engine.adapter.MeasuresResponseAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.engine.adapter.MessageFacetExtractor;
+import io.gravitee.repository.elasticsearch.v4.analytics.engine.adapter.MessageMeasuresQueryAdapter;
+import io.gravitee.repository.elasticsearch.v4.analytics.engine.adapter.TimeSeriesResponseAdapter;
 import io.gravitee.repository.log.v4.api.AnalyticsRepository;
+import io.gravitee.repository.log.v4.model.analytics.ApiMetricsDetail;
+import io.gravitee.repository.log.v4.model.analytics.ApiMetricsDetailQuery;
 import io.gravitee.repository.log.v4.model.analytics.AverageAggregate;
 import io.gravitee.repository.log.v4.model.analytics.AverageConnectionDurationQuery;
 import io.gravitee.repository.log.v4.model.analytics.AverageMessagesPerRequestQuery;
 import io.gravitee.repository.log.v4.model.analytics.CountAggregate;
+import io.gravitee.repository.log.v4.model.analytics.CountByAggregate;
+import io.gravitee.repository.log.v4.model.analytics.GroupByAggregate;
+import io.gravitee.repository.log.v4.model.analytics.GroupByQuery;
+import io.gravitee.repository.log.v4.model.analytics.HistogramAggregate;
+import io.gravitee.repository.log.v4.model.analytics.HistogramQuery;
 import io.gravitee.repository.log.v4.model.analytics.RequestResponseTimeAggregate;
 import io.gravitee.repository.log.v4.model.analytics.RequestResponseTimeQueryCriteria;
+import io.gravitee.repository.log.v4.model.analytics.RequestsCountByEventQuery;
 import io.gravitee.repository.log.v4.model.analytics.RequestsCountQuery;
 import io.gravitee.repository.log.v4.model.analytics.ResponseStatusOverTimeAggregate;
 import io.gravitee.repository.log.v4.model.analytics.ResponseStatusOverTimeQuery;
 import io.gravitee.repository.log.v4.model.analytics.ResponseStatusQueryCriteria;
 import io.gravitee.repository.log.v4.model.analytics.ResponseStatusRangesAggregate;
 import io.gravitee.repository.log.v4.model.analytics.ResponseTimeRangeQuery;
+import io.gravitee.repository.log.v4.model.analytics.StatsAggregate;
+import io.gravitee.repository.log.v4.model.analytics.StatsQuery;
 import io.gravitee.repository.log.v4.model.analytics.TopFailedAggregate;
 import io.gravitee.repository.log.v4.model.analytics.TopFailedQueryCriteria;
 import io.gravitee.repository.log.v4.model.analytics.TopHitsAggregate;
 import io.gravitee.repository.log.v4.model.analytics.TopHitsQueryCriteria;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Maybe;
+import io.vertx.core.json.JsonObject;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 public class AnalyticsElasticsearchRepository extends AbstractElasticsearchRepository implements AnalyticsRepository {
 
     public static final String ENTRYPOINT_ID_FIELD = "entrypoint-id";
@@ -69,6 +105,14 @@ public class AnalyticsElasticsearchRepository extends AbstractElasticsearchRepos
 
     private static final SearchResponseStatusOverTimeAdapter searchResponseStatusOverTimeAdapter =
         new SearchResponseStatusOverTimeAdapter();
+
+    private final HTTPMeasuresQueryAdapter httpMeasuresQueryAdapter = new HTTPMeasuresQueryAdapter();
+    private final HTTPFacetsQueryAdapter httpFacetsQueryAdapter = new HTTPFacetsQueryAdapter();
+    private final HTTPTimeSeriesQueryAdapter httpTimeSeriesQueryAdapter = new HTTPTimeSeriesQueryAdapter();
+    private final MeasuresResponseAdapter measuresResponseAdapter = new MeasuresResponseAdapter();
+    private final FacetsResponseAdapter facetsResponseAdapter = new FacetsResponseAdapter();
+    private final TimeSeriesResponseAdapter timeSeriesResponseAdapter = new TimeSeriesResponseAdapter();
+    private final MessageMeasuresQueryAdapter messageMeasuresQueryAdapter = new MessageMeasuresQueryAdapter();
 
     public AnalyticsElasticsearchRepository(RepositoryConfiguration configuration) {
         clusters = ClusterUtils.extractClusterIndexPrefixes(configuration);
@@ -163,7 +207,10 @@ public class AnalyticsElasticsearchRepository extends AbstractElasticsearchRepos
         var esQuery = adapter.adaptQuery(queryCriteria);
 
         log.debug("Search request response time query: {}", esQuery);
-        return client.search(indices, null, esQuery).map(response -> adapter.adaptResponse(response, queryCriteria)).blockingGet();
+        return client
+            .search(indices, null, esQuery)
+            .map(response -> adapter.adaptResponse(response, queryCriteria))
+            .blockingGet();
     }
 
     @Override
@@ -189,6 +236,176 @@ public class AnalyticsElasticsearchRepository extends AbstractElasticsearchRepos
 
         log.debug("Search top failed apis query: {}", esQuery);
         return this.client.search(indexes, null, esQuery).map(SearchTopFailedApisAdapter::adaptResponse).blockingGet();
+    }
+
+    @Override
+    public List<HistogramAggregate> searchHistogram(QueryContext queryContext, HistogramQuery query) {
+        var index = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_METRICS, clusters);
+        var adapter = new SearchHistogramQueryAdapter();
+        var esQuery = adapter.adapt(query);
+
+        log.debug("Search histogram query: {}", esQuery);
+        return client.search(index, null, esQuery).map(adapter::adaptResponse).blockingGet();
+    }
+
+    @Override
+    public Optional<GroupByAggregate> searchGroupBy(QueryContext queryContext, GroupByQuery query) {
+        var index = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_METRICS, clusters);
+        var adapter = new GroupByQueryAdapter();
+        var esQuery = adapter.adapt(query);
+
+        log.debug("Search group by query: {}", esQuery);
+        return client.search(index, null, esQuery).map(adapter::adaptResponse).blockingGet();
+    }
+
+    @Override
+    public Optional<StatsAggregate> searchStats(QueryContext queryContext, StatsQuery query) {
+        var index = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_METRICS, clusters);
+        var adapter = new StatsQueryAdapter();
+        var esQuery = adapter.adapt(query);
+
+        log.debug("Search stats query: {}", esQuery);
+        return client.search(index, null, esQuery).map(adapter::adaptResponse).blockingGet();
+    }
+
+    @Override
+    public Optional<CountByAggregate> searchRequestsCountByEvent(QueryContext queryContext, RequestsCountByEventQuery query) {
+        var index = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_METRICS, clusters);
+        var esQuery = SearchRequestsCountByEventQueryAdapter.adapt(query);
+        log.debug("Search Request total counts query: {}", esQuery);
+
+        return client.search(index, null, esQuery).map(SearchRequestsCountByEventQueryAdapter::adaptResponse).blockingGet();
+    }
+
+    @Override
+    public Optional<ApiMetricsDetail> findApiMetricsDetail(QueryContext queryContext, ApiMetricsDetailQuery query) {
+        var indexV4Metrics = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_METRICS, clusters);
+
+        return this.client.search(indexV4Metrics, null, FindApiMetricsDetailQueryAdapter.adapt(query))
+            .map(FindApiMetricsDetailResponseAdapter::adaptFirst)
+            .blockingGet();
+    }
+
+    @Override
+    public Optional<EventAnalyticsAggregate> searchEventAnalytics(QueryContext queryContext, HistogramQuery query) {
+        var index = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.EVENT_METRICS, clusters);
+        var esQuery = EventMetricsQueryAdapter.toESQuery(query);
+
+        log.debug("Search native stats query: {}", esQuery);
+
+        var result = client
+            .search(index, null, esQuery)
+            .map(response -> EventMetricsResponseAdapter.adapt(response, query))
+            .blockingGet();
+        return result;
+    }
+
+    @Override
+    public MeasuresResult searchHTTPMeasures(QueryContext queryContext, MeasuresQuery query) {
+        var index = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_METRICS, clusters);
+        var esQuery = httpMeasuresQueryAdapter.adapt(query);
+
+        log.debug("HTTP measures query: {}", esQuery);
+
+        return client
+            .search(index, null, esQuery)
+            .map(response -> measuresResponseAdapter.adapt(response, query))
+            .blockingGet();
+    }
+
+    @Override
+    public FacetsResult searchHTTPFacets(QueryContext queryContext, FacetsQuery query) {
+        var index = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_METRICS, clusters);
+        var esQuery = httpFacetsQueryAdapter.adapt(query);
+
+        log.debug("HTTP facets query: {}", esQuery);
+
+        return client
+            .search(index, null, esQuery)
+            .map(response -> facetsResponseAdapter.adapt(response, query))
+            .blockingGet();
+    }
+
+    @Override
+    public TimeSeriesResult searchHTTPTimeSeries(QueryContext queryContext, TimeSeriesQuery query) {
+        var index = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_METRICS, clusters);
+        var esQuery = httpTimeSeriesQueryAdapter.adapt(query);
+
+        log.debug("HTTP time series query: {}", esQuery);
+
+        return client
+            .search(index, null, esQuery)
+            .map(response -> timeSeriesResponseAdapter.adapt(response, query))
+            .blockingGet();
+    }
+
+    @Override
+    public MeasuresResult searchMessageMeasures(QueryContext queryContext, MeasuresQuery query) {
+        var httpIndex = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_METRICS, clusters);
+
+        var httpConnectionRequestIDs = searchMessageConnectionRequestIDs(query, httpIndex);
+
+        if (httpConnectionRequestIDs.isEmpty()) {
+            return measuresResponseAdapter.empty(query);
+        }
+
+        var messageIndex = this.indexNameGenerator.getWildcardIndexName(queryContext.placeholder(), Type.V4_MESSAGE_METRICS, clusters);
+        var messageQuery = messageMeasuresQueryAdapter.adapt(query, httpConnectionRequestIDs);
+
+        log.debug("Message - Measures query: {}", messageQuery);
+
+        return client
+            .search(messageIndex, null, messageQuery)
+            .map(response -> measuresResponseAdapter.adapt(response, query))
+            .blockingGet();
+    }
+
+    private Set<String> searchMessageConnectionRequestIDs(MeasuresQuery query, String httpIndex) {
+        return searchMessageConnectionRequestIDs(query, httpIndex, null, new HashSet<>(), 0);
+    }
+
+    private Set<String> searchMessageConnectionRequestIDs(
+        MeasuresQuery query,
+        String httpIndex,
+        JsonObject afterKey,
+        Set<String> accumulatedRequestIDs,
+        int iteration
+    ) {
+        var maxIterations = 1000;
+
+        if (iteration >= maxIterations) {
+            log.warn(
+                "The limit of {} requests has been reached for message connection request IDs. This will lead to partial result.",
+                maxIterations
+            );
+            return accumulatedRequestIDs;
+        }
+
+        var httpQuery = httpFacetsQueryAdapter.adaptRequestIDsQuery(query, afterKey);
+
+        log.debug("Message - HTTP connexions requests query {}", httpQuery);
+
+        var requestIDsResponse = client.search(httpIndex, null, httpQuery).blockingGet();
+
+        var messageFacetJoin = MessageFacetExtractor.extractFromComposite(requestIDsResponse, List.of());
+
+        if (messageFacetJoin.isEmpty()) {
+            log.debug("No request IDs found in iteration {}", iteration);
+            log.debug("Collected {} total message request IDs in {} iterations", accumulatedRequestIDs.size(), iteration);
+            return accumulatedRequestIDs;
+        }
+
+        var requestIDs = messageFacetJoin.getRequestIDs();
+        accumulatedRequestIDs.addAll(requestIDs);
+
+        var nextAfterKey = messageFacetJoin.getAfterKey();
+
+        if (nextAfterKey == null || nextAfterKey.isEmpty()) {
+            log.debug("Collected {} total message request IDs in {} iterations", accumulatedRequestIDs.size(), iteration + 1);
+            return accumulatedRequestIDs;
+        }
+
+        return searchMessageConnectionRequestIDs(query, httpIndex, nextAfterKey, accumulatedRequestIDs, iteration + 1);
     }
 
     private String getIndices(QueryContext queryContext, Collection<DefinitionVersion> definitionVersions) {

@@ -24,10 +24,10 @@ import io.gravitee.rest.api.model.WorkflowType;
 import io.gravitee.rest.api.service.WorkflowService;
 import io.gravitee.rest.api.service.common.UuidString;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -36,10 +36,9 @@ import org.springframework.stereotype.Component;
  * @author Azize ELAMRANI (azize at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class WorkflowServiceImpl extends TransactionalService implements WorkflowService {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(WorkflowServiceImpl.class);
 
     @Lazy
     @Autowired
@@ -67,7 +66,7 @@ public class WorkflowServiceImpl extends TransactionalService implements Workflo
             return workflowRepository.create(workflow);
         } catch (TechnicalException ex) {
             final String message = "An error occurs while trying to create workflow of type " + workflow.getType();
-            LOGGER.error(message, ex);
+            log.error(message, ex);
             throw new TechnicalManagementException(message, ex);
         }
     }
@@ -83,7 +82,26 @@ public class WorkflowServiceImpl extends TransactionalService implements Workflo
         } catch (TechnicalException ex) {
             final String message =
                 "An error occurs while trying to find workflow by ref " + referenceType + "/" + referenceId + " and type " + type;
-            LOGGER.error(message, ex);
+            log.error(message, ex);
+            throw new TechnicalManagementException(message, ex);
+        }
+    }
+
+    @Override
+    public List<Workflow> findByReferencesAndType(
+        final WorkflowReferenceType referenceType,
+        final Collection<String> referenceIds,
+        final WorkflowType type
+    ) {
+        if (referenceIds == null || referenceIds.isEmpty()) {
+            return List.of();
+        }
+        try {
+            return workflowRepository.findByReferencesAndType(referenceType.name(), referenceIds, type.name());
+        } catch (TechnicalException ex) {
+            final String message =
+                "An error occurs while trying to find workflows by refs " + referenceType + "/" + referenceIds + " and type " + type;
+            log.error(message, ex);
             throw new TechnicalManagementException(message, ex);
         }
     }

@@ -23,18 +23,17 @@ import io.gravitee.apim.core.json.JsonProcessingException;
 import io.gravitee.apim.core.json.JsonSerializer;
 import io.gravitee.apim.core.subscription.model.SubscriptionConfiguration;
 import io.gravitee.apim.core.subscription.model.SubscriptionEntity;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.apim.core.subscription.model.crd.SubscriptionCRDSpec;
 import io.gravitee.repository.management.model.Subscription;
 import io.gravitee.rest.api.model.SubscriptionStatus;
-import io.gravitee.rest.api.model.context.OriginContext;
+import lombok.CustomLog;
 import org.mapstruct.InjectionStrategy;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.Named;
 import org.mapstruct.NullValueMappingStrategy;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Mapper(
@@ -43,9 +42,8 @@ import org.springframework.beans.factory.annotation.Autowired;
     injectionStrategy = InjectionStrategy.FIELD,
     nullValueMappingStrategy = NullValueMappingStrategy.RETURN_NULL
 )
+@CustomLog
 public abstract class SubscriptionAdapter {
-
-    private final Logger LOGGER = LoggerFactory.getLogger(SubscriptionAdapter.class);
 
     protected JsonDeserializer jsonDeserializer;
 
@@ -69,6 +67,7 @@ public abstract class SubscriptionAdapter {
     @Mapping(source = "request", target = "requestMessage")
     @Mapping(source = "reason", target = "reasonMessage")
     @Mapping(target = "configuration", expression = "java(deserializeConfiguration(subscription.getConfiguration()))")
+    @Mapping(target = "referenceType", source = "referenceType", qualifiedByName = "mapReferenceTypeFromRepository")
     public abstract SubscriptionEntity toEntity(Subscription subscription);
 
     @Mapping(source = "apiId", target = "api")
@@ -77,9 +76,11 @@ public abstract class SubscriptionAdapter {
     @Mapping(source = "requestMessage", target = "request")
     @Mapping(source = "reasonMessage", target = "reason")
     @Mapping(target = "configuration", expression = "java(serializeConfiguration(subscription.getConfiguration()))")
+    @Mapping(target = "referenceType", source = "referenceType", qualifiedByName = "mapReferenceTypeToRepository")
     public abstract Subscription fromEntity(SubscriptionEntity subscription);
 
     @Mapping(source = "apiId", target = "api")
+    @Mapping(source = "referenceType", target = "referenceType", qualifiedByName = "coreReferenceTypeToRest")
     @Mapping(source = "planId", target = "plan")
     @Mapping(source = "applicationId", target = "application")
     @Mapping(source = "requestMessage", target = "request")
@@ -89,7 +90,7 @@ public abstract class SubscriptionAdapter {
     public abstract io.gravitee.rest.api.model.SubscriptionEntity map(SubscriptionEntity subscription);
 
     @Mapping(target = "type", ignore = true)
-    @Mapping(source = "api", target = "apiId")
+    @Mapping(target = "referenceType", source = "referenceType", qualifiedByName = "restReferenceTypeToCore")
     @Mapping(source = "plan", target = "planId")
     @Mapping(source = "application", target = "applicationId")
     @Mapping(source = "request", target = "requestMessage")
@@ -148,9 +149,42 @@ public abstract class SubscriptionAdapter {
         try {
             return jsonDeserializer.deserialize(configuration, JacksonSubscriptionConfiguration.class);
         } catch (JsonProcessingException e) {
-            LOGGER.error("Unexpected error while deserializing Subscription configuration", e);
+            log.error("Unexpected error while deserializing Subscription configuration", e);
             return null;
         }
+    }
+
+    @Named("mapReferenceTypeFromRepository")
+    protected SubscriptionReferenceType mapReferenceTypeFromRepository(
+        io.gravitee.repository.management.model.SubscriptionReferenceType repoType
+    ) {
+        if (repoType == null) {
+            return null;
+        }
+        return SubscriptionReferenceType.valueOf(repoType.name());
+    }
+
+    @Named("mapReferenceTypeToRepository")
+    protected io.gravitee.repository.management.model.SubscriptionReferenceType mapReferenceTypeToRepository(
+        SubscriptionReferenceType coreType
+    ) {
+        if (coreType == null) {
+            return null;
+        }
+        return io.gravitee.repository.management.model.SubscriptionReferenceType.valueOf(coreType.name());
+    }
+
+    @Named("coreReferenceTypeToRest")
+    protected String referenceTypeToRestString(SubscriptionReferenceType referenceType) {
+        return referenceType == null ? null : referenceType.name();
+    }
+
+    @Named("restReferenceTypeToCore")
+    protected SubscriptionReferenceType restReferenceTypeToCore(String referenceType) {
+        if (referenceType == null) {
+            return SubscriptionReferenceType.API;
+        }
+        return SubscriptionReferenceType.valueOf(referenceType);
     }
 
     @Named("serializeConfiguration")
@@ -162,7 +196,7 @@ public abstract class SubscriptionAdapter {
         try {
             return jsonSerializer.serialize(new JacksonSubscriptionConfiguration(configuration));
         } catch (JsonProcessingException e) {
-            LOGGER.error("Unexpected error while serializing Subscription configuration", e);
+            log.error("Unexpected error while serializing Subscription configuration", e);
             return null;
         }
     }

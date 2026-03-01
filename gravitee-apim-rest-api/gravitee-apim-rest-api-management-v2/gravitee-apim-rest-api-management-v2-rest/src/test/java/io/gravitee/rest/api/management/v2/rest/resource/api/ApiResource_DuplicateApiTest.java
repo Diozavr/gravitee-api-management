@@ -52,7 +52,9 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
 
     @Test
     void should_return_404_if_not_found() {
-        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API)).thenThrow(new ApiNotFoundException(API));
+        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API, true, true, true)).thenThrow(
+            new ApiNotFoundException(API)
+        );
 
         final Response response = rootTarget().request().post(Entity.json(aDuplicateApiOptions()));
         assertThat(response.getStatus()).isEqualTo(NOT_FOUND_404);
@@ -67,11 +69,11 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
         delimiterString = "|",
         useHeadersInDisplayName = true,
         textBlock = """
-        API_DEFINITION[READ] |  ENVIRONMENT_API[CREATE]
-        false                  |  false
-        true                   |  false
-        false                  |  true
-     """
+           API_DEFINITION[READ] |  ENVIRONMENT_API[CREATE]
+           false                  |  false
+           true                   |  false
+           false                  |  true
+        """
     )
     void should_return_403_if_incorrect_permissions(boolean apiDefinitionRead, boolean currentEnvironmentApiCreate) {
         when(
@@ -81,8 +83,7 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
                 eq(API),
                 eq(RolePermissionAction.READ)
             )
-        )
-            .thenReturn(apiDefinitionRead);
+        ).thenReturn(apiDefinitionRead);
         when(
             permissionService.hasPermission(
                 eq(GraviteeContext.getExecutionContext()),
@@ -90,8 +91,7 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
                 eq(ENVIRONMENT),
                 eq(RolePermissionAction.CREATE)
             )
-        )
-            .thenReturn(currentEnvironmentApiCreate);
+        ).thenReturn(currentEnvironmentApiCreate);
         final Response response = rootTarget().request().post(Entity.json(aDuplicateApiOptions()));
         assertThat(response.getStatus()).isEqualTo(FORBIDDEN_403);
 
@@ -103,7 +103,7 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
     @Test
     void should_return_400_when_duplicate_v1_api() {
         var apiEntity = ApiFixtures.aModelApiV1().toBuilder().id(API).build();
-        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API)).thenReturn(apiEntity);
+        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API, true, true, true)).thenReturn(apiEntity);
 
         final Response response = rootTarget().request().post(Entity.json(aDuplicateApiOptions()));
         assertThat(response.getStatus()).isEqualTo(BAD_REQUEST_400);
@@ -116,7 +116,7 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
     @Test
     void should_return_400_when_duplicate_exception_is_thrown() {
         var apiEntity = ApiFixtures.aModelHttpApiV4().toBuilder().id(API).build();
-        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API)).thenReturn(apiEntity);
+        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API, true, true, true)).thenReturn(apiEntity);
 
         var duplicateOptions = aDuplicateApiOptions();
         when(
@@ -125,8 +125,7 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
                 eq(apiEntity),
                 eq(DuplicateApiMapper.INSTANCE.map(duplicateOptions))
             )
-        )
-            .thenThrow(new ApiDuplicateException("duplication exception message"));
+        ).thenThrow(new ApiDuplicateException("duplication exception message"));
 
         final Response response = rootTarget().request().post(Entity.json(aDuplicateApiOptions()));
         assertThat(response.getStatus()).isEqualTo(BAD_REQUEST_400);
@@ -139,7 +138,7 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
     @Test
     void should_duplicate_v4_api() {
         ApiEntity apiEntity = ApiFixtures.aModelHttpApiV4().toBuilder().id(API).build();
-        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API)).thenReturn(apiEntity);
+        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API, true, true, true)).thenReturn(apiEntity);
 
         var duplicateOptions = aDuplicateApiOptions();
         when(
@@ -148,8 +147,7 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
                 eq(apiEntity),
                 eq(DuplicateApiMapper.INSTANCE.map(duplicateOptions))
             )
-        )
-            .thenReturn(ApiFixtures.aModelHttpApiV4().toBuilder().id("duplicate").build());
+        ).thenReturn(ApiFixtures.aModelHttpApiV4().toBuilder().id("duplicate").build());
 
         final Response response = rootTarget().request().post(Entity.json(duplicateOptions));
         assertThat(response.getStatus()).isEqualTo(OK_200);
@@ -163,7 +161,7 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
     @Test
     void should_duplicate_v2_api() {
         io.gravitee.rest.api.model.api.ApiEntity apiEntity = ApiFixtures.aModelApiV2().toBuilder().id(API).build();
-        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API)).thenReturn(apiEntity);
+        when(apiSearchServiceV4.findGenericById(GraviteeContext.getExecutionContext(), API, true, true, true)).thenReturn(apiEntity);
 
         var duplicateOptions = aDuplicateApiOptions();
         when(
@@ -172,8 +170,7 @@ class ApiResource_DuplicateApiTest extends ApiResourceTest {
                 eq(apiEntity),
                 eq(DuplicateApiMapper.INSTANCE.mapToV2(duplicateOptions))
             )
-        )
-            .thenReturn(ApiFixtures.aModelApiV2().toBuilder().id("duplicate").build());
+        ).thenReturn(ApiFixtures.aModelApiV2().toBuilder().id("duplicate").build());
 
         final Response response = rootTarget().request().post(Entity.json(duplicateOptions));
         assertThat(response.getStatus()).isEqualTo(OK_200);

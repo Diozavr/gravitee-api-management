@@ -19,10 +19,18 @@ import io.gravitee.el.TemplateVariableProvider;
 import io.gravitee.gateway.api.Request;
 import io.gravitee.gateway.api.Response;
 import io.gravitee.gateway.core.component.ComponentProvider;
+import io.gravitee.gateway.reactive.api.context.base.BaseExecutionContext;
 import io.gravitee.gateway.reactive.api.context.http.HttpExecutionContext;
+import io.gravitee.gateway.reactive.api.policy.base.BasePolicy;
 import io.gravitee.gateway.reactive.api.tracing.Tracer;
+import io.gravitee.node.logging.LogEntry;
 import io.gravitee.reporter.api.v4.metric.Metrics;
+import io.reactivex.rxjava3.core.Completable;
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 
 public interface HttpExecutionContextInternal extends HttpExecutionContext {
     @Override
@@ -50,4 +58,25 @@ public interface HttpExecutionContextInternal extends HttpExecutionContext {
     HttpExecutionContextInternal templateVariableProviders(final Collection<TemplateVariableProvider> templateVariableProviders);
 
     HttpExecutionContextInternal tracer(Tracer tracer);
+
+    /**
+     * Get the action to be executed at the response phase for a given source.
+     * @return the action to be executed at the response phase or <code>null</code> if no action has been registered for this source.
+     */
+    Map<BasePolicy, Function<HttpExecutionContext, Completable>> getOnResponseActions();
+
+    /**
+     * Get the list of actions to be executed at the response phase.
+     * @return a list of actions to be executed at the response phase.
+     */
+    Function<HttpExecutionContext, Completable> getOnResponseAction(BasePolicy source);
+
+    /**
+     * Sets the log entries for the current execution context.
+     *
+     * @param logEntries a set of log entries to be applied to the current execution context. Each log entry must be an instance
+     *                   or a subclass of {@code LogEntry<? extends HttpExecutionContextInternal>}.
+     * @return the current instance of {@code HttpExecutionContextInternal}, allowing method chaining.
+     */
+    HttpExecutionContextInternal logEntries(Set<LogEntry<? extends HttpExecutionContextInternal>> logEntries);
 }

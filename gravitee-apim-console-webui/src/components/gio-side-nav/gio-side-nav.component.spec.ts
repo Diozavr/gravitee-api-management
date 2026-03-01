@@ -137,8 +137,8 @@ describe('GioSideNavComponent', () => {
         const expirationNotification = await loader.getHarness(GioLicenseExpirationNotificationHarness);
         await expirationNotification
           .getTitleText()
-          .then((_) => fail('Should not be able to find title'))
-          .catch((err) => expect(err).toBeDefined());
+          .then(_ => fail('Should not be able to find title'))
+          .catch(err => expect(err).toBeDefined());
       });
     });
 
@@ -182,6 +182,7 @@ describe('GioSideNavComponent', () => {
         expect.arrayContaining([
           expect.objectContaining({ name: 'Dashboard', routerLink: expect.not.stringContaining('./') }),
           expect.objectContaining({ name: 'APIs', routerLink: expect.not.stringContaining('./') }),
+          expect.objectContaining({ name: 'API Products', routerLink: expect.not.stringContaining('./') }),
           expect.objectContaining({ name: 'Applications', routerLink: expect.not.stringContaining('./') }),
           expect.objectContaining({ name: 'Gateways', routerLink: expect.not.stringContaining('./') }),
           expect.objectContaining({ name: 'Audit', routerLink: expect.not.stringContaining('./') }),
@@ -197,20 +198,34 @@ describe('GioSideNavComponent', () => {
       await init(true, true, false);
       expectLicense({ tier: '', features: [], packs: [], expiresAt: new Date() });
 
-      expect(fixture.componentInstance.mainMenuItems.find((item) => item.displayName === 'API Score')).toBeUndefined();
+      expect(fixture.componentInstance.mainMenuItems.find(item => item.displayName === 'API Score')).toBeUndefined();
     });
 
     it('should show scoring elements when feature is enabled', async () => {
       await init(true, true, true);
       expectLicense({ tier: '', features: [], packs: [], expiresAt: new Date() });
 
-      expect(fixture.componentInstance.mainMenuItems.find((item) => item.displayName === 'API Score')).toEqual({
+      expect(fixture.componentInstance.mainMenuItems.find(item => item.displayName === 'API Score')).toEqual({
         category: 'API Score',
         displayName: 'API Score',
         icon: 'gio:shield-check',
         permissions: ['environment-integration-r'],
         routerLink: './api-score',
       });
+    });
+
+    it('should show API Products menu item with license options', async () => {
+      await init();
+      expectLicense({ tier: '', features: [], packs: [], expiresAt: new Date() });
+
+      const apiProductsItem = fixture.componentInstance.mainMenuItems.find(item => item.displayName === 'API Products');
+      expect(apiProductsItem).toBeDefined();
+      expect(apiProductsItem?.routerLink).toBe('./api-products');
+      expect(apiProductsItem?.licenseOptions).toEqual({
+        feature: 'apim-api-products',
+        context: 'environment',
+      });
+      expect(apiProductsItem?.iconRight$).toBeDefined();
     });
   });
 

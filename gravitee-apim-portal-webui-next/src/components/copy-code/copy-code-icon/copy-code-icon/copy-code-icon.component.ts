@@ -16,11 +16,10 @@
 import { CdkCopyToClipboard } from '@angular/cdk/clipboard';
 import { Component, Input } from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
-import { MatIcon } from '@angular/material/icon';
 
 @Component({
   selector: 'app-copy-code-icon',
-  imports: [MatIcon, CdkCopyToClipboard, MatIconButton],
+  imports: [CdkCopyToClipboard, MatIconButton],
   template: `
     <button
       mat-icon-button
@@ -28,8 +27,9 @@ import { MatIcon } from '@angular/material/icon';
       [attr.aria-label]="label"
       [class.clicked]="clicked"
       [cdkCopyToClipboard]="contentToCopy"
-      (cdkCopyToClipboardCopied)="onCopied()">
-      <mat-icon>{{ clicked ? 'check' : 'content_copy' }}</mat-icon>
+      (cdkCopyToClipboardCopied)="onCopied()"
+    >
+      <span class="material-icons icon-small">{{ clicked ? 'check' : 'content_copy' }}</span>
     </button>
   `,
 })

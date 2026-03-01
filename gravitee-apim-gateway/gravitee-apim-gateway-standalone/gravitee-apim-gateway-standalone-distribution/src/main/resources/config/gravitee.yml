@@ -65,6 +65,9 @@ secrets:
 #      enabled: true
 #      pollIntervalSec: 30
 
+#vertx:
+#  # Native transport is prefered by default but can be disabled in case of network instabilities such as with Azure Private Link.
+#  preferNativeTransport: true
 
 # Gateway HTTP server
 #http:
@@ -109,6 +112,9 @@ secrets:
 #      path: ${gravitee.home}/security/truststore.jks
 #      password: secret
 #      watch: true # Watch for any updates on the keystore and reload it. Default is true.
+#    crl:
+#      path: # Path to the CRL file or folder. CRL checking is disabled if not set. Supports DER and PEM formats.
+#      watch: true # Watch for any updates on the CRL and reload it. Default is true.
 #    sni: false
 #    openssl: false # Used to rely on OpenSSL Engine instead of default JDK SSL Engine
 #  websocket:
@@ -158,6 +164,9 @@ secrets:
 #      path: ${gravitee.home}/security/truststore.jks
 #      password: secret
 #      watch: true # Watch for any updates on the keystore/pem and reload it. Default is true.
+#    crl:
+#      path: # Path to the CRL file or folder. CRL checking is disabled if not set. Supports DER and PEM formats.
+#      watch: true # Watch for any updates on the CRL and reload it. Default is true.
 #    openssl: false # Used to rely on OpenSSL Engine instead of default JDK SSL Engine
 #  haproxy: # Support for https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt
 #    proxyProtocol: false
@@ -409,6 +418,7 @@ ratelimit:
   mongodb:
     uri: mongodb://${ds.mongodb.host}:${ds.mongodb.port}/${ds.mongodb.dbname}
 #  redis:
+#    username: # Optional: Redis username for ACL authentication
 #    password:
 #    # Redis Standalone settings
 #    host: localhost
@@ -504,10 +514,16 @@ ratelimit:
 # Reporters configuration (used to store reporting monitoring data, request metrics, healthchecks and others...
 # All reporters are enabled by default. To stop one of them, you have to add the property 'enabled: false'
 reporters:
-  # logging configuration
+# logging configuration
 #  logging:
 #    max_size: -1 # max size per API log content respectively : client-request, client-response, proxy-request and proxy-response in MB (-1 means no limit)
 #    excluded_response_types: video.*|audio.*|image.*|application\/octet-stream|application\/pdf # Response content types to exclude in logging (must be a regular expression)
+#    memory_pressure_guard:
+#      enabled: true (default is false)
+#      strategy:
+#        type: cooldown #type of strategy (default is cooldown)
+#        cooldown:
+#          duration: 60 #duration in seconds (default is 60 seconds)
   # Elasticsearch reporter
   elasticsearch:
     # enabled: true # Is the reporter enabled or not (default to true)
@@ -521,6 +537,7 @@ reporters:
 #        request: my_policy # ILM policy for the gravitee-request-* indexes
 #        health: my_policy # ILM policy for the gravitee-health-* indexes
 #        log: my_policy # ILM policy for the gravitee-log-* indexes
+#        event_metrics: my_policy # ILM policy for the gravitee-event-metrics-* data streams
 #    index: gravitee
 #    index_per_type: true
 #    index_mode: daily         # "daily" indexes, suffixed with date. Or "ilm" managed indexes, without date
@@ -633,10 +650,15 @@ services:
 #    enabled: true
 #    delay: 5000
 #    unit: MILLISECONDS
-  # The thresholds to determine if a probe is healthy or not
+##   The thresholds to determine if a probe is healthy or not
 #    threshold:
-#      cpu: # Default is 80%
-#      memory: # Default is 80%
+#      cpu: 80 # Default is 80%
+#      memory: 80 # Default is 80%
+#      gc-pressure: 1 # Default is 15%
+
+
+#  healthcheck:
+#    jitterInMs: 900
 
   # Synchronization daemon used to keep the gateway state in sync with the configuration from the management repository
   # Be aware that, by disabling it, the gateway will not be sync with the configuration done through management API
@@ -682,6 +704,7 @@ services:
 #      - http_path
     prometheus:
       enabled: true
+      concurrencyLimit: 3
 
   # heartbeat
 #  heartbeat:
@@ -833,6 +856,8 @@ api:
   # change), this timeout will be the maximum time (in milliseconds) to wait for all pending requests to terminate
 #  pending_requests_timeout: 10000
   validateSubscription: true  # set to false if you want to skip validating the subscription, default value is true
+#  security:
+#    verbose401: false  # set to true to return detailed error messages in 401 responses
   # PUSH plan Subscription retry strategy
 #  subscriptionEndpointRetry:
 #    backoffStrategy: EXPONENTIAL # LINEAR or EXPONENTIAL
@@ -847,19 +872,53 @@ api:
 #      - id: all                # uri starts with '/all/...'
 #        plugin: vault
 #        configuration:
-#          enabled: true
-#          # ... HC Vault plugin configuration
+#          enabled: false
+#          host: 127.0.0.1
+#          port: 8200
+#          # namespace:
+#          # kvEngine: V2                          # defaults to v2 can be "v1", no mixing supported
+#          # readTimeoutSec: 2
+#          # connectTimeoutSec: 3
+#          ssl:
+#            enabled: false                        # not for production
+#            # format: "pemfile"                   # one of "pem","pemfile" "truststore"
+#            # pem:                                # pem in base64 with headers
+#            # file: /opt/gravitee/vault.pem       # for 'pemfile' and 'truststore'
 #          auth:
-#            method: token
-#            # this points to the configuration-level kube plugin
-#            # as configured in 'secrets.kubernetes' section of the configuration
-#            token: secrets://kubernetes/gravitee-secrets:vault-token
-#      # this one is another instance of kube plugin
-#      # and may have a different configuration
+#            method: token # one of "token", "github", "userpass", "approle", "cert" (mTLS)
+#            config:
+#              ### token config
+#              # token:
+
+#              ### github config
+#              # token:
+#              ## path: <non standard github mount path>
+
+#              ### userpass config
+#              # username:
+#              # password:
+#              ## path: <non standard userpass mount path>
+
+#              ### approle
+#              # roleId:
+#              # secretId:
+#              ## path: <non standard approle mount path>
+
+#              ### cert
+#              # format:        # one of "pem", "pemfile", "keystore"
+#              ## path: <non standard cert mount path>
+#              ## for 'pem' and 'pemfile' format
+#              # cert:          # filename or inline cert
+#              # key:           # filename or inline private key
+#              ## for 'keystore' format
+#              # keyStore:      # for "keystore": keystore filename
+#              # password:      # keystore password
 #      - plugin: kubernetes    # uri starts with '/kubernetes/...'
 #        configuration:
 #          enabled: true
-#          # ... Kube plugin config
+#          # namespace: default   # if left empty will assume the namespace is the current namespace in which gravitee is deployed
+#          # kubeConfigFile: /opt/gravitee/config/kube-config.json
+#          # timeoutMs: 3000      # client timeout
 #        environments:
 #          - f5bd78b7-eec2-4c97-9d3a-cb73ec7e3e87
 #          - 6654bb2f-1f07-4b55-b708-0d0fde18159e
@@ -871,10 +930,16 @@ api:
 #      maxDelay: 60
 #      maxAttempt: 10
 #    allowGeneratedSpecs: true
+#    # Enables automatic renewal of the secret based on secrets TTL
 #    renewal:
-#      enable: true
+#      enabled: true # Default is false
+#      # Check frequency to see if secret TTL has expired
 #      check:
-#        delay: 15
+#        delay: 1
+#        unit: MINUTES
+#      # TTL by default for all secrets
+#      defaultSecretTtl:
+#        delay: 1
 #        unit: MINUTES
 
 # Graceful shutdown.

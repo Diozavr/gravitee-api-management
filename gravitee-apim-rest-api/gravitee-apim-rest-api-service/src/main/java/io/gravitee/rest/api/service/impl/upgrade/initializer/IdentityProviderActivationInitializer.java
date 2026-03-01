@@ -22,15 +22,13 @@ import io.gravitee.rest.api.service.common.GraviteeContext;
 import io.gravitee.rest.api.service.configuration.identity.IdentityProviderActivationService;
 import io.gravitee.rest.api.service.configuration.identity.IdentityProviderActivationService.ActivationTarget;
 import io.gravitee.rest.api.service.configuration.identity.IdentityProviderService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
+@CustomLog
 public class IdentityProviderActivationInitializer implements Initializer {
-
-    private final Logger logger = LoggerFactory.getLogger(IdentityProviderActivationInitializer.class);
 
     @Autowired
     private IdentityProviderService identityProviderService;
@@ -57,18 +55,17 @@ public class IdentityProviderActivationInitializer implements Initializer {
             this.identityProviderActivationService.findAllByTarget(defaultOrgTarget).isEmpty() &&
             this.identityProviderActivationService.findAllByTarget(defaultEnvTarget).isEmpty()
         ) {
-            logger.info("    No activation found. Active all idp on all target by default if enabled.");
-            this.identityProviderService.findAll(executionContext)
-                .forEach(idp -> {
-                    if (idp.isEnabled()) {
-                        this.identityProviderActivationService.activateIdpOnTargets(
-                                executionContext,
-                                idp.getId(),
-                                defaultOrgTarget,
-                                defaultEnvTarget
-                            );
-                    }
-                });
+            log.info("    No activation found. Active all idp on all target by default if enabled.");
+            this.identityProviderService.findAll(executionContext).forEach(idp -> {
+                if (idp.isEnabled()) {
+                    this.identityProviderActivationService.activateIdpOnTargets(
+                        executionContext,
+                        idp.getId(),
+                        defaultOrgTarget,
+                        defaultEnvTarget
+                    );
+                }
+            });
         }
         return true;
     }

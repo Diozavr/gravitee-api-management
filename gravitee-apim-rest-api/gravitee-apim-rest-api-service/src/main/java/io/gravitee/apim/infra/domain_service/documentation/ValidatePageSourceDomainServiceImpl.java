@@ -33,7 +33,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 
@@ -41,7 +41,7 @@ import org.springframework.stereotype.Service;
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @Service
 public class ValidatePageSourceDomainServiceImpl implements ValidatePageSourceDomainService {
 
@@ -112,8 +112,10 @@ public class ValidatePageSourceDomainServiceImpl implements ValidatePageSourceDo
 
             validatePageSourceURL(input.pageName(), GITHUB_URL_PROPERTY, GITHUB_SOURCE_TYPE, config).errors().ifPresent(errors::addAll);
 
-            checkRequiredProperties(input.pageName(), config, GITHUB_SOURCE_TYPE, REQUIRED_GITHUB_PROPERTIES)
-                .peek(sanitizedBuilder::configurationMap, errors::addAll);
+            checkRequiredProperties(input.pageName(), config, GITHUB_SOURCE_TYPE, REQUIRED_GITHUB_PROPERTIES).peek(
+                sanitizedBuilder::configurationMap,
+                errors::addAll
+            );
 
             if (errors.stream().anyMatch(Error::isSevere)) {
                 return Result.ofBoth(input.sanitized(sanitizedBuilder.build()), errors);
@@ -128,8 +130,13 @@ public class ValidatePageSourceDomainServiceImpl implements ValidatePageSourceDo
                 );
             }
 
-            checkUnknownProperties(input.pageName(), config, GITHUB_SOURCE_TYPE, REQUIRED_GITHUB_PROPERTIES, OPTIONAL_GITHUB_PROPERTIES)
-                .peek(sanitizedBuilder::configurationMap, errors::addAll);
+            checkUnknownProperties(
+                input.pageName(),
+                config,
+                GITHUB_SOURCE_TYPE,
+                REQUIRED_GITHUB_PROPERTIES,
+                OPTIONAL_GITHUB_PROPERTIES
+            ).peek(sanitizedBuilder::configurationMap, errors::addAll);
 
             validateFetchCronProperty(input.pageName(), GITHUB_SOURCE_TYPE, config).errors().ifPresent(errors::addAll);
 
@@ -186,11 +193,15 @@ public class ValidatePageSourceDomainServiceImpl implements ValidatePageSourceDo
 
         var config = new HashMap<>(input.source().getConfigurationMap());
 
-        checkRequiredProperties(input.pageName(), config, HTTP_SOURCE_TYPE, REQUIRED_HTTP_PROPERTIES)
-            .peek(sanitizedBuilder::configurationMap, errors::addAll);
+        checkRequiredProperties(input.pageName(), config, HTTP_SOURCE_TYPE, REQUIRED_HTTP_PROPERTIES).peek(
+            sanitizedBuilder::configurationMap,
+            errors::addAll
+        );
 
-        checkUnknownProperties(input.pageName(), config, HTTP_SOURCE_TYPE, REQUIRED_HTTP_PROPERTIES, OPTIONAL_HTTP_PROPERTIES)
-            .peek(sanitizedBuilder::configurationMap, errors::addAll);
+        checkUnknownProperties(input.pageName(), config, HTTP_SOURCE_TYPE, REQUIRED_HTTP_PROPERTIES, OPTIONAL_HTTP_PROPERTIES).peek(
+            sanitizedBuilder::configurationMap,
+            errors::addAll
+        );
 
         validatePageSourceURL(input.pageName(), HTTP_URL_PROPERTY, HTTP_SOURCE_TYPE, config).errors().ifPresent(errors::addAll);
 

@@ -20,7 +20,7 @@ import { switchMap, tap } from 'rxjs';
 
 import { AuthService } from '../../services/auth.service';
 import { CurrentUserService } from '../../services/current-user.service';
-import { PortalMenuLinksService } from '../../services/portal-menu-links.service';
+import { PortalNavigationItemsService } from '../../services/portal-navigation-items.service';
 
 @Component({
   selector: 'app-log-out',
@@ -28,24 +28,28 @@ import { PortalMenuLinksService } from '../../services/portal-menu-links.service
   template: '',
 })
 export class LogOutComponent implements OnInit {
-  private destroyRef = inject(DestroyRef);
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor(
-    private authService: AuthService,
-    private currentUserService: CurrentUserService,
-    private portalMenuLinksService: PortalMenuLinksService,
-    private router: Router,
+    private readonly authService: AuthService,
+    private readonly currentUserService: CurrentUserService,
+    private readonly portalNavigationItemsService: PortalNavigationItemsService,
+    private readonly router: Router,
   ) {}
 
   ngOnInit() {
-    this.authService
-      .logout()
-      .pipe(
-        tap(_ => this.currentUserService.clear()),
-        switchMap(_ => this.portalMenuLinksService.loadCustomLinks()),
-        tap(_ => this.router.navigate([''])),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe();
+    if (this.currentUserService.isAuthenticated()) {
+      this.authService
+        .logout()
+        .pipe(
+          tap(_ => this.currentUserService.clear()),
+          switchMap(_ => this.portalNavigationItemsService.loadTopNavBarItems()),
+          tap(_ => this.router.navigate([''])),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe();
+    } else {
+      this.router.navigate(['']);
+    }
   }
 }

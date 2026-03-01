@@ -1,0 +1,54 @@
+/*
+ * Copyright © 2015 The Gravitee team (http://gravitee.io)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.gravitee.gateway.handlers.api.spring;
+
+import io.gravitee.common.event.EventManager;
+import io.gravitee.gateway.handlers.api.manager.ApiProductManager;
+import io.gravitee.gateway.handlers.api.manager.impl.ApiProductManagerImpl;
+import io.gravitee.gateway.handlers.api.registry.ApiProductPlanDefinitionCache;
+import io.gravitee.gateway.handlers.api.registry.ApiProductRegistry;
+import io.gravitee.gateway.handlers.api.registry.impl.ApiProductPlanDefinitionCacheImpl;
+import io.gravitee.gateway.handlers.api.registry.impl.ApiProductRegistryImpl;
+import io.gravitee.node.api.license.LicenseManager;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * @author Arpit Mishra (arpit.mishra at graviteesource.com)
+ * @author GraviteeSource Team
+ */
+@Configuration
+public class ApiProductConfiguration {
+
+    @Bean
+    public ApiProductRegistry apiProductRegistry(ApiProductPlanDefinitionCache apiProductPlanDefinitionCache) {
+        return new ApiProductRegistryImpl(apiProductPlanDefinitionCache);
+    }
+
+    @Bean
+    public ApiProductPlanDefinitionCache apiProductPlanDefinitionCache() {
+        return new ApiProductPlanDefinitionCacheImpl();
+    }
+
+    @Bean
+    public ApiProductManager apiProductManager(
+        ApiProductRegistry apiProductRegistry,
+        EventManager eventManager,
+        LicenseManager licenseManager
+    ) {
+        return new ApiProductManagerImpl(apiProductRegistry, eventManager, licenseManager);
+    }
+}

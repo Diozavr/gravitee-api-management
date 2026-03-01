@@ -33,13 +33,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Yann TAVERNIER (yann.tavernier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class SharedPolicyGroupManagerImpl implements SharedPolicyGroupManager {
 
     private static final int PARALLELISM = Runtime.getRuntime().availableProcessors() * 2;
@@ -113,7 +113,10 @@ public class SharedPolicyGroupManagerImpl implements SharedPolicyGroupManager {
         try {
             licenseManager.validatePluginFeatures(
                 sharedPolicyGroup.getOrganizationId(),
-                plugins.stream().map(p -> new LicenseManager.Plugin(p.type(), p.id())).collect(Collectors.toSet())
+                plugins
+                    .stream()
+                    .map(p -> new LicenseManager.Plugin(p.type(), p.id()))
+                    .collect(Collectors.toSet())
             );
         } catch (InvalidLicenseException | ForbiddenFeatureException e) {
             log.warn(

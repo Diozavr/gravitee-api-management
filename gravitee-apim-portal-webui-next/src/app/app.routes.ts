@@ -13,7 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
+
+import { GraviteeDashboardComponent, GraviteeDashboardService } from '@gravitee/gravitee-dashboard';
+import { GraviteeMarkdownComponent } from '@gravitee/gravitee-markdown';
 
 import { ApiDetailsComponent } from './api/api-details/api-details.component';
 import { ApiTabDetailsComponent } from './api/api-details/api-tab-details/api-tab-details.component';
@@ -23,6 +27,12 @@ import { ApiTabSubscriptionsComponent } from './api/api-details/api-tab-subscrip
 import { SubscriptionsDetailsComponent } from './api/api-details/api-tab-subscriptions/subscriptions-details/subscriptions-details.component';
 import { SubscriptionsTableComponent } from './api/api-details/api-tab-subscriptions/subscriptions-table/subscriptions-table.component';
 import { ApiComponent } from './api/api.component';
+import { ConfigureConsumerComponent } from '../components/subscription/webhook/configure-consumer/configure-consumer.component';
+import { anonymousGuard } from '../guards/anonymous.guard';
+import { authGuard } from '../guards/auth.guard';
+import { catalogCategoriesViewGuard } from '../guards/catalog-categories-view.guard';
+import { pagesResolver } from '../resolvers/pages.resolver';
+import { ApiTabToolsComponent } from './api/api-details/api-tab-tools/api-tab-tools.component';
 import { SubscribeToApiComponent } from './api/subscribe-to-api/subscribe-to-api.component';
 import { ApplicationLogComponent } from './applications/application/application-tab-logs/application-log/application-log.component';
 import { ApplicationLogTableComponent } from './applications/application/application-tab-logs/application-log-table/application-log-table.component';
@@ -30,27 +40,29 @@ import { ApplicationTabLogsComponent } from './applications/application/applicat
 import { ApplicationTabSettingsComponent } from './applications/application/application-tab-settings/application-tab-settings.component';
 import { ApplicationComponent } from './applications/application/application.component';
 import { ApplicationsComponent } from './applications/applications.component';
-import { CategoriesViewComponent } from './catalog/categories-view/categories-view.component';
-import { CategoryApisComponent } from './catalog/categories-view/category-apis/category-apis.component';
-import { TabsViewComponent } from './catalog/tabs-view/tabs-view.component';
-import { GuidesComponent } from './guides/guides.component';
-import { LogInComponent } from './log-in/log-in.component';
-import { ResetPasswordConfirmationComponent } from './log-in/reset-password/reset-password-confirmation/reset-password-confirmation.component';
-import { ResetPasswordComponent } from './log-in/reset-password/reset-password.component';
-import { LogOutComponent } from './log-out/log-out.component';
-import { NotFoundComponent } from './not-found/not-found.component';
+import { DashboardComponent } from './dashboard/dashboard.component';
+import { RegistrationConfirmationComponent } from './registration/registration-confirmation/registration-confirmation.component';
 import { ServiceUnavailableComponent } from './service-unavailable/service-unavailable.component';
-import { ConfigureConsumerComponent } from '../components/subscription/webhook/configure-consumer/configure-consumer.component';
-import { anonymousGuard } from '../guards/anonymous.guard';
-import { authGuard } from '../guards/auth.guard';
-import { catalogCategoriesViewGuard } from '../guards/catalog-categories-view.guard';
+import { NavigationPageFullWidthComponent } from '../components/navigation-page-full-width/navigation-page-full-width.component';
 import { catalogTabsViewGuard } from '../guards/catalog-tabs-view.guard';
 import { redirectGuard } from '../guards/redirect.guard';
 import { apiResolver } from '../resolvers/api.resolver';
 import { applicationPermissionResolver, applicationResolver, applicationTypeResolver } from '../resolvers/application.resolver';
 import { categoriesResolver } from '../resolvers/categories.resolver';
-import { pagesResolver } from '../resolvers/pages.resolver';
-import { ApiTabToolsComponent } from './api/api-details/api-tab-tools/api-tab-tools.component';
+import { homepageContentResolver } from '../resolvers/homepage-content.resolver';
+import { CreateApplicationComponent } from './applications/create-application/create-application.component';
+import { CategoriesViewComponent } from './catalog/categories-view/categories-view.component';
+import { CategoryApisComponent } from './catalog/categories-view/category-apis/category-apis.component';
+import { TabsViewComponent } from './catalog/tabs-view/tabs-view.component';
+import { DocumentationSubscribeComponent } from './documentation/components/documentation-subscribe/documentation-subscribe.component';
+import { DocumentationComponent } from './documentation/components/documentation.component';
+import { documentationResolver } from './documentation/resolvers/documentation.resolver';
+import { LogInComponent } from './log-in/log-in.component';
+import { ResetPasswordConfirmationComponent } from './log-in/reset-password/reset-password-confirmation/reset-password-confirmation.component';
+import { ResetPasswordComponent } from './log-in/reset-password/reset-password.component';
+import { LogOutComponent } from './log-out/log-out.component';
+import { NotFoundComponent } from './not-found/not-found.component';
+import { RegistrationComponent } from './registration/registration.component';
 
 const apiRoutes: Routes = [
   {
@@ -123,10 +135,17 @@ const apiRoutes: Routes = [
 ];
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'catalog', pathMatch: 'full' },
+  {
+    path: '',
+    canActivate: [redirectGuard, authGuard],
+    resolve: {
+      pageContent: homepageContentResolver,
+    },
+    component: NavigationPageFullWidthComponent,
+  },
   {
     path: 'catalog',
-    canActivateChild: [redirectGuard],
+    canActivateChild: [redirectGuard, authGuard],
     data: { breadcrumb: 'Catalog' },
     children: [
       {
@@ -136,6 +155,11 @@ export const routes: Routes = [
         resolve: {
           categories: categoriesResolver,
         },
+      },
+      {
+        path: 'all',
+        redirectTo: '',
+        pathMatch: 'full',
       },
       {
         path: 'categories',
@@ -166,10 +190,31 @@ export const routes: Routes = [
     ],
   },
   {
+    path: 'dashboard',
+    canActivateChild: [redirectGuard, authGuard],
+    component: DashboardComponent,
+    children: [
+      { path: '', redirectTo: 'subscriptions', pathMatch: 'full' },
+      {
+        path: 'subscriptions',
+        loadComponent: () => import('./dashboard/subscriptions/subscriptions.component'),
+      },
+      {
+        path: 'subscriptions/:subscriptionId',
+        loadComponent: () => import('./dashboard/subscription-details/subscription-details.component'),
+      },
+    ],
+  },
+  {
     path: 'applications',
-    canActivateChild: [authGuard, redirectGuard],
+    canActivateChild: [redirectGuard, authGuard],
     children: [
       { path: '', component: ApplicationsComponent, data: { breadcrumb: 'Applications' } },
+      {
+        path: 'create',
+        component: CreateApplicationComponent,
+        data: { breadcrumb: 'Create Application' },
+      },
       {
         path: ':applicationId',
         component: ApplicationComponent,
@@ -208,8 +253,38 @@ export const routes: Routes = [
     ],
   },
   {
-    path: 'guides',
-    component: GuidesComponent,
+    path: 'documentation',
+    canActivate: [redirectGuard, authGuard],
+    children: [
+      {
+        path: '',
+        resolve: { navItem: documentationResolver },
+        component: DocumentationComponent,
+      },
+      {
+        path: ':navId',
+        resolve: { navItem: documentationResolver },
+        children: [
+          {
+            path: '',
+            component: DocumentationComponent,
+          },
+          {
+            path: 'api/:apiId/subscribe',
+            resolve: { api: apiResolver },
+            component: DocumentationSubscribeComponent,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    path: 'analytics',
+    component: GraviteeDashboardComponent,
+    resolve: {
+      widgets: () => inject(GraviteeDashboardService).getWidgets(),
+      baseURL: () => 'https://apim-master-api.team-apim.gravitee.dev/management/v2/organizations/DEFAULT/environments/DEFAULT',
+    },
   },
   {
     path: 'log-in',
@@ -232,9 +307,29 @@ export const routes: Routes = [
       },
     ],
   },
-  { path: 'log-out', component: LogOutComponent, canActivate: [redirectGuard, authGuard] },
+  {
+    path: 'user',
+    children: [
+      /**
+       * DO NOT CHANGE THESE PATHS!
+       * Registration routes must match Classic Portal paths: /user/registration/...
+       */
+      {
+        path: 'registration',
+        component: RegistrationComponent,
+        canActivate: [anonymousGuard],
+      },
+      {
+        path: 'registration/confirm/:token',
+        component: RegistrationConfirmationComponent,
+        canActivate: [anonymousGuard],
+      },
+    ],
+  },
+  { path: 'log-out', component: LogOutComponent, canActivate: [redirectGuard] },
   { path: '404', component: NotFoundComponent },
   { path: '503', component: ServiceUnavailableComponent },
+  { path: 'gravitee-md', component: GraviteeMarkdownComponent },
   {
     path: '**',
     component: NotFoundComponent,

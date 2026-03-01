@@ -46,8 +46,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -57,9 +56,8 @@ import org.springframework.web.filter.GenericFilterBean;
  * @author Azize Elamrani (azize at gravitee.io)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class TokenAuthenticationFilter extends GenericFilterBean {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(TokenAuthenticationFilter.class);
 
     public static final String AUTH_COOKIE_NAME = "Auth-Graviteeio-APIM";
     public static final String TOKEN_AUTH_SCHEMA = "bearer";
@@ -95,8 +93,7 @@ public class TokenAuthenticationFilter extends GenericFilterBean {
         String stringToken = req.getHeader(HttpHeaders.AUTHORIZATION);
 
         if (isEmpty(stringToken) && req.getCookies() != null) {
-            final Optional<Cookie> optionalStringToken = Arrays
-                .stream(req.getCookies())
+            final Optional<Cookie> optionalStringToken = Arrays.stream(req.getCookies())
                 .filter(cookie -> AUTH_COOKIE_NAME.equals(cookie.getName()))
                 .findAny();
             if (optionalStringToken.isPresent()) {
@@ -105,7 +102,7 @@ public class TokenAuthenticationFilter extends GenericFilterBean {
         }
 
         if (isEmpty(stringToken)) {
-            LOGGER.debug("Authorization header/cookie not found");
+            log.debug("Authorization header/cookie not found");
         } else {
             try {
                 if (stringToken.toLowerCase().contains(TOKEN_AUTH_SCHEMA)) {
@@ -113,8 +110,9 @@ public class TokenAuthenticationFilter extends GenericFilterBean {
                     if (tokenValue.contains(".")) {
                         final DecodedJWT jwt = jwtVerifier.verify(tokenValue);
 
-                        final Set<GrantedAuthority> authorities =
-                            this.authoritiesProvider.retrieveAuthorities(jwt.getClaim(Claims.SUBJECT).asString());
+                        final Set<GrantedAuthority> authorities = this.authoritiesProvider.retrieveAuthorities(
+                            jwt.getClaim(Claims.SUBJECT).asString()
+                        );
 
                         final UserDetails userDetails = new UserDetails(getStringValue(jwt.getSubject()), "", authorities);
                         userDetails.setEmail(jwt.getClaim(Claims.EMAIL).asString());
@@ -122,9 +120,9 @@ public class TokenAuthenticationFilter extends GenericFilterBean {
                         userDetails.setLastname(jwt.getClaim(Claims.LASTNAME).asString());
                         userDetails.setOrganizationId(jwt.getClaim(Claims.ORG).asString());
 
-                        SecurityContextHolder
-                            .getContext()
-                            .setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, authorities));
+                        SecurityContextHolder.getContext().setAuthentication(
+                            new UsernamePasswordAuthenticationToken(userDetails, null, authorities)
+                        );
                     } else if (tokenService != null && userService != null) {
                         final Token token = tokenService.findByToken(tokenValue);
                         final UserEntity user = userService.findById(GraviteeContext.getExecutionContext(), token.getReferenceId());
@@ -139,22 +137,22 @@ public class TokenAuthenticationFilter extends GenericFilterBean {
                         userDetails.setSourceId(token.getName());
                         userDetails.setOrganizationId(user.getOrganizationId());
 
-                        SecurityContextHolder
-                            .getContext()
-                            .setAuthentication(new UsernamePasswordAuthenticationToken(userDetails, null, authorities));
+                        SecurityContextHolder.getContext().setAuthentication(
+                            new UsernamePasswordAuthenticationToken(userDetails, null, authorities)
+                        );
                     }
                 } else {
-                    LOGGER.debug("Authorization schema not found");
+                    log.debug("Authorization schema not found");
                 }
             } catch (final Exception e) {
                 final String errorMessage = "Invalid token";
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.error(errorMessage, e);
+                if (log.isDebugEnabled()) {
+                    log.error(errorMessage, e);
                 } else {
                     if (e instanceof JWTVerificationException) {
-                        LOGGER.warn(errorMessage);
+                        log.warn(errorMessage);
                     } else {
-                        LOGGER.error(errorMessage);
+                        log.error(errorMessage);
                     }
                 }
                 res.addCookie(cookieGenerator.generate(TokenAuthenticationFilter.AUTH_COOKIE_NAME, null));

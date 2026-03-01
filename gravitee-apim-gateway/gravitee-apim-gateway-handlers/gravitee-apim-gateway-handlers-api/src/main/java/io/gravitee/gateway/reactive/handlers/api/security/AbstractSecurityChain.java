@@ -18,19 +18,25 @@ package io.gravitee.gateway.reactive.handlers.api.security;
 import static io.gravitee.common.http.HttpStatusCode.SERVICE_UNAVAILABLE_503;
 import static io.gravitee.common.http.HttpStatusCode.UNAUTHORIZED_401;
 import static io.gravitee.gateway.reactive.api.context.InternalContextAttributes.ATTR_INTERNAL_FLOW_STAGE;
+import static io.gravitee.gateway.reactive.api.context.InternalContextAttributes.ATTR_INTERNAL_SECURITY_DIAGNOSTIC;
 import static io.gravitee.gateway.reactive.api.context.InternalContextAttributes.ATTR_INTERNAL_SECURITY_SKIP;
 import static io.gravitee.gateway.reactive.api.context.InternalContextAttributes.ATTR_INTERNAL_SECURITY_TOKEN;
 import static io.reactivex.rxjava3.core.Completable.defer;
 
+import io.gravitee.gateway.reactive.api.ComponentType;
 import io.gravitee.gateway.reactive.api.ExecutionFailure;
 import io.gravitee.gateway.reactive.api.context.base.BaseExecutionContext;
+import io.gravitee.gateway.reactive.api.context.http.HttpPlainExecutionContext;
 import io.gravitee.gateway.reactive.api.policy.base.BaseSecurityPolicy;
+import io.gravitee.gateway.reactive.core.context.ComponentScope;
 import io.gravitee.gateway.reactive.handlers.api.security.plan.AbstractSecurityPlan;
+import io.gravitee.gateway.reactive.handlers.api.security.plan.HttpSecurityPlan;
+import io.gravitee.node.api.configuration.Configuration;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Single;
 import java.util.Objects;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * {@link AbstractSecurityChain} is a special chain dedicated to execute policy associated with plans.
@@ -41,9 +47,10 @@ import lombok.extern.slf4j.Slf4j;
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public abstract class AbstractSecurityChain<
-    P extends AbstractSecurityPlan<? extends BaseSecurityPolicy, C>, C extends BaseExecutionContext
+    P extends AbstractSecurityPlan<? extends BaseSecurityPolicy, C>,
+    C extends BaseExecutionContext
 > {
 
     protected static final String PLAN_UNRESOLVABLE = "GATEWAY_PLAN_UNRESOLVABLE";
@@ -51,10 +58,11 @@ public abstract class AbstractSecurityChain<
     protected static final String UNAUTHORIZED_MESSAGE = "Unauthorized";
     protected static final String TEMPORARILY_UNAVAILABLE_MESSAGE = "Temporarily Unavailable";
     protected static final String ATTR_INTERNAL_PLAN_RESOLUTION_FAILURE = "httpSecurityChain.planResolutionFailure";
+    protected static final String SECURITY_VERBOSE_401 = "api.security.verbose401";
 
     protected static final Single<Boolean> TRUE = Single.just(true);
     protected static final Single<Boolean> FALSE = Single.just(false);
-    private final Flowable<P> chain;
+    protected final Flowable<P> chain;
 
     public AbstractSecurityChain(Flowable<P> securityPlans) {
         this.chain = securityPlans;
@@ -78,6 +86,11 @@ public abstract class AbstractSecurityChain<
     public Completable execute(C ctx) {
         return defer(() -> {
             if (!Objects.equals(true, ctx.getInternalAttribute(ATTR_INTERNAL_SECURITY_SKIP))) {
+                ComponentScope.push(ctx, ComponentType.SYSTEM, "security");
+                Configuration configuration = ctx.getComponent(Configuration.class);
+                Boolean verbose401 = configuration.getProperty(SECURITY_VERBOSE_401, Boolean.class, false);
+                SecurityChainDiagnostic securityChainDiagnostic = new SecurityChainDiagnostic(verbose401);
+                ctx.setInternalAttribute(ATTR_INTERNAL_SECURITY_DIAGNOSTIC, securityChainDiagnostic);
                 return chain
                     .concatMapSingle(securityPlan -> continueChain(ctx, securityPlan))
                     .any(Boolean::booleanValue)
@@ -88,29 +101,47 @@ public abstract class AbstractSecurityChain<
                                 return sendError(
                                     ctx,
                                     new ExecutionFailure(SERVICE_UNAVAILABLE_503)
+                                        .cause(throwable)
                                         .key(PLAN_RESOLUTION_FAILURE)
                                         .message(TEMPORARILY_UNAVAILABLE_MESSAGE)
                                 );
                             }
-                            return sendError(
-                                ctx,
-                                new ExecutionFailure(UNAUTHORIZED_401).key(PLAN_UNRESOLVABLE).message(UNAUTHORIZED_MESSAGE)
-                            );
+
+                            return chain
+                                .filter(securityPlan -> securityPlan instanceof HttpSecurityPlan)
+                                .flatMapSingle(securityPlan -> {
+                                    if (ctx instanceof HttpPlainExecutionContext httpCtx) {
+                                        return ((HttpSecurityPlan) securityPlan).wwwAuthenticate(httpCtx);
+                                    }
+                                    return Single.just(false);
+                                })
+                                .any(Boolean::booleanValue)
+                                .flatMapCompletable(wwwAuthenticate ->
+                                    sendError(
+                                        ctx,
+                                        new ExecutionFailure(UNAUTHORIZED_401)
+                                            .key(PLAN_UNRESOLVABLE)
+                                            .message(securityChainDiagnostic.message())
+                                            .cause(securityChainDiagnostic.cause())
+                                    )
+                                );
                         }
                         return Completable.complete();
                     })
                     .doOnSubscribe(disposable -> {
-                        log.debug("Executing security chain");
+                        ctx.withLogger(log).debug("Executing security chain");
                         ctx.putInternalAttribute(ATTR_INTERNAL_FLOW_STAGE, "security");
                     })
                     .doOnTerminate(() -> {
+                        ComponentScope.remove(ctx, ComponentType.SYSTEM, "security");
+                        ctx.removeInternalAttribute(ATTR_INTERNAL_SECURITY_DIAGNOSTIC);
                         ctx.removeInternalAttribute(ATTR_INTERNAL_FLOW_STAGE);
                         ctx.removeInternalAttribute(ATTR_INTERNAL_PLAN_RESOLUTION_FAILURE);
                         ctx.removeInternalAttribute(ATTR_INTERNAL_SECURITY_TOKEN);
                     });
             }
 
-            log.debug("Skipping security chain because it has been explicitly required");
+            ctx.withLogger(log).debug("Skipping security chain because it has been explicitly required");
             return Completable.complete();
         });
     }
@@ -119,7 +150,9 @@ public abstract class AbstractSecurityChain<
         return securityPlan
             .canExecute(ctx)
             .onErrorResumeNext(throwable -> {
-                log.error("An error occurred while checking if security plan {} can be executed", securityPlan.id(), throwable);
+                ctx
+                    .withLogger(log)
+                    .error("An error occurred while checking if security plan {} can be executed", securityPlan.id(), throwable);
                 ctx.setInternalAttribute(ATTR_INTERNAL_PLAN_RESOLUTION_FAILURE, throwable);
                 return FALSE;
             })

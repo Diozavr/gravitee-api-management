@@ -25,13 +25,14 @@ import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.PlanRepository;
 import io.gravitee.rest.api.service.exceptions.PlanNotFoundException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class PlanCrudServiceImpl implements PlanCrudService {
 
     private final PlanRepository planRepository;
@@ -49,7 +50,7 @@ public class PlanCrudServiceImpl implements PlanCrudService {
                 .map(PlanAdapter.INSTANCE::fromRepository)
                 .orElseThrow(() -> new PlanNotFoundException(planId));
         } catch (TechnicalException ex) {
-            throw new TechnicalDomainException(String.format("An error occurs while trying to get a plan by id: %s", planId), ex);
+            throw new TechnicalDomainException(String.format("An error occurred while trying to get a plan by id: %s", planId), ex);
         }
     }
 
@@ -59,18 +60,70 @@ public class PlanCrudServiceImpl implements PlanCrudService {
             log.debug("Find a plan by id : {}", planId);
             return planRepository.findById(planId).map(PlanAdapter.INSTANCE::fromRepository);
         } catch (TechnicalException ex) {
-            throw new TechnicalDomainException(String.format("An error occurs while trying to find a plan by id: %s", planId), ex);
+            throw new TechnicalDomainException(String.format("An error occurred while trying to find a plan by id: %s", planId), ex);
+        }
+    }
+
+    @Override
+    public List<Plan> findByIds(List<String> planIds) {
+        log.debug("Find all plan by ids : {}", planIds);
+
+        try {
+            return planRepository.findByIdIn(planIds).stream().map(PlanAdapter.INSTANCE::fromRepository).toList();
+        } catch (TechnicalException e) {
+            throw new TechnicalDomainException(String.format("An error occurred while trying to find all plan by ids %s", planIds), e);
+        }
+    }
+
+    @Override
+    public void updateCrossIds(List<Plan> plans) {
+        log.debug("Update plans cross IDs : {}", plans);
+        try {
+            planRepository.updateCrossIds(plans.stream().map(PlanAdapter.INSTANCE::toRepository).toList());
+        } catch (TechnicalException e) {
+            throw new TechnicalDomainException(String.format("An error occurred while trying to update plans cross IDs %s", plans), e);
+        }
+    }
+
+    @Override
+    public Optional<Plan> findByPlanIdAndReferenceIdAndReferenceType(String planId, String referenceId, String referenceType) {
+        try {
+            log.debug("Get plan by id : {}", planId);
+            return planRepository
+                .findByIdAndReferenceIdAndReferenceType(
+                    planId,
+                    referenceId,
+                    io.gravitee.repository.management.model.Plan.PlanReferenceType.valueOf(referenceType)
+                )
+                .map(PlanAdapter.INSTANCE::fromRepository);
+        } catch (TechnicalException ex) {
+            throw new TechnicalDomainException(String.format("An error occurred while trying to get a plan by id: %s", planId), ex);
+        }
+    }
+
+    @Override
+    public Collection<Plan> findByReferenceIdAndReferenceType(String referenceId, String referenceType) {
+        try {
+            log.debug("Find a plan by reference id : {}", referenceId);
+            return stream(
+                planRepository.findByReferenceIdAndReferenceType(
+                    referenceId,
+                    io.gravitee.repository.management.model.Plan.PlanReferenceType.valueOf(referenceType)
+                )
+            )
+                .map(PlanAdapter.INSTANCE::fromRepository)
+                .toList();
+        } catch (TechnicalException ex) {
+            throw new TechnicalDomainException(
+                String.format("An error occurred while trying to find a plan by reference id: %s", referenceId),
+                ex
+            );
         }
     }
 
     @Override
     public Collection<Plan> findByApiId(String apiId) {
-        try {
-            log.debug("Find a plan by API id : {}", apiId);
-            return stream(planRepository.findByApi(apiId)).map(PlanAdapter.INSTANCE::fromRepository).toList();
-        } catch (TechnicalException ex) {
-            throw new TechnicalDomainException(String.format("An error occurs while trying to find a plan by id: %s", apiId), ex);
-        }
+        return findByReferenceIdAndReferenceType(apiId, io.gravitee.repository.management.model.Plan.PlanReferenceType.API.name());
     }
 
     @Override
@@ -79,7 +132,7 @@ public class PlanCrudServiceImpl implements PlanCrudService {
             var result = planRepository.create(PlanAdapter.INSTANCE.toRepository(plan));
             return PlanAdapter.INSTANCE.fromRepository(result);
         } catch (TechnicalException e) {
-            throw new TechnicalDomainException("An error occurs while trying to create the plan: " + plan.getId(), e);
+            throw new TechnicalDomainException("An error occurred while trying to create the plan: " + plan.getId(), e);
         }
     }
 
@@ -89,7 +142,7 @@ public class PlanCrudServiceImpl implements PlanCrudService {
             var result = planRepository.update(PlanAdapter.INSTANCE.toRepository(plan));
             return PlanAdapter.INSTANCE.fromRepository(result);
         } catch (TechnicalException e) {
-            throw new TechnicalDomainException("An error occurs while trying to update the plan: " + plan.getId(), e);
+            throw new TechnicalDomainException("An error occurred while trying to update the plan: " + plan.getId(), e);
         }
     }
 
@@ -98,7 +151,7 @@ public class PlanCrudServiceImpl implements PlanCrudService {
         try {
             planRepository.delete(planId);
         } catch (TechnicalException e) {
-            throw new TechnicalDomainException("An error occurs while trying to delete the plan: " + planId, e);
+            throw new TechnicalDomainException("An error occurred while trying to delete the plan: " + planId, e);
         }
     }
 }

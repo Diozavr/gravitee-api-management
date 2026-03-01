@@ -32,14 +32,14 @@ import io.gravitee.definition.model.v4.ApiType;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.util.Map;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Rémi SULTAN (remi.sultan at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 @UseCase
 public class BuildSpecGenPageResponseUseCase {
@@ -62,8 +62,7 @@ public class BuildSpecGenPageResponseUseCase {
 
     private static Page buildPage(ApiSpecGen api, String rawSpec) {
         String now = now().format(ofPattern(DATE_FORMAT_PATTERN));
-        return Page
-            .builder()
+        return Page.builder()
             .referenceId(api.id())
             .referenceType(API)
             .name(api.name() + " by Newt - " + now)

@@ -28,6 +28,7 @@ import io.gravitee.apim.core.plan.model.PlanWithFlows;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.v4.flow.AbstractFlow;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.function.Function;
@@ -48,17 +49,17 @@ public class CreatePlanUseCase {
 
         var plan = input.toPlan.apply(api);
 
-        if (isMtls(api, plan) && api.getApiDefinitionHttpV4() != null && api.getApiDefinitionHttpV4().isTcpProxy()) {
+        if (isMtls(api, plan) && api.isTcpProxy()) {
             throw new PlanInvalidException("Cannot create mTLS plan for TCP API");
         }
 
         plan.setEnvironmentId(api.getEnvironmentId());
-        plan.setApiId(input.apiId);
-        plan.setType(Plan.PlanType.API);
         plan.setPlanStatus(PlanStatus.STAGING);
         if (plan.getPlanMode() == null) {
             plan.setPlanMode(io.gravitee.definition.model.v4.plan.PlanMode.STANDARD);
         }
+        plan.setReferenceType(GenericPlanEntity.ReferenceType.API);
+        plan.setReferenceId(input.apiId);
 
         var flows = input.flowProvider.apply(api);
 

@@ -21,6 +21,7 @@ import io.gravitee.gateway.reactive.api.policy.SecurityToken;
 import io.gravitee.gateway.reactive.api.policy.http.HttpSecurityPolicy;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
+import io.reactivex.rxjava3.core.Single;
 import jakarta.annotation.Nonnull;
 
 /**
@@ -38,8 +39,8 @@ import jakarta.annotation.Nonnull;
  */
 public class HttpSecurityPlan extends AbstractSecurityPlan<HttpSecurityPolicy, HttpPlainExecutionContext> {
 
-    public HttpSecurityPlan(@Nonnull final String planId, @Nonnull final HttpSecurityPolicy policy, final String selectionRule) {
-        super(planId, policy, selectionRule);
+    public HttpSecurityPlan(@Nonnull final SecurityPlanContext planContext, @Nonnull final HttpSecurityPolicy policy) {
+        super(planContext, policy);
     }
 
     @Override
@@ -66,5 +67,13 @@ public class HttpSecurityPlan extends AbstractSecurityPlan<HttpSecurityPolicy, H
             return "{" + selectionRule + "}";
         }
         return selectionRule;
+    }
+
+    public Single<Boolean> wwwAuthenticate(final HttpPlainExecutionContext ctx) {
+        return policy.wwwAuthenticate(ctx);
+    }
+
+    public Single<Boolean> onWellKnown(HttpPlainExecutionContext ctx) {
+        return policy.onWellKnown(ctx);
     }
 }

@@ -21,10 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.RoleRepository;
 import io.gravitee.repository.management.model.Role;
 import io.gravitee.repository.management.model.RoleReferenceType;
@@ -34,14 +35,18 @@ import io.gravitee.rest.api.service.AuditService;
 import io.gravitee.rest.api.service.ConfigService;
 import io.gravitee.rest.api.service.MembershipService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
+import io.gravitee.rest.api.service.common.GraviteeContext;
 import io.gravitee.rest.api.service.exceptions.DefaultRoleNotFoundException;
 import io.gravitee.rest.api.service.exceptions.RoleDeletionForbiddenException;
 import io.gravitee.rest.api.service.exceptions.RoleNotFoundException;
+import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -89,8 +94,9 @@ class RoleServiceImplTest {
         @SneakyThrows
         void should_give_the_role() {
             // Given
-            when(roleRepository.findAllByReferenceIdAndReferenceType("organization", RoleReferenceType.ORGANIZATION))
-                .thenReturn(Set.of(Role.builder().name("Groudon").build()));
+            when(roleRepository.findAllByReferenceIdAndReferenceType("organization", RoleReferenceType.ORGANIZATION)).thenReturn(
+                Set.of(Role.builder().name("Groudon").build())
+            );
 
             // When
             List<RoleEntity> roles = sut.findAllByOrganization("organization");
@@ -123,10 +129,9 @@ class RoleServiceImplTest {
         void forbidden_delete_default_or_system_role(boolean system, boolean def) {
             // Given
             ExecutionContext ctx = new ExecutionContext("orgId");
-            when(roleRepository.findById(anyString()))
-                .thenReturn(
-                    Optional.of(Role.builder().name("Groudon").defaultRole(def).system(system).scope(RoleScope.INTEGRATION).build())
-                );
+            when(roleRepository.findById(anyString())).thenReturn(
+                Optional.of(Role.builder().name("Groudon").defaultRole(def).system(system).scope(RoleScope.INTEGRATION).build())
+            );
 
             // When
             Throwable throwable = catchThrowable(() -> sut.delete(ctx, "roleId"));
@@ -141,10 +146,12 @@ class RoleServiceImplTest {
             // Given
             RoleScope scope = RoleScope.INTEGRATION;
             ExecutionContext ctx = new ExecutionContext("orgId");
-            when(roleRepository.findById(anyString()))
-                .thenReturn(Optional.of(Role.builder().name("Groudon").defaultRole(false).system(false).scope(scope).build()));
-            when(roleRepository.findByScopeAndReferenceIdAndReferenceType(scope, "orgId", RoleReferenceType.ORGANIZATION))
-                .thenReturn(Set.of());
+            when(roleRepository.findById(anyString())).thenReturn(
+                Optional.of(Role.builder().name("Groudon").defaultRole(false).system(false).scope(scope).build())
+            );
+            when(roleRepository.findByScopeAndReferenceIdAndReferenceType(scope, "orgId", RoleReferenceType.ORGANIZATION)).thenReturn(
+                Set.of()
+            );
 
             // When
             Throwable throwable = catchThrowable(() -> sut.delete(ctx, "roleId"));
@@ -160,10 +167,12 @@ class RoleServiceImplTest {
             String roleId = "Dimoret";
             RoleScope scope = RoleScope.INTEGRATION;
             ExecutionContext ctx = new ExecutionContext("orgId");
-            when(roleRepository.findById(anyString()))
-                .thenReturn(Optional.of(Role.builder().name("Groudon").defaultRole(false).system(false).scope(scope).build()));
-            when(roleRepository.findByScopeAndReferenceIdAndReferenceType(scope, "orgId", RoleReferenceType.ORGANIZATION))
-                .thenReturn(Set.of(Role.builder().id("default role").defaultRole(true).build()));
+            when(roleRepository.findById(anyString())).thenReturn(
+                Optional.of(Role.builder().name("Groudon").defaultRole(false).system(false).scope(scope).build())
+            );
+            when(roleRepository.findByScopeAndReferenceIdAndReferenceType(scope, "orgId", RoleReferenceType.ORGANIZATION)).thenReturn(
+                Set.of(Role.builder().id("default role").defaultRole(true).build())
+            );
 
             // When
             sut.delete(ctx, roleId);
@@ -174,16 +183,14 @@ class RoleServiceImplTest {
 
             verify(roleRepository).delete(roleId);
 
-            verify(auditService)
-                .createOrganizationAuditLog(
-                    any(),
-                    eq("orgId"),
-                    eq(Map.of(ROLE, scope + ":" + "Groudon")),
-                    eq(ROLE_DELETED),
-                    any(),
-                    any(),
-                    any()
-                );
+            verify(auditService).createOrganizationAuditLog(
+                any(),
+                argThat(
+                    auditLogData ->
+                        auditLogData.getProperties().equals(Map.of(ROLE, scope + ":" + "Groudon")) &&
+                        auditLogData.getEvent().equals(ROLE_DELETED)
+                )
+            );
         }
     }
 
@@ -195,14 +202,13 @@ class RoleServiceImplTest {
         void success() {
             // Given
             RoleScope scope = RoleScope.INTEGRATION;
-            when(roleRepository.findByScopeAndReferenceIdAndReferenceType(scope, "orgId", RoleReferenceType.ORGANIZATION))
-                .thenReturn(
-                    Set.of(
-                        Role.builder().id("Necrozma").name("Necrozma").build(),
-                        Role.builder().id("Feurisson").name("Feurisson").build(),
-                        Role.builder().id("Kangourex").name("Kangourex").build()
-                    )
-                );
+            when(roleRepository.findByScopeAndReferenceIdAndReferenceType(scope, "orgId", RoleReferenceType.ORGANIZATION)).thenReturn(
+                Set.of(
+                    Role.builder().id("Necrozma").name("Necrozma").build(),
+                    Role.builder().id("Feurisson").name("Feurisson").build(),
+                    Role.builder().id("Kangourex").name("Kangourex").build()
+                )
+            );
 
             // When
             List<RoleEntity> roles = sut.findByScope(io.gravitee.rest.api.model.permissions.RoleScope.INTEGRATION, "orgId");
@@ -222,8 +228,9 @@ class RoleServiceImplTest {
             // Given
             String roleId = "roleId";
             String organizationId = "orgId";
-            when(roleRepository.findByIdAndReferenceIdAndReferenceType(roleId, organizationId, RoleReferenceType.ORGANIZATION))
-                .thenReturn(Optional.of(Role.builder().name("Hyporoi").build()));
+            when(roleRepository.findByIdAndReferenceIdAndReferenceType(roleId, organizationId, RoleReferenceType.ORGANIZATION)).thenReturn(
+                Optional.of(Role.builder().name("Hyporoi").build())
+            );
 
             // When
             Optional<RoleEntity> roles = sut.findByIdAndOrganizationId(roleId, organizationId);
@@ -238,8 +245,9 @@ class RoleServiceImplTest {
             // Given
             String roleId = "roleId";
             String organizationId = "orgId";
-            when(roleRepository.findByIdAndReferenceIdAndReferenceType(roleId, organizationId, RoleReferenceType.ORGANIZATION))
-                .thenReturn(Optional.empty());
+            when(roleRepository.findByIdAndReferenceIdAndReferenceType(roleId, organizationId, RoleReferenceType.ORGANIZATION)).thenReturn(
+                Optional.empty()
+            );
 
             // When
             Optional<RoleEntity> roles = sut.findByIdAndOrganizationId(roleId, organizationId);
@@ -266,8 +274,7 @@ class RoleServiceImplTest {
                     organizationId,
                     RoleReferenceType.ORGANIZATION
                 )
-            )
-                .thenReturn(Optional.of(Role.builder().name("Hyporoi").build()));
+            ).thenReturn(Optional.of(Role.builder().name("Hyporoi").build()));
 
             // When
             Optional<RoleEntity> roles = sut.findByScopeAndName(scope, name, organizationId);
@@ -290,14 +297,129 @@ class RoleServiceImplTest {
                     organizationId,
                     RoleReferenceType.ORGANIZATION
                 )
-            )
-                .thenReturn(Optional.empty());
+            ).thenReturn(Optional.empty());
 
             // When
             Optional<RoleEntity> roles = sut.findByScopeAndName(scope, name, organizationId);
 
             // Then
             assertThat(roles).isNotPresent();
+        }
+    }
+
+    @Nested
+    class FindByIds {
+
+        @BeforeEach
+        void setUp() {
+            GraviteeContext.getCurrentRoles().clear();
+        }
+
+        @AfterEach
+        void tearDown() {
+            GraviteeContext.getCurrentRoles().clear();
+        }
+
+        @Test
+        void should_return_empty_map_when_roleIds_is_null() {
+            // When
+            Map<String, RoleEntity> result = sut.findByIds(null);
+
+            // Then
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        void should_return_empty_map_when_roleIds_is_empty() {
+            // When
+            Map<String, RoleEntity> result = sut.findByIds(Set.of());
+
+            // Then
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        void should_return_roles_from_cache_when_all_present() {
+            // Given
+            RoleEntity cachedRole1 = RoleEntity.builder().id("role1").name("Role1").build();
+            RoleEntity cachedRole2 = RoleEntity.builder().id("role2").name("Role2").build();
+            GraviteeContext.getCurrentRoles().put("role1", cachedRole1);
+            GraviteeContext.getCurrentRoles().put("role2", cachedRole2);
+
+            // When
+            Map<String, RoleEntity> result = sut.findByIds(Set.of("role1", "role2"));
+
+            // Then
+            assertThat(result).hasSize(2);
+            assertThat(result).containsEntry("role1", cachedRole1);
+            assertThat(result).containsEntry("role2", cachedRole2);
+        }
+
+        @Test
+        @SneakyThrows
+        void should_fetch_missing_roles_from_repository() {
+            // Given
+            RoleEntity cachedRole = RoleEntity.builder().id("role1").name("CachedRole").build();
+            GraviteeContext.getCurrentRoles().put("role1", cachedRole);
+
+            Role repoRole = Role.builder().id("role2").name("RepoRole").build();
+            when(roleRepository.findAllByIdIn(Set.of("role2"))).thenReturn(Set.of(repoRole));
+
+            // When
+            Map<String, RoleEntity> result = sut.findByIds(Set.of("role1", "role2"));
+
+            // Then
+            assertThat(result).hasSize(2);
+            assertThat(result.get("role1").getName()).isEqualTo("CachedRole");
+            assertThat(result.get("role2").getName()).isEqualTo("RepoRole");
+            // Verify role2 was added to cache
+            assertThat(GraviteeContext.getCurrentRoles()).containsKey("role2");
+        }
+
+        @Test
+        @SneakyThrows
+        void should_fetch_all_roles_from_repository_when_cache_empty() {
+            // Given
+            Role role1 = Role.builder().id("role1").name("Role1").build();
+            Role role2 = Role.builder().id("role2").name("Role2").build();
+            when(roleRepository.findAllByIdIn(Set.of("role1", "role2"))).thenReturn(Set.of(role1, role2));
+
+            // When
+            Map<String, RoleEntity> result = sut.findByIds(Set.of("role1", "role2"));
+
+            // Then
+            assertThat(result).hasSize(2);
+            assertThat(result.get("role1").getName()).isEqualTo("Role1");
+            assertThat(result.get("role2").getName()).isEqualTo("Role2");
+        }
+
+        @Test
+        @SneakyThrows
+        void should_throw_when_repository_fails() {
+            // Given
+            when(roleRepository.findAllByIdIn(any())).thenThrow(new TechnicalException("DB error"));
+
+            // When
+            Throwable throwable = catchThrowable(() -> sut.findByIds(Set.of("role1")));
+
+            // Then
+            assertThat(throwable).isInstanceOf(TechnicalManagementException.class);
+        }
+
+        @Test
+        @SneakyThrows
+        void should_return_only_found_roles_when_some_not_exist() {
+            // Given
+            Role role1 = Role.builder().id("role1").name("Role1").build();
+            when(roleRepository.findAllByIdIn(Set.of("role1", "role2"))).thenReturn(Set.of(role1));
+
+            // When
+            Map<String, RoleEntity> result = sut.findByIds(Set.of("role1", "role2"));
+
+            // Then
+            assertThat(result).hasSize(1);
+            assertThat(result).containsKey("role1");
+            assertThat(result).doesNotContainKey("role2");
         }
     }
 }

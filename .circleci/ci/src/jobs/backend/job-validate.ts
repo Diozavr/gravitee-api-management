@@ -36,11 +36,11 @@ export class ValidateJob {
       new reusable.ReusedCommand(restoreMavenJobCacheCmd, { jobName: ValidateJob.jobName }),
       new commands.Run({
         name: 'Validate project',
-        command: `mvn -s ${config.maven.settingsFile} validate --no-transfer-progress -Pall-modules,integration-tests-modules -T 2C`,
+        command: `mvn -s ${config.maven.settingsFile} validate -Dgravitee.archrules.skip=true --no-transfer-progress -Pall-modules,integration-tests-modules -T 2C`,
       }),
       new reusable.ReusedCommand(notifyOnFailureCmd),
       new reusable.ReusedCommand(saveMavenJobCacheCmd, { jobName: ValidateJob.jobName }),
     ];
-    return new Job(ValidateJob.jobName, OpenJdkExecutor.create('small'), steps);
+    return new Job(ValidateJob.jobName, OpenJdkExecutor.create('medium'), steps);
   }
 }

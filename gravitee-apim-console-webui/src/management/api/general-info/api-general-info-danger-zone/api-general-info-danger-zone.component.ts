@@ -49,6 +49,11 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
     context: UTMTags.GENERAL_DANGER_ZONE,
   };
 
+  private llmLicenseOptions = {
+    feature: ApimFeature.APIM_LLM_PROXY_REACTOR,
+    context: UTMTags.GENERAL_DANGER_ZONE,
+  };
+
   @Input()
   public api: Api;
 
@@ -69,6 +74,7 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
     canDelete: false,
   };
   public isReadOnly = false;
+  public canDetach = false;
   public license$: Observable<License>;
   public isOEM$: Observable<boolean>;
   public shouldUpgrade: boolean;
@@ -87,7 +93,7 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
 
   ngOnInit(): void {
     this.isReadOnly = this.api.definitionVersion === 'V1' || this.api.originContext?.origin === 'KUBERNETES';
-
+    this.canDetach = this.api.originContext?.origin === 'KUBERNETES';
     this.license$ = this.licenseService.getLicense$();
     this.isOEM$ = this.licenseService.isOEM$();
 
@@ -95,7 +101,7 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
     if (this.api.definitionVersion !== 'V4' || (this.api as ApiV4).type === 'PROXY') {
       this.shouldUpgrade = false;
     } else {
-      this.apiService.verifyDeploy(this.api.id).subscribe((resp) => {
+      this.apiService.verifyDeploy(this.api.id).subscribe(resp => {
         this.shouldUpgrade = resp?.ok !== true;
       });
     }
@@ -154,7 +160,7 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
       })
       .afterClosed()
       .pipe(
-        filter((confirm) => confirm === true),
+        filter(confirm => confirm === true),
         switchMap(() => this.apiReviewV2Service.ask(this.api.id)),
         catchError(({ error }) => {
           this.snackBarService.error(error.message);
@@ -181,7 +187,7 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
       })
       .afterClosed()
       .pipe(
-        filter((confirm) => confirm === true),
+        filter(confirm => confirm === true),
         switchMap(() => (state === 'START' ? this.apiService.start(this.api.id) : this.apiService.stop(this.api.id))),
         catchError(({ error }) => {
           this.snackBarService.error(error.message);
@@ -212,9 +218,9 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
       })
       .afterClosed()
       .pipe(
-        filter((confirm) => confirm === true),
+        filter(confirm => confirm === true),
         switchMap(() => this.apiService.get(this.api.id)),
-        switchMap((api) => {
+        switchMap(api => {
           if (api.definitionVersion === 'V2' || api.definitionVersion === 'V4' || api.definitionVersion === 'FEDERATED') {
             const apiToUpdate: UpdateApi = { ...api, lifecycleState: lifecycleState };
             return this.apiService.update(this.api.id, apiToUpdate);
@@ -251,9 +257,9 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
       })
       .afterClosed()
       .pipe(
-        filter((confirm) => confirm === true),
+        filter(confirm => confirm === true),
         switchMap(() => this.apiService.get(this.api.id)),
-        switchMap((api) => {
+        switchMap(api => {
           if (api.definitionVersion === 'V2' || api.definitionVersion === 'V4' || api.definitionVersion === 'FEDERATED') {
             return this.apiService.update(api.id, {
               ...api,
@@ -293,13 +299,44 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
       })
       .afterClosed()
       .pipe(
-        filter((confirm) => confirm === true),
+        filter(confirm => confirm === true),
         switchMap(() => this.apiService.delete(this.api.id, shouldClosePlans)),
         catchError(({ error }) => {
           this.snackBarService.error(error.message);
           return EMPTY;
         }),
         map(() => this.snackBarService.success(`The API has been deleted.`)),
+        takeUntil(this.unsubscribe$),
+      )
+      .subscribe(() => {
+        this.router.navigate(['..'], { relativeTo: this.activatedRoute });
+      });
+  }
+
+  detach() {
+    this.matDialog
+      .open<GioConfirmAndValidateDialogComponent, GioConfirmAndValidateDialogData>(GioConfirmAndValidateDialogComponent, {
+        width: '500px',
+        data: {
+          title: `Detach API`,
+          content: `Are you sure you want to detach the API from its automation source?`,
+          confirmButton: `Yes, detach it`,
+          validationMessage: `Please, type in the name of the api <code>${this.api.name}</code> to confirm.`,
+          validationValue: this.api.name,
+          warning: `Any update made while the API was detached will be lost when the API is re-attached to the automation agent.`,
+        },
+        role: 'alertdialog',
+        id: 'apiDetachDialog',
+      })
+      .afterClosed()
+      .pipe(
+        filter(confirm => confirm === true),
+        switchMap(() => this.apiService.detach(this.api.id)),
+        catchError(({ error }) => {
+          this.snackBarService.error(error.message);
+          return EMPTY;
+        }),
+        map(() => this.snackBarService.success(`The API has been detached from its automation source.`)),
         takeUntil(this.unsubscribe$),
       )
       .subscribe(() => {
@@ -318,6 +355,10 @@ export class ApiGeneralInfoDangerZoneComponent implements OnChanges, OnDestroy, 
   }
 
   public onRequestUpgrade() {
-    this.licenseService.openDialog(this.licenseOptions);
+    if ((this.api as ApiV4).type === 'LLM_PROXY') {
+      this.licenseService.openDialog(this.llmLicenseOptions);
+    } else {
+      this.licenseService.openDialog(this.licenseOptions);
+    }
   }
 }

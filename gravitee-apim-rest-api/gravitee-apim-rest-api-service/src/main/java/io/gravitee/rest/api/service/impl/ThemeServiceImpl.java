@@ -16,7 +16,10 @@
 package io.gravitee.rest.api.service.impl;
 
 import static io.gravitee.repository.management.model.Audit.AuditProperties.THEME;
-import static io.gravitee.repository.management.model.Theme.AuditEvent.*;
+import static io.gravitee.repository.management.model.Theme.AuditEvent.THEME_CREATED;
+import static io.gravitee.repository.management.model.Theme.AuditEvent.THEME_DELETED;
+import static io.gravitee.repository.management.model.Theme.AuditEvent.THEME_RESET;
+import static io.gravitee.repository.management.model.Theme.AuditEvent.THEME_UPDATED;
 import static io.gravitee.repository.management.model.ThemeReferenceType.ENVIRONMENT;
 import static java.nio.charset.Charset.defaultCharset;
 import static java.util.Comparator.comparing;
@@ -50,11 +53,16 @@ import jakarta.xml.bind.DatatypeConverter;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.*;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.CustomLog;
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -64,10 +72,10 @@ import org.springframework.stereotype.Component;
  * @author Guillaume CUSNIEUX (azize at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class ThemeServiceImpl extends AbstractService implements ThemeService {
 
-    private final Logger LOGGER = LoggerFactory.getLogger(ThemeServiceImpl.class);
     private static final ThemeDefinitionMapper MAPPER = new ThemeDefinitionMapper();
     private static final String DEFAULT_THEME_PATH = "/definition.json";
 
@@ -84,7 +92,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
     @Override
     public Set<GenericThemeEntity> findAllByType(final ExecutionContext executionContext, io.gravitee.rest.api.model.theme.ThemeType type) {
         try {
-            LOGGER.debug("Find all themes by reference: " + executionContext.getEnvironmentId());
+            log.debug("Find all themes by reference: " + executionContext.getEnvironmentId());
             return themeRepository
                 .findByReferenceIdAndReferenceTypeAndType(
                     executionContext.getEnvironmentId(),
@@ -95,7 +103,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
                 .map(this::convert)
                 .collect(Collectors.toSet());
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to find all themes", ex);
+            log.error("An error occurs while trying to find all themes", ex);
             throw new TechnicalManagementException("An error occurs while trying to find all themes", ex);
         }
     }
@@ -107,7 +115,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
 
     private Theme findByIdWithoutConvert(final ExecutionContext executionContext, String themeId) {
         try {
-            LOGGER.debug("Find theme by ID: {}", themeId);
+            log.debug("Find theme by ID: {}", themeId);
             Optional<Theme> optTheme = themeRepository.findById(themeId);
 
             if (!optTheme.isPresent()) {
@@ -116,14 +124,14 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
 
             Theme theme = optTheme.get();
             if (!theme.getReferenceId().equals(executionContext.getEnvironmentId())) {
-                LOGGER.warn(
+                log.warn(
                     "Theme is not in current environment " + executionContext.getEnvironmentId() + " actual:" + theme.getReferenceId()
                 );
                 throw new ThemeNotFoundException(themeId);
             }
             return theme;
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to find theme by ID", ex);
+            log.error("An error occurs while trying to find theme by ID", ex);
             throw new TechnicalManagementException("An error occurs while trying to find theme by ID", ex);
         }
     }
@@ -147,17 +155,19 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
 
             auditService.createAuditLog(
                 executionContext,
-                Collections.singletonMap(THEME, theme.getId()),
-                THEME_CREATED,
-                theme.getCreatedAt(),
-                null,
-                theme
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.singletonMap(THEME, theme.getId()))
+                    .event(THEME_CREATED)
+                    .createdAt(theme.getCreatedAt())
+                    .oldValue(null)
+                    .newValue(theme)
+                    .build()
             );
 
             return convertToPortalThemeEntity(theme);
         } catch (TechnicalException ex) {
             final String error = "An error occurred while trying to create theme " + themeEntity;
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalManagementException(error, ex);
         }
     }
@@ -184,7 +194,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
                 final Theme theme = new Theme(themeOptional.get());
 
                 if (!theme.getReferenceId().equals(executionContext.getEnvironmentId())) {
-                    LOGGER.warn(
+                    log.warn(
                         "Theme is not in current environment " + executionContext.getEnvironmentId() + " actual:" + theme.getReferenceId()
                     );
                     throw new ThemeNotFoundException(theme.getId());
@@ -229,11 +239,13 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
                 final ThemeEntity savedTheme = convertToPortalThemeEntity(themeRepository.update(theme));
                 auditService.createAuditLog(
                     executionContext,
-                    Collections.singletonMap(THEME, theme.getId()),
-                    THEME_UPDATED,
-                    new Date(),
-                    themeOptional.get(),
-                    theme
+                    AuditService.AuditLogData.builder()
+                        .properties(Collections.singletonMap(THEME, theme.getId()))
+                        .event(THEME_UPDATED)
+                        .createdAt(new Date())
+                        .oldValue(themeOptional.get())
+                        .newValue(theme)
+                        .build()
                 );
                 return savedTheme;
             } else {
@@ -249,7 +261,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
             }
         } catch (TechnicalException | JsonProcessingException ex) {
             final String error = "An error occurred while trying to update theme " + updateThemeEntity;
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalManagementException(error, ex);
         }
     }
@@ -259,24 +271,27 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
         try {
             Optional<Theme> themeOptional = themeRepository
                 .findById(themeId)
-                .filter(t ->
-                    ENVIRONMENT.name().equalsIgnoreCase(t.getReferenceType()) &&
-                    t.getReferenceId().equalsIgnoreCase(executionContext.getEnvironmentId())
+                .filter(
+                    t ->
+                        ENVIRONMENT.name().equalsIgnoreCase(t.getReferenceType()) &&
+                        t.getReferenceId().equalsIgnoreCase(executionContext.getEnvironmentId())
                 );
             if (themeOptional.isPresent()) {
                 themeRepository.delete(themeId);
                 auditService.createAuditLog(
                     executionContext,
-                    Collections.singletonMap(THEME, themeId),
-                    THEME_DELETED,
-                    new Date(),
-                    null,
-                    themeOptional.get()
+                    AuditService.AuditLogData.builder()
+                        .properties(Collections.singletonMap(THEME, themeId))
+                        .event(THEME_DELETED)
+                        .createdAt(new Date())
+                        .oldValue(null)
+                        .newValue(themeOptional.get())
+                        .build()
                 );
             }
         } catch (TechnicalException ex) {
             final String error = "An error occurs while trying to delete theme " + themeId;
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalManagementException(error, ex);
         }
     }
@@ -287,7 +302,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
             return findEnvironmentPortalThemes(executionContext).filter(ThemeEntity::isEnabled).orElseGet(this::buildDefaultPortalTheme);
         } catch (TechnicalException ex) {
             final String error = "An error occurs while trying to find enabled theme";
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalManagementException(error, ex);
         }
     }
@@ -298,7 +313,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
             return findEnvironmentPortalThemes(executionContext).orElseGet(() -> createDefaultPortalTheme(executionContext));
         } catch (TechnicalException ex) {
             final String error = "An error occurs while trying to find theme or create default";
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalManagementException(error, ex);
         }
     }
@@ -357,11 +372,13 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
                             this.themeRepository.update(themeUpdate);
                             auditService.createAuditLog(
                                 executionContext,
-                                Collections.singletonMap(THEME, theme.getId()),
-                                THEME_UPDATED,
-                                new Date(),
-                                theme,
-                                themeUpdate
+                                AuditService.AuditLogData.builder()
+                                    .properties(Collections.singletonMap(THEME, theme.getId()))
+                                    .event(THEME_UPDATED)
+                                    .createdAt(new Date())
+                                    .oldValue(theme)
+                                    .newValue(themeUpdate)
+                                    .build()
                             );
                         } catch (IOException ex) {
                             final String error =
@@ -370,16 +387,16 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
                                 DEFAULT_THEME_PATH +
                                 " with theme " +
                                 theme.toString();
-                            LOGGER.error(error, ex);
+                            log.error(error, ex);
                         } catch (TechnicalException ex) {
                             final String error = "Error while trying to update theme after merge with default" + theme.toString();
-                            LOGGER.error(error, ex);
+                            log.error(error, ex);
                         }
                     }
                 });
             }
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurs while trying to find all themes", ex);
+            log.error("An error occurs while trying to find all themes", ex);
         }
     }
 
@@ -391,7 +408,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
                 return convertToPicture(favicon);
             }
         } catch (ThemeNotFoundException ex) {
-            LOGGER.debug("Theme {} not found, using default favicon", themeId);
+            log.debug("Theme {} not found, using default favicon", themeId);
         }
         return convertToPicture(this.getDefaultFavicon());
     }
@@ -409,7 +426,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
             return jsonNode.toString();
         } catch (IOException ex) {
             final String error = "Error while trying to load a theme from the definition path: " + path;
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalManagementException(error, ex);
         }
     }
@@ -442,7 +459,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
             return "data:" + fileTypeMap.getContentType(filename) + ";base64," + Base64.getEncoder().encodeToString(image);
         } catch (IOException ex) {
             final String error = "Error while trying to load image from: " + filepath;
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             return null;
         }
     }
@@ -450,16 +467,18 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
     @Override
     public GenericThemeEntity resetToDefaultTheme(final ExecutionContext executionContext, String themeId) {
         try {
-            LOGGER.debug("Reset to default theme by ID: {}", themeId);
+            log.debug("Reset to default theme by ID: {}", themeId);
             final GenericThemeEntity previousTheme = findById(executionContext, themeId);
             themeRepository.delete(previousTheme.getId());
             auditService.createAuditLog(
                 executionContext,
-                Collections.singletonMap(THEME, themeId),
-                THEME_RESET,
-                new Date(),
-                previousTheme,
-                null
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.singletonMap(THEME, themeId))
+                    .event(THEME_RESET)
+                    .createdAt(new Date())
+                    .oldValue(previousTheme)
+                    .newValue(null)
+                    .build()
             );
             if (io.gravitee.rest.api.model.theme.ThemeType.PORTAL.equals(previousTheme.getType())) {
                 return findOrCreateDefaultPortalTheme(executionContext);
@@ -467,7 +486,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
             return null;
         } catch (Exception ex) {
             final String error = "Error while trying to reset a default theme";
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalManagementException(error, ex);
         }
     }
@@ -480,7 +499,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
                 return convertToPicture(logo);
             }
         } catch (ThemeNotFoundException ex) {
-            LOGGER.debug("Theme {} not found, using default logo", themeId);
+            log.debug("Theme {} not found, using default logo", themeId);
         }
         return convertToPicture(this.getDefaultLogo());
     }
@@ -493,7 +512,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
                 return convertToPicture(optionalLogo);
             }
         } catch (ThemeNotFoundException ex) {
-            LOGGER.debug("Theme {} not found, using default optional logo", themeId);
+            log.debug("Theme {} not found, using default optional logo", themeId);
         }
         return convertToPicture(this.getDefaultOptionalLogo());
     }
@@ -506,7 +525,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
                 return convertToPicture(backgroundImage);
             }
         } catch (ThemeNotFoundException ex) {
-            LOGGER.debug("Theme {} not found, using default background image", themeId);
+            log.debug("Theme {} not found, using default background image", themeId);
         }
         return convertToPicture(this.getDefaultBackgroundImage());
     }
@@ -557,7 +576,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
         try {
             themeEntity.setDefinition(MAPPER.readPortalDefinition(theme.getDefinition()));
         } catch (IOException e) {
-            LOGGER.error("Cannot read definition of theme " + theme.getId() + " definition:" + theme.getDefinition());
+            log.error("Cannot read definition of theme " + theme.getId() + " definition:" + theme.getDefinition());
         }
         themeEntity.setCreatedAt(theme.getCreatedAt());
         themeEntity.setUpdatedAt(theme.getUpdatedAt());
@@ -577,8 +596,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
         try {
             var portalNextDefinition = MAPPER.readPortalNextDefinition(theme.getDefinition());
 
-            return io.gravitee.rest.api.model.theme.portalnext.ThemeEntity
-                .builder()
+            return io.gravitee.rest.api.model.theme.portalnext.ThemeEntity.builder()
                 .id(theme.getId())
                 .name(theme.getName())
                 .definition(portalNextDefinition)
@@ -604,9 +622,8 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
         return newThemeEntity;
     }
 
+    @CustomLog
     public static class ThemeDefinitionMapper extends ObjectMapper {
-
-        private final Logger LOGGER = LoggerFactory.getLogger(ThemeDefinitionMapper.class);
 
         public ThemeDefinition readPortalDefinition(String themeDefinition) throws IOException {
             return this.readValue(themeDefinition, ThemeDefinition.class);
@@ -663,7 +680,12 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
         public ThemeCssDefinition getThemeCssDefinition(ThemeDefinition themeDefinition, String name, String cssName) {
             ThemeComponentDefinition componentDefinition = getThemeComponentDefinition(themeDefinition, name);
             if (componentDefinition != null) {
-                return componentDefinition.getCss().stream().filter(css -> cssName.equals(css.getName())).findFirst().orElse(null);
+                return componentDefinition
+                    .getCss()
+                    .stream()
+                    .filter(css -> cssName.equals(css.getName()))
+                    .findFirst()
+                    .orElse(null);
             }
             return null;
         }
@@ -672,7 +694,7 @@ public class ThemeServiceImpl extends AbstractService implements ThemeService {
             try {
                 return this.readTree(definitionA).equals(this.readTree(definitionB));
             } catch (IOException e) {
-                LOGGER.error("Cannot compare definition " + definitionA + " and " + definitionB, e);
+                log.error("Cannot compare definition " + definitionA + " and " + definitionB, e);
             }
             return false;
         }

@@ -19,7 +19,11 @@ import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.PageRepository;
 import io.gravitee.repository.management.api.search.PageCriteria;
 import io.gravitee.repository.management.api.search.Pageable;
-import io.gravitee.repository.management.model.*;
+import io.gravitee.repository.management.model.AccessControl;
+import io.gravitee.repository.management.model.Page;
+import io.gravitee.repository.management.model.PageMedia;
+import io.gravitee.repository.management.model.PageReferenceType;
+import io.gravitee.repository.management.model.PageSource;
 import io.gravitee.repository.mongodb.management.internal.model.AccessControlMongo;
 import io.gravitee.repository.mongodb.management.internal.model.PageMediaMongo;
 import io.gravitee.repository.mongodb.management.internal.model.PageMongo;
@@ -34,8 +38,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -45,10 +48,9 @@ import org.springframework.stereotype.Component;
  * @author Guillaume GILLON (guillaume.gillon@outlook.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class MongoPageRepository implements PageRepository {
-
-    private static final Logger logger = LoggerFactory.getLogger(MongoPageRepository.class);
 
     @Autowired
     private PageMongoRepository internalPageRepo;
@@ -58,33 +60,33 @@ public class MongoPageRepository implements PageRepository {
 
     @Override
     public List<Page> search(PageCriteria criteria) throws TechnicalException {
-        logger.debug("Search Pages by criteria");
+        log.debug("Search Pages by criteria");
         List<PageMongo> results = internalPageRepo.search(criteria);
-        logger.debug("Search Pages by criteria. Count={} - Done", results == null ? 0 : results.size());
+        log.debug("Search Pages by criteria. Count={} - Done", results == null ? 0 : results.size());
         return mapper.mapPages(results);
     }
 
     @Override
     public Optional<Page> findById(String pageId) throws TechnicalException {
-        logger.debug("Find page by ID [{}]", pageId);
+        log.debug("Find page by ID [{}]", pageId);
 
         PageMongo page = internalPageRepo.findById(pageId).orElse(null);
         Page res = mapper.map(page);
 
-        logger.debug("Find page by ID [{}] - Done", pageId);
+        log.debug("Find page by ID [{}] - Done", pageId);
         return Optional.ofNullable(res);
     }
 
     @Override
     public Page create(Page page) throws TechnicalException {
-        logger.debug("Create page [{}]", page.getName());
+        log.debug("Create page [{}]", page.getName());
 
         PageMongo pageMongo = mapper.map(page);
         PageMongo createdPageMongo = internalPageRepo.insert(pageMongo);
 
         Page res = mapper.map(createdPageMongo);
 
-        logger.debug("Create page [{}] - Done", page.getName());
+        log.debug("Create page [{}] - Done", page.getName());
 
         return res;
     }
@@ -103,6 +105,7 @@ public class MongoPageRepository implements PageRepository {
         try {
             pageMongo.setName(page.getName());
             pageMongo.setCrossId(page.getCrossId());
+            pageMongo.setHrid(page.getHrid());
             pageMongo.setContent(page.getContent());
             pageMongo.setType(page.getType());
             pageMongo.setId(page.getId());
@@ -123,6 +126,7 @@ public class MongoPageRepository implements PageRepository {
                 pageMongo.setAttachedMedia(null);
             }
             pageMongo.setParentId(page.getParentId());
+            pageMongo.setParentHrid(page.getParentHrid());
             if (page.getSource() != null) {
                 pageMongo.setSource(convert(page.getSource()));
             } else {
@@ -135,7 +139,7 @@ public class MongoPageRepository implements PageRepository {
             PageMongo pageMongoUpdated = internalPageRepo.save(pageMongo);
             return mapper.map(pageMongoUpdated);
         } catch (Exception e) {
-            logger.error("An error occurred when updating page", e);
+            log.error("An error occurred when updating page", e);
             throw new TechnicalException("An error occurred when updating page");
         }
     }
@@ -159,7 +163,7 @@ public class MongoPageRepository implements PageRepository {
         try {
             internalPageRepo.deleteById(pageId);
         } catch (Exception e) {
-            logger.error("An error occurred when deleting page [{}]", pageId, e);
+            log.error("An error occurred when deleting page [{}]", pageId, e);
             throw new TechnicalException("An error occurred when deleting page");
         }
     }
@@ -175,7 +179,7 @@ public class MongoPageRepository implements PageRepository {
         try {
             return internalPageRepo.findMaxPageReferenceIdAndReferenceTypeOrder(referenceId, referenceType.name());
         } catch (Exception e) {
-            logger.error("An error occurred when searching max order page for reference [{}, {}]", referenceId, referenceType, e);
+            log.error("An error occurred when searching max order page for reference [{}, {}]", referenceId, referenceType, e);
             throw new TechnicalException("An error occurred when searching max order page for reference");
         }
     }
@@ -187,7 +191,7 @@ public class MongoPageRepository implements PageRepository {
             List<Page> pageItems = mapper.mapPages(page.getContent());
             return new io.gravitee.common.data.domain.Page<>(pageItems, page.getPageNumber(), pageItems.size(), page.getTotalElements());
         } catch (Exception e) {
-            logger.error("An error occurred when searching all pages", e);
+            log.error("An error occurred when searching all pages", e);
             throw new TechnicalException("An error occurred when searching all pages");
         }
     }
@@ -197,7 +201,7 @@ public class MongoPageRepository implements PageRepository {
         try {
             return internalPageRepo.countByParentIdAndIsPublished(parentId);
         } catch (Exception e) {
-            logger.error("An error occurred when counting page by parent_id {}", parentId, e);
+            log.error("An error occurred when counting page by parent_id {}", parentId, e);
             throw new TechnicalException("An error occurred when counting page by parentId");
         }
     }
@@ -205,7 +209,7 @@ public class MongoPageRepository implements PageRepository {
     @Override
     public Map<String, List<String>> deleteByReferenceIdAndReferenceType(String referenceId, PageReferenceType referenceType)
         throws TechnicalException {
-        logger.debug("Delete pages by refId: {}/{}", referenceId, referenceType);
+        log.debug("Delete pages by refId: {}/{}", referenceId, referenceType);
         try {
             final var pageIdAndMedias = new HashMap<String, List<String>>();
             internalPageRepo
@@ -218,11 +222,21 @@ public class MongoPageRepository implements PageRepository {
                             : Collections.emptyList()
                     )
                 );
-            logger.debug("Delete pages by refId: {}/{}", referenceId, referenceType);
+            log.debug("Delete pages by refId: {}/{}", referenceId, referenceType);
             return pageIdAndMedias;
         } catch (Exception e) {
-            logger.error("Failed to delete page by refId: {}/{}", referenceId, referenceType, e);
+            log.error("Failed to delete page by refId: {}/{}", referenceId, referenceType, e);
             throw new TechnicalException("Failed to delete page by reference");
+        }
+    }
+
+    @Override
+    public void updateCrossIds(List<Page> pages) throws TechnicalException {
+        log.debug("Update pages cross Ids [{}]", pages);
+        try {
+            internalPageRepo.updateCrossIds(pages);
+        } catch (Exception e) {
+            throw new TechnicalException("Failed to update pages cross IDs", e);
         }
     }
 
@@ -243,11 +257,15 @@ public class MongoPageRepository implements PageRepository {
                 pmm.setAttachedAt(pageMedia.getAttachedAt());
                 return pmm;
             })
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
     public Set<Page> findAll() throws TechnicalException {
-        return internalPageRepo.findAll().stream().map(pageMongo -> mapper.map(pageMongo)).collect(Collectors.toSet());
+        return internalPageRepo
+            .findAll()
+            .stream()
+            .map(pageMongo -> mapper.map(pageMongo))
+            .collect(Collectors.toSet());
     }
 }

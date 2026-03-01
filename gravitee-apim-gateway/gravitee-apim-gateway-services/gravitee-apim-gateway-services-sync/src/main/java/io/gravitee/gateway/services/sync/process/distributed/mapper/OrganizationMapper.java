@@ -23,11 +23,11 @@ import io.gravitee.repository.distributedsync.model.DistributedEventType;
 import io.gravitee.repository.distributedsync.model.DistributedSyncAction;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Date;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class OrganizationMapper {
 
     private final ObjectMapper objectMapper;
@@ -47,8 +47,7 @@ public class OrganizationMapper {
     public Maybe<DistributedEvent> to(final OrganizationDeployable organizationDeployable) {
         return Maybe.fromCallable(() -> {
             try {
-                return DistributedEvent
-                    .builder()
+                return DistributedEvent.builder()
                     .id(organizationDeployable.id())
                     .type(DistributedEventType.ORGANIZATION)
                     .syncAction(DistributedSyncAction.DEPLOY)

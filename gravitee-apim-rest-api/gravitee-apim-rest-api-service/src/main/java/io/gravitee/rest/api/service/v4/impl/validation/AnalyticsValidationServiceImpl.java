@@ -38,14 +38,14 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 
 /**
  * @author Florent CHAMFROY (florent.chamfroy at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @Component
 public class AnalyticsValidationServiceImpl extends TransactionalService implements AnalyticsValidationService {
 
@@ -150,6 +150,18 @@ public class AnalyticsValidationServiceImpl extends TransactionalService impleme
                     .findFirst()
                     .orElse(Key.LOGGING_MESSAGE_SAMPLING_TEMPORAL_LIMIT.defaultValue())
             );
+            case WINDOWED_COUNT -> new SamplingType.ValidationLimit.WindowedCountLimit(
+                parameterService
+                    .findAll(
+                        executionContext,
+                        Key.LOGGING_MESSAGE_SAMPLING_WINDOWED_COUNT_LIMIT,
+                        Function.identity(),
+                        ParameterReferenceType.ORGANIZATION
+                    )
+                    .stream()
+                    .findFirst()
+                    .orElse(Key.LOGGING_MESSAGE_SAMPLING_WINDOWED_COUNT_LIMIT.defaultValue())
+            );
         };
     }
 
@@ -162,15 +174,11 @@ public class AnalyticsValidationServiceImpl extends TransactionalService impleme
 
             // Validate logging option according to api
             if (
-                (
-                    type == ApiType.PROXY &&
-                    (
-                        logging.getContent().isMessageHeaders() ||
+                (type == ApiType.PROXY &&
+                    (logging.getContent().isMessageHeaders() ||
                         logging.getContent().isMessagePayload() ||
                         logging.getContent().isMessageMetadata() ||
-                        logging.getMessageCondition() != null
-                    )
-                ) ||
+                        logging.getMessageCondition() != null)) ||
                 (type == ApiType.MESSAGE && logging.getContent().isPayload())
             ) {
                 throw new LoggingInvalidConfigurationException();

@@ -29,9 +29,11 @@ import io.gravitee.repository.management.model.ThemeReferenceType;
 import io.gravitee.repository.management.model.ThemeType;
 import java.sql.PreparedStatement;
 import java.sql.Types;
-import java.util.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
@@ -39,10 +41,9 @@ import org.springframework.stereotype.Repository;
  * @author Guillaume CUSNIEUX (guillaume.cusnieux at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Repository
 public class JdbcThemeRepository extends JdbcAbstractCrudRepository<Theme, String> implements ThemeRepository {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcThemeRepository.class);
 
     JdbcThemeRepository(@Value("${management.jdbc.prefix:}") String tablePrefix) {
         super(tablePrefix, "themes");
@@ -50,8 +51,7 @@ public class JdbcThemeRepository extends JdbcAbstractCrudRepository<Theme, Strin
 
     @Override
     protected JdbcObjectMapper<Theme> buildOrm() {
-        return JdbcObjectMapper
-            .builder(Theme.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(Theme.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("name", Types.NVARCHAR, String.class)
             .addColumn("type", Types.NVARCHAR, ThemeType.class)
@@ -81,14 +81,14 @@ public class JdbcThemeRepository extends JdbcAbstractCrudRepository<Theme, Strin
     @Override
     public Set<Theme> findByReferenceIdAndReferenceTypeAndType(String referenceId, String referenceType, ThemeType type)
         throws TechnicalException {
-        LOGGER.debug("JdbcThemeRepository.findByReference({})", referenceType);
+        log.debug("JdbcThemeRepository.findByReference({})", referenceType);
         try {
             return new HashSet(
                 jdbcTemplate.query(
                     getOrm().getSelectAllSql() +
-                    " where reference_id = ? and reference_type = ? and " +
-                    escapeReservedWord("type") +
-                    " = ?",
+                        " where reference_id = ? and reference_type = ? and " +
+                        escapeReservedWord("type") +
+                        " = ?",
                     getOrm().getRowMapper(),
                     referenceId,
                     referenceType,
@@ -97,14 +97,14 @@ public class JdbcThemeRepository extends JdbcAbstractCrudRepository<Theme, Strin
             );
         } catch (final Exception ex) {
             final String error = "Failed to find themes by reference type";
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalException(error, ex);
         }
     }
 
     @Override
     public Page<Theme> search(ThemeCriteria criteria, Pageable pageable) throws TechnicalException {
-        LOGGER.debug("JdbcThemeRepository.search({}, {})", criteria, pageable);
+        log.debug("JdbcThemeRepository.search({}, {})", criteria, pageable);
         try {
             List<Theme> result;
             if (criteria == null) {
@@ -124,25 +124,24 @@ public class JdbcThemeRepository extends JdbcAbstractCrudRepository<Theme, Strin
 
                 query.append(" order by name ");
 
-                result =
-                    jdbcTemplate.query(
-                        query.toString(),
-                        (PreparedStatement ps) -> {
-                            int idx = 1;
-                            if (criteria.getEnabled() != null) {
-                                idx = getOrm().setArguments(ps, List.of(criteria.getEnabled()), idx);
-                            }
-                            if (criteria.getType() != null) {
-                                getOrm().setArguments(ps, List.of(criteria.getType().name()), idx);
-                            }
-                        },
-                        getOrm().getRowMapper()
-                    );
+                result = jdbcTemplate.query(
+                    query.toString(),
+                    (PreparedStatement ps) -> {
+                        int idx = 1;
+                        if (criteria.getEnabled() != null) {
+                            idx = getOrm().setArguments(ps, List.of(criteria.getEnabled()), idx);
+                        }
+                        if (criteria.getType() != null) {
+                            getOrm().setArguments(ps, List.of(criteria.getType().name()), idx);
+                        }
+                    },
+                    getOrm().getRowMapper()
+                );
             }
             return getResultAsPage(pageable, result);
         } catch (final Exception ex) {
             final String error = "Failed to search themes by criteria";
-            LOGGER.error(error, ex);
+            log.error(error, ex);
             throw new TechnicalException(error, ex);
         }
     }
@@ -150,7 +149,7 @@ public class JdbcThemeRepository extends JdbcAbstractCrudRepository<Theme, Strin
     @Override
     public List<String> deleteByReferenceIdAndReferenceType(String referenceId, ThemeReferenceType referenceType)
         throws TechnicalException {
-        LOGGER.debug("JdbcThemeRepository.deleteByReferenceIdAndReferenceType({}/{})", referenceType, referenceId);
+        log.debug("JdbcThemeRepository.deleteByReferenceIdAndReferenceType({}/{})", referenceType, referenceId);
         try {
             final var rows = jdbcTemplate.queryForList(
                 "select id from " + tableName + " WHERE reference_id = ? AND reference_type = ?",
@@ -167,10 +166,10 @@ public class JdbcThemeRepository extends JdbcAbstractCrudRepository<Theme, Strin
                 );
             }
 
-            LOGGER.debug("JdbcThemeRepository.deleteByReferenceIdAndReferenceType({}/{}) - Done", referenceType, referenceId);
+            log.debug("JdbcThemeRepository.deleteByReferenceIdAndReferenceType({}/{}) - Done", referenceType, referenceId);
             return rows;
         } catch (Exception ex) {
-            LOGGER.error("Failed to delete themes for refId: {}/{}", referenceId, referenceType, ex);
+            log.error("Failed to delete themes for refId: {}/{}", referenceId, referenceType, ex);
             throw new TechnicalException("Failed to delete themes by reference", ex);
         }
     }

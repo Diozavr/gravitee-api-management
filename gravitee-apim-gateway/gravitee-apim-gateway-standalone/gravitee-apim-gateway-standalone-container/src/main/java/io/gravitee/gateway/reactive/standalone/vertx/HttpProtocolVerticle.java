@@ -15,24 +15,28 @@
  */
 package io.gravitee.gateway.reactive.standalone.vertx;
 
+import static io.gravitee.gateway.reactive.http.vertx.VertxHttpServerRequest.NETTY_ATTR_CONNECTION_TIME;
+
 import io.gravitee.common.http.HttpStatusCode;
 import io.gravitee.gateway.reactive.reactor.HttpRequestDispatcher;
 import io.gravitee.node.api.server.ServerManager;
 import io.gravitee.node.vertx.server.http.VertxHttpServer;
+import io.netty.util.AttributeKey;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.plugins.RxJavaPlugins;
+import io.vertx.core.http.impl.HttpServerConnection;
 import io.vertx.rxjava3.core.AbstractVerticle;
 import io.vertx.rxjava3.core.RxHelper;
+import io.vertx.rxjava3.core.Vertx;
 import io.vertx.rxjava3.core.http.HttpServer;
 import io.vertx.rxjava3.core.http.HttpServerRequest;
 import io.vertx.rxjava3.core.http.HttpServerResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Qualifier;
 
 /**
@@ -42,9 +46,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class HttpProtocolVerticle extends AbstractVerticle {
-
-    private final Logger log = LoggerFactory.getLogger(HttpProtocolVerticle.class);
 
     private final ServerManager serverManager;
     private final HttpRequestDispatcher requestDispatcher;
@@ -62,7 +65,7 @@ public class HttpProtocolVerticle extends AbstractVerticle {
     @Override
     public Completable rxStart() {
         // Set global error handler to catch everything that has not been properly caught.
-        RxJavaPlugins.setErrorHandler(throwable -> log.warn("An unexpected error occurred", throwable));
+        RxJavaPlugins.setErrorHandler(this::logGlobalErrors);
 
         // Reconfigure RxJava to use Vertx schedulers.
         RxJavaPlugins.setComputationSchedulerHandler(s -> RxHelper.scheduler(vertx));
@@ -71,14 +74,21 @@ public class HttpProtocolVerticle extends AbstractVerticle {
 
         final List<VertxHttpServer> servers = this.serverManager.servers(VertxHttpServer.class);
 
-        return Flowable
-            .fromIterable(servers)
+        // Some exceptions can be raised at the Vertx context level (outside the request flow). This is the case when the client
+        // closes the connection before the response is fully written. This one can be ignored as it's properly handled at the request level.
+        Vertx.currentContext().exceptionHandler(this::logGlobalErrors);
+
+        return Flowable.fromIterable(servers)
             .concatMapCompletable(gioServer -> {
                 final HttpServer rxHttpServer = gioServer.newInstance();
                 httpServerMap.put(gioServer, rxHttpServer);
 
                 // Listen and dispatch http requests.
                 return rxHttpServer
+                    .connectionHandler(connection -> {
+                        HttpServerConnection delegate = (HttpServerConnection) connection.getDelegate();
+                        delegate.channel().attr(AttributeKey.valueOf(NETTY_ATTR_CONNECTION_TIME)).set(System.currentTimeMillis());
+                    })
                     .requestHandler(request -> dispatchRequest(request, gioServer.id()))
                     .rxListen()
                     .ignoreElement()
@@ -88,6 +98,14 @@ public class HttpProtocolVerticle extends AbstractVerticle {
                     .doOnError(throwable -> log.error("Unable to start HTTP server [{}]", gioServer.id(), throwable.getCause()));
             })
             .doOnSubscribe(disposable -> log.info("Starting HTTP servers..."));
+    }
+
+    private void logGlobalErrors(Throwable throwable) {
+        if (throwable instanceof IllegalStateException && "Response has already been written".equals(throwable.getMessage())) {
+            log.debug("Client has prematurely closed the connection before the response is fully written. Ignoring.");
+        } else {
+            log.warn("An unexpected error occurred.", throwable);
+        }
     }
 
     /**
@@ -153,14 +171,23 @@ public class HttpProtocolVerticle extends AbstractVerticle {
         request
             .connection()
             // Must be added to ensure closed connection or error disposes underlying subscription.
-            .exceptionHandler(event -> dispatchDisposable.dispose())
-            .closeHandler(event -> dispatchDisposable.dispose());
+            .exceptionHandler(event -> gracefulDispose(dispatchDisposable))
+            .closeHandler(event -> gracefulDispose(dispatchDisposable));
+    }
+
+    private void gracefulDispose(Disposable dispatchDisposable) {
+        if (!dispatchDisposable.isDisposed()) {
+            try {
+                dispatchDisposable.dispose();
+            } catch (Exception e) {
+                log.warn("Cannot graceful dispose request", e);
+            }
+        }
     }
 
     @Override
     public Completable rxStop() {
-        return Flowable
-            .fromIterable(httpServerMap.entrySet())
+        return Flowable.fromIterable(httpServerMap.entrySet())
             .flatMapCompletable(entry -> {
                 final VertxHttpServer gioServer = entry.getKey();
                 final HttpServer rxHttpServer = entry.getValue();

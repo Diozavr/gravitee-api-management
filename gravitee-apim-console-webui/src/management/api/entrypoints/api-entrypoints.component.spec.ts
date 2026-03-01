@@ -71,6 +71,19 @@ describe('ApiProxyEntrypointsComponent', () => {
     httpTestingController.verify({ ignoreCancelled: true });
   });
 
+  function setupWithPermissions(permissions: string[]) {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      declarations: [ApiEntrypointsComponent],
+      imports: [NoopAnimationsModule, GioTestingModule, ApiEntrypointsModule, MatIconTestingModule],
+      providers: [{ provide: ActivatedRoute, useValue: { snapshot: { params: { apiId: API_ID } } } }],
+    });
+    TestBed.overrideProvider(GioTestingPermissionProvider, { useValue: permissions });
+    fixture = TestBed.createComponent(ApiEntrypointsComponent);
+    loader = TestbedHarnessEnvironment.loader(fixture);
+    fixture.detectChanges();
+  }
+
   describe('context-path mode', () => {
     beforeEach(() => {
       exceptRestrictedDomainsGetRequest([]);
@@ -85,7 +98,7 @@ describe('ApiProxyEntrypointsComponent', () => {
       expect(await saveButton.isDisabled()).toBe(true);
 
       const formListenersContextPathHarness = await loader.getHarness(GioFormListenersContextPathHarness);
-      const contextPathInput = await formListenersContextPathHarness.getLastListenerRow().then((row) => row.pathInput);
+      const contextPathInput = await formListenersContextPathHarness.getLastListenerRow().then(row => row.pathInput);
       expect(await contextPathInput.isDisabled()).toEqual(false);
       expect(await contextPathInput.getValue()).toEqual('/path');
 
@@ -101,6 +114,12 @@ describe('ApiProxyEntrypointsComponent', () => {
       expect(req.request.body.proxy.virtualHosts).toEqual([{ path: '/new-path' }]);
     });
 
+    it('should disable or hide save button with only api-definition-u permission', async () => {
+      setupWithPermissions(['api-definition-u']);
+      const saveButtons = await loader.getAllHarnesses(MatButtonHarness.with({ text: 'Save changes' }));
+      expect(saveButtons.length === 0 || (saveButtons.length > 0 && (await saveButtons[0].isDisabled()))).toBe(true);
+    });
+
     it('should disable field when origin is kubernetes', async () => {
       const api = fakeApiV2({ id: API_ID, proxy: { virtualHosts: [{ path: '/path' }] }, definitionContext: { origin: 'KUBERNETES' } });
       expectApiGetRequest(api);
@@ -110,7 +129,7 @@ describe('ApiProxyEntrypointsComponent', () => {
       expect(saveButton.length).toEqual(0);
 
       const formListenersContextPathHarness = await loader.getHarness(GioFormListenersContextPathHarness);
-      const contextPathInput = await formListenersContextPathHarness.getLastListenerRow().then((row) => row.pathInput);
+      const contextPathInput = await formListenersContextPathHarness.getLastListenerRow().then(row => row.pathInput);
       expect(await contextPathInput.isDisabled()).toEqual(true);
       expectVerifyContextPath();
     });
@@ -124,7 +143,7 @@ describe('ApiProxyEntrypointsComponent', () => {
       expect(await saveButton.length).toEqual(0);
 
       const formListenersContextPathHarness = await loader.getHarness(GioFormListenersContextPathHarness);
-      const contextPathInput = await formListenersContextPathHarness.getLastListenerRow().then((row) => row.pathInput);
+      const contextPathInput = await formListenersContextPathHarness.getLastListenerRow().then(row => row.pathInput);
       expect(await contextPathInput.isDisabled()).toEqual(true);
       expectVerifyContextPath();
     });
@@ -363,7 +382,7 @@ describe('ApiProxyEntrypointsComponent', () => {
 
       // Expect fetch api get and update proxy
       expect(
-        fixture.componentInstance.pathsFormControl.value.map((v) => {
+        fixture.componentInstance.pathsFormControl.value.map(v => {
           return { host: v.host, path: v.path };
         }),
       ).toEqual([
@@ -457,8 +476,8 @@ describe('ApiProxyEntrypointsComponent', () => {
     };
     httpTestingController
       .match({ url: `${CONSTANTS_TESTING.env.baseURL}/portal`, method: 'GET' })
-      .filter((r) => !r.cancelled)
-      .forEach((r) => r.flush(settings));
+      .filter(r => !r.cancelled)
+      .forEach(r => r.flush(settings));
     fixture.detectChanges();
   }
 

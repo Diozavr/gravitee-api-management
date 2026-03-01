@@ -16,7 +16,10 @@
 package io.gravitee.rest.api.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -39,6 +42,7 @@ import io.gravitee.rest.api.service.MembershipService;
 import io.gravitee.rest.api.service.RoleService;
 import io.gravitee.rest.api.service.UserService;
 import io.gravitee.rest.api.service.common.GraviteeContext;
+import io.gravitee.rest.api.service.v4.PrimaryOwnerService;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -80,28 +84,35 @@ public class MembershipService_GetMemberPermissionsTest {
     @Mock
     private ApiRepository apiRepository;
 
+    @Mock
+    private PrimaryOwnerService primaryOwnerService;
+
     @BeforeEach
     public void setUp() throws Exception {
-        membershipService =
-            new MembershipServiceImpl(
-                null,
-                userService,
-                null,
-                null,
-                null,
-                null,
-                membershipRepository,
-                roleService,
-                null,
-                null,
-                null,
-                null,
-                apiRepository,
-                null,
-                null,
-                null,
-                null
-            );
+        membershipService = new MembershipServiceImpl(
+            null,
+            userService,
+            null,
+            null,
+            primaryOwnerService,
+            null,
+            membershipRepository,
+            roleService,
+            null,
+            null,
+            null,
+            null,
+            apiRepository,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
     }
 
     @Test
@@ -127,13 +138,12 @@ public class MembershipService_GetMemberPermissionsTest {
         );
 
         assertThat(permissions).isEmpty();
-        verify(membershipRepository, times(1))
-            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
-                USERNAME,
-                MembershipMemberType.USER,
-                MembershipReferenceType.API,
-                API_ID
-            );
+        verify(membershipRepository, times(1)).findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
+            USERNAME,
+            MembershipMemberType.USER,
+            MembershipReferenceType.API,
+            API_ID
+        );
         verify(apiRepository, times(1)).findById(API_ID);
     }
 
@@ -164,7 +174,14 @@ public class MembershipService_GetMemberPermissionsTest {
             new char[] { RolePermissionAction.UPDATE.getId(), RolePermissionAction.CREATE.getId() }
         );
         doReturn(rolePerms).when(roleEntity).getPermissions();
-        doReturn(roleEntity).when(roleService).findById("API_" + ROLENAME);
+        when(roleService.findByIds(Set.of("API_" + ROLENAME))).thenAnswer(invocation -> {
+            Set<String> ids = invocation.getArgument(0);
+            Map<String, RoleEntity> roles = new HashMap<>();
+            if (ids.contains("API_" + ROLENAME)) {
+                roles.put("API_" + ROLENAME, roleEntity);
+            }
+            return roles;
+        });
 
         ApiEntity apiEntity = new ApiEntity();
         apiEntity.setId(API_ID);
@@ -176,23 +193,20 @@ public class MembershipService_GetMemberPermissionsTest {
 
         assertThat(permissions).isNotNull();
         assertPermissions(rolePerms, permissions);
-        verify(membershipRepository, times(1))
-            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
-                USERNAME,
-                MembershipMemberType.USER,
-                MembershipReferenceType.API,
-                API_ID
-            );
-        verify(membershipRepository, never())
-            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
-                USERNAME,
-                MembershipMemberType.USER,
-                MembershipReferenceType.GROUP,
-                GROUP_ID1
-            );
+        verify(membershipRepository, times(1)).findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
+            USERNAME,
+            MembershipMemberType.USER,
+            MembershipReferenceType.API,
+            API_ID
+        );
+        verify(membershipRepository, never()).findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
+            USERNAME,
+            MembershipMemberType.USER,
+            MembershipReferenceType.GROUP,
+            GROUP_ID1
+        );
         verify(apiRepository, times(1)).findById(API_ID);
         verify(userService, times(1)).findById(GraviteeContext.getExecutionContext(), USERNAME);
-        verify(roleService, times(1)).findById("API_" + ROLENAME);
     }
 
     @Test
@@ -212,13 +226,14 @@ public class MembershipService_GetMemberPermissionsTest {
 
         Membership membership = mock(Membership.class);
         doReturn("API_" + ROLENAME).when(membership).getRoleId();
+        doReturn(GROUP_ID1).when(membership).getReferenceId();
         doReturn(new HashSet<>(List.of(membership)))
             .when(membershipRepository)
-            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
+            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceIds(
                 USERNAME,
                 MembershipMemberType.USER,
                 MembershipReferenceType.GROUP,
-                GROUP_ID1
+                Set.of(GROUP_ID1)
             );
 
         UserEntity userEntity = mock(UserEntity.class);
@@ -232,7 +247,14 @@ public class MembershipService_GetMemberPermissionsTest {
         );
         doReturn(rolePerms).when(roleEntity).getPermissions();
         doReturn(RoleScope.API).when(roleEntity).getScope();
-        doReturn(roleEntity).when(roleService).findById("API_" + ROLENAME);
+        when(roleService.findByIds(Set.of("API_" + ROLENAME))).thenAnswer(invocation -> {
+            Set<String> ids = invocation.getArgument(0);
+            Map<String, RoleEntity> roles = new HashMap<>();
+            if (ids.contains("API_" + ROLENAME)) {
+                roles.put("API_" + ROLENAME, roleEntity);
+            }
+            return roles;
+        });
 
         ApiEntity apiEntity = new ApiEntity();
         apiEntity.setId(API_ID);
@@ -244,23 +266,20 @@ public class MembershipService_GetMemberPermissionsTest {
 
         assertThat(permissions).isNotNull();
         assertPermissions(rolePerms, permissions);
-        verify(membershipRepository, times(1))
-            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
-                USERNAME,
-                MembershipMemberType.USER,
-                MembershipReferenceType.API,
-                API_ID
-            );
-        verify(membershipRepository, times(1))
-            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
-                USERNAME,
-                MembershipMemberType.USER,
-                MembershipReferenceType.GROUP,
-                GROUP_ID1
-            );
+        verify(membershipRepository, times(1)).findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
+            USERNAME,
+            MembershipMemberType.USER,
+            MembershipReferenceType.API,
+            API_ID
+        );
+        verify(membershipRepository, times(1)).findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceIds(
+            USERNAME,
+            MembershipMemberType.USER,
+            MembershipReferenceType.GROUP,
+            Set.of(GROUP_ID1)
+        );
         verify(apiRepository, times(1)).findById(API_ID);
         verify(userService, times(1)).findById(GraviteeContext.getExecutionContext(), USERNAME);
-        verify(roleService, times(1)).findById("API_" + ROLENAME);
     }
 
     @Test
@@ -282,13 +301,14 @@ public class MembershipService_GetMemberPermissionsTest {
 
         Membership membershipGroup = mock(Membership.class);
         doReturn("API_" + ROLENAME2).when(membershipGroup).getRoleId();
+        doReturn(GROUP_ID1).when(membershipGroup).getReferenceId();
         doReturn(new HashSet<>(List.of(membershipGroup)))
             .when(membershipRepository)
-            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
+            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceIds(
                 USERNAME,
                 MembershipMemberType.USER,
                 MembershipReferenceType.GROUP,
-                GROUP_ID1
+                Set.of(GROUP_ID1)
             );
 
         UserEntity userEntity = mock(UserEntity.class);
@@ -301,7 +321,7 @@ public class MembershipService_GetMemberPermissionsTest {
             new char[] { RolePermissionAction.UPDATE.getId(), RolePermissionAction.CREATE.getId() }
         );
         doReturn(rolePerms).when(roleEntity).getPermissions();
-        doReturn(roleEntity).when(roleService).findById("API_" + ROLENAME);
+        lenient().doReturn(RoleScope.API).when(roleEntity).getScope();
 
         RoleEntity roleEntity2 = mock(RoleEntity.class);
         Map<String, char[]> rolePerms2 = new HashMap<>();
@@ -312,7 +332,8 @@ public class MembershipService_GetMemberPermissionsTest {
         rolePerms2.put(ApiPermission.PLAN.getName(), new char[] { RolePermissionAction.READ.getId() });
         doReturn(rolePerms2).when(roleEntity2).getPermissions();
         doReturn(RoleScope.API).when(roleEntity2).getScope();
-        doReturn(roleEntity2).when(roleService).findById("API_" + ROLENAME2);
+        when(roleService.findByIds(Set.of("API_" + ROLENAME))).thenReturn(Map.of("API_" + ROLENAME, roleEntity));
+        when(roleService.findByIds(Set.of("API_" + ROLENAME2))).thenReturn(Map.of("API_" + ROLENAME2, roleEntity2));
 
         ApiEntity apiEntity = new ApiEntity();
         apiEntity.setId(API_ID);
@@ -335,24 +356,20 @@ public class MembershipService_GetMemberPermissionsTest {
         );
         expectedPermissions.put(ApiPermission.PLAN.getName(), new char[] { RolePermissionAction.READ.getId() });
         assertPermissions(expectedPermissions, permissions);
-        verify(membershipRepository, times(1))
-            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
-                USERNAME,
-                MembershipMemberType.USER,
-                MembershipReferenceType.API,
-                API_ID
-            );
-        verify(membershipRepository, times(1))
-            .findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
-                USERNAME,
-                MembershipMemberType.USER,
-                MembershipReferenceType.GROUP,
-                GROUP_ID1
-            );
+        verify(membershipRepository, times(1)).findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceId(
+            USERNAME,
+            MembershipMemberType.USER,
+            MembershipReferenceType.API,
+            API_ID
+        );
+        verify(membershipRepository, times(1)).findByMemberIdAndMemberTypeAndReferenceTypeAndReferenceIds(
+            USERNAME,
+            MembershipMemberType.USER,
+            MembershipReferenceType.GROUP,
+            Set.of(GROUP_ID1)
+        );
         verify(apiRepository, times(1)).findById(API_ID);
         verify(userService, times(1)).findById(GraviteeContext.getExecutionContext(), USERNAME);
-        verify(roleService, times(1)).findById("API_" + ROLENAME);
-        verify(roleService, times(1)).findById("API_" + ROLENAME2);
     }
 
     private void assertPermissions(Map<String, char[]> expected, Map<String, char[]> actual) {

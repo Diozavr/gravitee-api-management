@@ -17,27 +17,37 @@ package io.gravitee.gateway.reactive.core.v4.analytics;
 
 import io.gravitee.common.utils.SizeUtils;
 import io.gravitee.definition.model.ConditionSupplier;
-import io.gravitee.definition.model.MessageConditionSupplier;
 import io.gravitee.definition.model.v4.analytics.logging.Logging;
-import java.util.regex.Pattern;
+import io.gravitee.gateway.core.logging.LoggableContentType;
+import io.gravitee.gateway.reactive.api.context.base.BaseExecutionContext;
+import io.gravitee.gateway.report.guard.LogGuardService;
+import lombok.CustomLog;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.Setter;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class LoggingContext implements ConditionSupplier {
 
-    private static final String DEFAULT_EXCLUDED_CONTENT_TYPES =
-        "video.*|audio.*|image.*|application\\/octet-stream|application\\/pdf|text\\/event-stream";
-
     protected final Logging logging;
+
+    @Getter
     private int maxSizeLogMessage = -1;
-    private String excludedResponseTypes;
-    private Pattern excludedContentTypesPattern;
+
+    @Setter
+    private LogGuardService logGuardService;
+
+    private final LoggableContentType loggableContentType;
+
+    public LoggingContext(Logging logging) {
+        this.logging = logging;
+        loggableContentType = new LoggableContentType();
+    }
 
     @Override
     public String getCondition() {
@@ -92,8 +102,12 @@ public class LoggingContext implements ConditionSupplier {
         return logging.getMode().isEndpoint() && logging.getPhase().isResponse() && logging.getContent().isPayload();
     }
 
-    public int getMaxSizeLogMessage() {
-        return maxSizeLogMessage;
+    public String getExcludedResponseTypes() {
+        return loggableContentType.getExcludedResponseTypes();
+    }
+
+    public void setExcludedResponseTypes(String excludedResponseTypes) {
+        loggableContentType.setExcludedResponseTypes(excludedResponseTypes);
     }
 
     /**
@@ -114,24 +128,17 @@ public class LoggingContext implements ConditionSupplier {
         }
     }
 
-    public String getExcludedResponseTypes() {
-        return excludedResponseTypes;
+    public boolean isContentTypeLoggable(final String contentType, BaseExecutionContext ctx) {
+        return loggableContentType.isContentTypeLoggable(contentType, ctx);
     }
 
-    public void setExcludedResponseTypes(final String excludedResponseTypes) {
-        this.excludedResponseTypes = excludedResponseTypes;
-    }
-
-    public boolean isContentTypeLoggable(final String contentType) {
-        // init pattern
-        if (excludedContentTypesPattern == null) {
-            try {
-                excludedContentTypesPattern = Pattern.compile(excludedResponseTypes);
-            } catch (Exception e) {
-                excludedContentTypesPattern = Pattern.compile(DEFAULT_EXCLUDED_CONTENT_TYPES);
-            }
-        }
-
-        return contentType == null || !excludedContentTypesPattern.matcher(contentType).find();
+    /**
+     * Determines if body can be logged by asking the logGuardService
+     * if the guard is activated (if logGuardService not available, always
+     * return true)
+     * @return true if the body can be logged
+     */
+    public boolean isBodyLoggable() {
+        return logGuardService == null || !logGuardService.isLogGuardActive();
     }
 }

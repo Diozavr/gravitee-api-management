@@ -166,10 +166,12 @@
                 <exclude>com.graviteesource.reactor:*:zip</exclude>
                 <exclude>com.graviteesource.reporter:*:zip</exclude>
                 <exclude>io.gravitee.apim.repository:gravitee-apim-repository-redis:zip</exclude>
+                <exclude>io.gravitee.apim.reporter:*:zip</exclude>
                 <exclude>io.gravitee.policy:gravitee-gateway-services-ratelimit:zip</exclude>
                 <exclude>io.gravitee.reporter:*:zip</exclude>
                 <exclude>io.gravitee.tracer:*:zip</exclude>
                 <exclude>com.graviteesource.service:gravitee-service-secrets:zip</exclude>
+                <exclude>io.gravitee.inference.service:gravitee-inference-service:zip</exclude>
             </excludes>
             <useProjectArtifact>false</useProjectArtifact>
             <fileMode>755</fileMode>

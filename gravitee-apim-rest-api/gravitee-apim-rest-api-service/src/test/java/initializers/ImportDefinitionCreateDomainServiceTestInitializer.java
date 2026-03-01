@@ -44,13 +44,12 @@ import inmemory.RoleQueryServiceInMemory;
 import inmemory.UserCrudServiceInMemory;
 import inmemory.WorkflowCrudServiceInMemory;
 import io.gravitee.apim.core.api.domain_service.ApiIdsCalculatorDomainService;
-import io.gravitee.apim.core.api.domain_service.ApiImportDomainService;
 import io.gravitee.apim.core.api.domain_service.ApiIndexerDomainService;
 import io.gravitee.apim.core.api.domain_service.ApiMetadataDecoderDomainService;
 import io.gravitee.apim.core.api.domain_service.ApiMetadataDomainService;
 import io.gravitee.apim.core.api.domain_service.CreateApiDomainService;
-import io.gravitee.apim.core.api.domain_service.ImportDefinitionCreateDomainService;
 import io.gravitee.apim.core.api.domain_service.ValidateApiDomainService;
+import io.gravitee.apim.core.api.domain_service.import_definition.ImportDefinitionCreateDomainService;
 import io.gravitee.apim.core.audit.domain_service.AuditDomainService;
 import io.gravitee.apim.core.category.domain_service.CreateCategoryApiDomainService;
 import io.gravitee.apim.core.documentation.domain_service.ApiDocumentationDomainService;
@@ -60,7 +59,6 @@ import io.gravitee.apim.core.flow.domain_service.FlowValidationDomainService;
 import io.gravitee.apim.core.membership.domain_service.ApiPrimaryOwnerDomainService;
 import io.gravitee.apim.core.membership.domain_service.ApiPrimaryOwnerFactory;
 import io.gravitee.apim.core.membership.model.Role;
-import io.gravitee.apim.core.metadata.crud_service.MetadataCrudService;
 import io.gravitee.apim.core.plan.domain_service.CreatePlanDomainService;
 import io.gravitee.apim.core.plan.domain_service.PlanValidatorDomainService;
 import io.gravitee.apim.core.policy.domain_service.PolicyValidationDomainService;
@@ -112,14 +110,13 @@ public class ImportDefinitionCreateDomainServiceTestInitializer {
 
     public ImportDefinitionCreateDomainServiceTestInitializer(ApiCrudServiceInMemory apiCrudService) {
         var membershipQueryService = new MembershipQueryServiceInMemory(membershipCrudService);
-        apiPrimaryOwnerFactory =
-            new ApiPrimaryOwnerFactory(
-                groupQueryService,
-                membershipQueryService,
-                parametersQueryService,
-                roleQueryService,
-                userCrudService
-            );
+        apiPrimaryOwnerFactory = new ApiPrimaryOwnerFactory(
+            groupQueryService,
+            membershipQueryService,
+            parametersQueryService,
+            roleQueryService,
+            userCrudService
+        );
         var metadataQueryService = new ApiMetadataQueryServiceInMemory(metadataCrudService);
         var auditDomainService = new AuditDomainService(auditCrudService, userCrudService, new JacksonJsonDiffProcessor());
         var apiPrimaryOwnerDomainService = new ApiPrimaryOwnerDomainService(
@@ -131,69 +128,69 @@ public class ImportDefinitionCreateDomainServiceTestInitializer {
             userCrudService
         );
         apiMetadataDomainService = new ApiMetadataDomainService(metadataCrudService, apiMetadataQueryServiceInMemory, auditDomainService);
-        createApiDomainService =
-            new CreateApiDomainService(
-                apiCrudService,
-                auditDomainService,
-                new ApiIndexerDomainService(
-                    new ApiMetadataDecoderDomainService(metadataQueryService, new FreemarkerTemplateProcessor()),
-                    apiPrimaryOwnerDomainService,
-                    new ApiCategoryQueryServiceInMemory(),
-                    indexer
-                ),
-                apiMetadataDomainService,
+        createApiDomainService = new CreateApiDomainService(
+            apiCrudService,
+            auditDomainService,
+            new ApiIndexerDomainService(
+                new ApiMetadataDecoderDomainService(metadataQueryService, new FreemarkerTemplateProcessor()),
                 apiPrimaryOwnerDomainService,
-                flowCrudService,
-                notificationConfigCrudService,
-                parametersQueryService,
-                workflowCrudService,
-                createCategoryApiDomainService
-            );
+                new ApiCategoryQueryServiceInMemory(),
+                indexer
+            ),
+            apiMetadataDomainService,
+            apiPrimaryOwnerDomainService,
+            flowCrudService,
+            notificationConfigCrudService,
+            parametersQueryService,
+            workflowCrudService,
+            createCategoryApiDomainService
+        );
 
         var planValidatorService = new PlanValidatorDomainService(parametersQueryService, policyValidationDomainService, pageCrudService);
         var flowValidationDomainService = new FlowValidationDomainService(
             policyValidationDomainService,
             new EntrypointPluginQueryServiceInMemory()
         );
-        createPlanDomainService =
-            new CreatePlanDomainService(
-                planValidatorService,
-                flowValidationDomainService,
-                planCrudService,
-                flowCrudService,
-                auditDomainService
-            );
+        createPlanDomainService = new CreatePlanDomainService(
+            planValidatorService,
+            flowValidationDomainService,
+            planCrudService,
+            flowCrudService,
+            auditDomainService
+        );
 
-        createApiDocumentationDomainService =
-            new CreateApiDocumentationDomainService(pageCrudService, pageRevisionCrudService, auditDomainService, indexer);
+        createApiDocumentationDomainService = new CreateApiDocumentationDomainService(
+            pageCrudService,
+            pageRevisionCrudService,
+            auditDomainService,
+            indexer
+        );
         apiIdsCalculatorDomainService = new ApiIdsCalculatorDomainService(apiQueryService, pageQueryService, planQueryService);
 
         var htmlSanitizer = new HtmlSanitizer(new MockEnvironment());
-        documentationValidationDomainService =
-            new DocumentationValidationDomainService(
-                new HtmlSanitizerImpl(htmlSanitizer),
-                new NoopTemplateResolverDomainService(),
-                apiCrudService,
-                new NoopSwaggerOpenApiResolver(),
-                new ApiMetadataQueryServiceInMemory(),
-                new ApiPrimaryOwnerDomainService(
-                    new AuditDomainService(auditCrudService, userCrudService, new JacksonJsonDiffProcessor()),
-                    groupQueryService,
-                    membershipCrudService,
-                    membershipQueryService,
-                    roleQueryService,
-                    userCrudService
-                ),
-                new ApiDocumentationDomainService(pageQueryService, planQueryService),
-                pageCrudService,
-                pageSourceDomainService,
+        documentationValidationDomainService = new DocumentationValidationDomainService(
+            new HtmlSanitizerImpl(htmlSanitizer),
+            new NoopTemplateResolverDomainService(),
+            apiCrudService,
+            new NoopSwaggerOpenApiResolver(),
+            new ApiMetadataQueryServiceInMemory(),
+            new ApiPrimaryOwnerDomainService(
+                new AuditDomainService(auditCrudService, userCrudService, new JacksonJsonDiffProcessor()),
                 groupQueryService,
-                roleQueryService
-            );
+                membershipCrudService,
+                membershipQueryService,
+                roleQueryService,
+                userCrudService
+            ),
+            new ApiDocumentationDomainService(pageQueryService, planQueryService),
+            pageCrudService,
+            pageSourceDomainService,
+            groupQueryService,
+            roleQueryService
+        );
         roleQueryService.initWith(
             List.of(
-                Role
-                    .builder()
+                Role.builder()
                     .id("role-id")
                     .scope(Role.Scope.API)
                     .referenceType(Role.ReferenceType.ORGANIZATION)

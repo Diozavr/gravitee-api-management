@@ -35,7 +35,7 @@ export class RoleService {
   list(scope: string): Observable<Role[]> {
     return this.http
       .get<Role[]>(`${this.constants.org.baseURL}/configuration/rolescopes/${scope}/roles`)
-      .pipe(map((roles) => roles.map((role) => ({ ...role, scope: role.scope.toUpperCase() as RoleScope }))));
+      .pipe(map(roles => roles.map(role => ({ ...role, scope: role.scope.toUpperCase() as RoleScope }))));
   }
 
   getPermissionsByScopes(): Observable<PermissionsByScopes> {
@@ -44,13 +44,13 @@ export class RoleService {
 
   getPermissionsByScope(scope: string): Observable<string[]>;
   getPermissionsByScope(
-    scope: Extract<RoleScope, 'API' | 'APPLICATION' | 'ENVIRONMENT' | 'ORGANIZATION' | 'INTEGRATION'>,
+    scope: Extract<RoleScope, 'API' | 'APPLICATION' | 'ENVIRONMENT' | 'ORGANIZATION' | 'INTEGRATION' | 'CLUSTER' | 'API_PRODUCT'>,
   ): Observable<string[]> {
-    const availableScopes = ['API', 'APPLICATION', 'ENVIRONMENT', 'ORGANIZATION', 'INTEGRATION'];
+    const availableScopes = ['API', 'APPLICATION', 'ENVIRONMENT', 'ORGANIZATION', 'INTEGRATION', 'CLUSTER', 'API_PRODUCT'];
 
     const isAvailableScope = (
       scopeString: string,
-    ): scopeString is 'API' | 'APPLICATION' | 'ENVIRONMENT' | 'ORGANIZATION' | 'INTEGRATION' => {
+    ): scopeString is 'API' | 'APPLICATION' | 'ENVIRONMENT' | 'ORGANIZATION' | 'INTEGRATION' | 'CLUSTER' | 'API_PRODUCT' => {
       return availableScopes.includes(scope);
     };
 
@@ -58,13 +58,13 @@ export class RoleService {
       throw new Error(`Invalid scope. The accepted scopes are ${availableScopes.join(' | ')}`);
     }
 
-    return this.getPermissionsByScopes().pipe(map((s) => s[scope]));
+    return this.getPermissionsByScopes().pipe(map(s => s[scope]));
   }
 
   get(scope: string, roleName: string): Observable<Role> {
     return this.http
       .get<Role>(`${this.constants.org.baseURL}/configuration/rolescopes/${scope}/roles/${roleName}`)
-      .pipe(map((role) => ({ ...role, scope: role.scope.toUpperCase() as RoleScope })));
+      .pipe(map(role => ({ ...role, scope: role.scope.toUpperCase() as RoleScope })));
   }
 
   create(role: Role): Observable<Role> {

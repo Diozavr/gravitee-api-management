@@ -43,11 +43,15 @@ import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
 
+@CustomLog
 @RequiredArgsConstructor
 @UseCase
 public class ScoreApiRequestUseCase {
@@ -62,53 +66,60 @@ public class ScoreApiRequestUseCase {
     private final ScoringFunctionQueryService scoringFunctionQueryService;
 
     public Completable execute(Input input) {
-        var pages$ = Flowable
-            .fromIterable(apiDocumentationDomainService.getApiPages(input.apiId, null))
+        var pages$ = Flowable.fromIterable(apiDocumentationDomainService.getApiPages(input.apiId, null))
             .filter(page -> page.isAsyncApi() || page.isSwagger())
             .map(this::assetToScore);
-        var customRulesets$ = Flowable
-            .fromCallable(() ->
-                scoringRulesetQueryService.findByReference(input.auditInfo.environmentId(), ScoringRuleset.ReferenceType.ENVIRONMENT)
-            )
+        var customRulesets$ = Flowable.fromCallable(() ->
+            scoringRulesetQueryService.findByReference(input.auditInfo.environmentId(), ScoringRuleset.ReferenceType.ENVIRONMENT)
+        )
             .flatMap(Flowable::fromIterable)
             .flatMapMaybe(this::customRuleset)
             .toList();
-        var customFunctions$ = Flowable
-            .fromCallable(() ->
-                scoringFunctionQueryService.findByReference(input.auditInfo.environmentId(), ScoringFunction.ReferenceType.ENVIRONMENT)
-            )
+        var customFunctions$ = Flowable.fromCallable(() ->
+            scoringFunctionQueryService.findByReference(input.auditInfo.environmentId(), ScoringFunction.ReferenceType.ENVIRONMENT)
+        )
             .flatMap(Flowable::fromIterable)
             .map(r -> new ScoreRequest.Function(r.name(), r.payload()))
             .toList();
 
-        var export$ = Flowable
-            .fromCallable(() -> apiExportDomainService.export(input.apiId, input.auditInfo, EnumSet.noneOf(Excludable.class)))
+        var export$ = Flowable.fromCallable(() ->
+            apiExportDomainService.export(input.apiId, input.auditInfo, EnumSet.noneOf(Excludable.class))
+        )
             .map(this::assetToScore)
-            // export service throw error in some case (like if API isn't V4)
-            .onErrorResumeNext(th -> Flowable.empty());
+            .doOnError(throwable -> log.error("An error occurs while exporting API [{}]", input.apiId, throwable));
 
-        return Maybe
-            .fromOptional(apiCrudService.findById(input.apiId()))
+        return Maybe.fromOptional(apiCrudService.findById(input.apiId()))
+            .subscribeOn(Schedulers.io())
             .switchIfEmpty(Single.error(new ApiNotFoundException(input.apiId())))
             .flatMap(api -> Flowable.merge(pages$, export$).toList())
             .flatMap(assets ->
-                Single
-                    .zip(customRulesets$, customFunctions$, RulesetAndFunctions::new)
-                    .map(entry ->
-                        new ScoreRequest(
-                            UuidString.generateRandom(),
-                            input.auditInfo.organizationId(),
-                            input.auditInfo.environmentId(),
-                            input.apiId,
-                            assets,
-                            entry.rulesets(),
-                            entry.functions()
-                        )
+                Single.zip(customRulesets$, customFunctions$, RulesetAndFunctions::new).map(entry ->
+                    new ScoreRequest(
+                        UuidString.generateRandom(),
+                        input.auditInfo.organizationId(),
+                        input.auditInfo.environmentId(),
+                        input.apiId,
+                        assets,
+                        entry.rulesets(),
+                        entry.functions()
                     )
+                )
             )
-            .flatMapCompletable(request -> {
-                var job = newScoringJob(request.jobId(), input.auditInfo, input.apiId, deadLine(request));
-                return scoringProvider.requestScore(request).doOnComplete(() -> asyncJobCrudService.create(job));
+            .flatMap(request ->
+                Single.fromCallable(() ->
+                    asyncJobCrudService.create(newScoringJob(request.jobId(), input.auditInfo, input.apiId, deadLine(request)))
+                ).map(job -> Map.entry(request, job))
+            )
+            .flatMapCompletable(entry -> {
+                var request = entry.getKey();
+                var job = entry.getValue();
+                return scoringProvider
+                    .requestScore(request)
+                    .onErrorResumeNext(throwable ->
+                        Completable.fromRunnable(() -> asyncJobCrudService.update(job.error(throwable.getMessage()))).andThen(
+                            Completable.error(throwable)
+                        )
+                    );
             });
     }
 
@@ -136,7 +147,7 @@ public class ScoreApiRequestUseCase {
             case GraviteeDefinition.Federated ignored -> ScoreRequest.Format.GRAVITEE_FEDERATED;
             case GraviteeDefinition.Native ignored -> ScoreRequest.Format.GRAVITEE_NATIVE;
             case GraviteeDefinition.V4 v4 -> switch (v4.api().type()) {
-                case PROXY -> ScoreRequest.Format.GRAVITEE_PROXY;
+                case A2A_PROXY, LLM_PROXY, MCP_PROXY, PROXY -> ScoreRequest.Format.GRAVITEE_PROXY;
                 case MESSAGE -> ScoreRequest.Format.GRAVITEE_MESSAGE;
                 case NATIVE -> ScoreRequest.Format.GRAVITEE_NATIVE;
             };
@@ -163,8 +174,7 @@ public class ScoreApiRequestUseCase {
 
     public AsyncJob newScoringJob(String id, AuditInfo auditInfo, String apiId, Duration ttl) {
         var now = TimeProvider.now();
-        return AsyncJob
-            .builder()
+        return AsyncJob.builder()
             .id(id)
             .sourceId(apiId)
             .environmentId(auditInfo.environmentId())
@@ -184,7 +194,7 @@ public class ScoreApiRequestUseCase {
 
     /**
      * Compute the TTL of the scoring job.
-     *
+     * <p>
      * As simple rule, we consider that the scoring job will take 10 seconds per asset per ruleset to score (as simple ) and 30 seconds for the margin.
      *
      * @param request the scoring request

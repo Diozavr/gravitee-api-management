@@ -44,13 +44,13 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class IntegrationPrimaryOwnerUpgrader implements Upgrader {
 
     private static final int PAGE_SIZE = 100;
@@ -102,11 +102,10 @@ public class IntegrationPrimaryOwnerUpgrader implements Upgrader {
         int handledIntegrations = 0;
         Page<Integration> integrationPage;
         do {
-            integrationPage =
-                integrationRepository.findAllByEnvironment(
-                    executionContext.getEnvironmentId(),
-                    new PageableBuilder().pageNumber(handledIntegrations / PAGE_SIZE).pageSize(PAGE_SIZE).build()
-                );
+            integrationPage = integrationRepository.findAllByEnvironment(
+                executionContext.getEnvironmentId(),
+                new PageableBuilder().pageNumber(handledIntegrations / PAGE_SIZE).pageSize(PAGE_SIZE).build()
+            );
             handledIntegrations += (int) integrationPage.getPageElements();
 
             setPrimaryOwnersForIntegrations(integrationPage, executionContext);

@@ -58,7 +58,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.ToLongFunction;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -68,7 +68,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class ApiCategoryServiceImpl implements ApiCategoryService {
 
     private final ApiRepository apiRepository;
@@ -125,12 +125,14 @@ public class ApiCategoryServiceImpl implements ApiCategoryService {
             apiNotificationService.triggerUpdateNotification(executionContext, api);
             auditService.createApiAuditLog(
                 executionContext,
-                api.getId(),
-                Collections.emptyMap(),
-                API_UPDATED,
-                api.getUpdatedAt(),
-                apiSnapshot,
-                api
+                AuditService.AuditLogData.builder()
+                    .properties(Collections.emptyMap())
+                    .event(API_UPDATED)
+                    .createdAt(api.getUpdatedAt())
+                    .oldValue(apiSnapshot)
+                    .newValue(api)
+                    .build(),
+                api.getId()
             );
             apiCategoryOrderRepository.delete(api.getId(), categoryId);
         } catch (TechnicalException e) {
@@ -175,7 +177,12 @@ public class ApiCategoryServiceImpl implements ApiCategoryService {
         var apiByCatgeory = apiRepository
             .search(new ApiCriteria.Builder().ids(foundApiIds.getContent()).build(), null, ApiFieldFilter.defaultFields())
             .filter(api -> api.getCategories() != null && !api.getCategories().isEmpty())
-            .flatMap(api -> api.getCategories().stream().map(cat -> Pair.of(cat, api)))
+            .flatMap(api ->
+                api
+                    .getCategories()
+                    .stream()
+                    .map(cat -> Pair.of(cat, api))
+            )
             .collect(groupingBy(Pair::getKey, HashMap::new, counting()));
         return categoryId -> apiByCatgeory.getOrDefault(categoryId, 0L);
     }
@@ -260,17 +267,24 @@ public class ApiCategoryServiceImpl implements ApiCategoryService {
             .map(ApiCategoryOrder::getCategoryId)
             .collect(Collectors.toSet());
 
-        var categoriesToAdd = categoryIds.stream().filter(cat -> !currentApiCategoryIds.contains(cat)).collect(Collectors.toSet());
+        var categoriesToAdd = categoryIds
+            .stream()
+            .filter(cat -> !currentApiCategoryIds.contains(cat))
+            .collect(Collectors.toSet());
         this.addApiToCategories(apiId, categoriesToAdd);
 
         // Categories to remove
-        currentApiCategoryIds.stream().filter(cat -> !categoryIds.contains(cat)).forEach(cat -> removeApiFromCategory(apiId, cat));
+        currentApiCategoryIds
+            .stream()
+            .filter(cat -> !categoryIds.contains(cat))
+            .forEach(cat -> removeApiFromCategory(apiId, cat));
     }
 
     @Override
     public void deleteApiFromCategories(String apiId) {
-        this.apiCategoryOrderRepository.findAllByApiId(apiId)
-            .forEach(apiCategoryOrder -> removeApiFromCategory(apiId, apiCategoryOrder.getCategoryId()));
+        this.apiCategoryOrderRepository.findAllByApiId(apiId).forEach(apiCategoryOrder ->
+            removeApiFromCategory(apiId, apiCategoryOrder.getCategoryId())
+        );
     }
 
     private List<String> getUserMembershipApiIds(String userId) {

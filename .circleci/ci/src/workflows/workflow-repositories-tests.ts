@@ -49,23 +49,22 @@ export class RepositoriesTestsWorkflow {
         requires: [buildJobName],
         matrix: {
           jdbcType: [
-            'postgresql~13',
             'postgresql~14',
             'postgresql~15',
             'postgresql~16',
             'postgresql~17',
-            'mariadb~10.4',
-            'mariadb~10.5',
+            'postgresql~18',
             'mariadb~10.6',
             'mariadb~10.11',
-            'mariadb~11.0',
-            'mariadb~11.1',
-            'mariadb~11.2',
+            'mariadb~11.4',
+            'mariadb~11.8',
+            'mariadb~12.1',
             'mysql~8.0',
-            'mysql~8.2',
+            'mysql~8.4',
             'sqlserver~2017-latest',
             'sqlserver~2019-latest',
             'sqlserver~2022-latest',
+            'sqlserver~2025-latest',
           ],
         },
       }),
@@ -83,7 +82,7 @@ export class RepositoriesTestsWorkflow {
         requires: [buildJobName],
         matrix: {
           engineType: ['elasticsearch'],
-          engineVersion: ['7.17.15', '8.16.1'],
+          engineVersion: ['7.17.29', '8.19.7', '9.2.1'],
         },
       }),
       new workflow.WorkflowJob(opensearchTestContainerJob, {
@@ -92,7 +91,7 @@ export class RepositoriesTestsWorkflow {
         requires: [buildJobName],
         matrix: {
           engineType: ['opensearch'],
-          engineVersion: ['1', '2'],
+          engineVersion: ['1', '2', '3'],
         },
       }),
       new workflow.WorkflowJob(redisTestContainerJob, {

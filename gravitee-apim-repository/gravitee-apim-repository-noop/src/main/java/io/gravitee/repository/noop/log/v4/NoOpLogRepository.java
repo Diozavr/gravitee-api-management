@@ -15,46 +15,30 @@
  */
 package io.gravitee.repository.noop.log.v4;
 
-import io.gravitee.definition.model.DefinitionVersion;
-import io.gravitee.repository.analytics.AnalyticsException;
 import io.gravitee.repository.common.query.QueryContext;
 import io.gravitee.repository.log.v4.api.LogRepository;
 import io.gravitee.repository.log.v4.model.LogResponse;
-import io.gravitee.repository.log.v4.model.connection.ConnectionLog;
 import io.gravitee.repository.log.v4.model.connection.ConnectionLogDetail;
 import io.gravitee.repository.log.v4.model.connection.ConnectionLogDetailQuery;
-import io.gravitee.repository.log.v4.model.connection.ConnectionLogQuery;
 import io.gravitee.repository.log.v4.model.message.AggregatedMessageLog;
 import io.gravitee.repository.log.v4.model.message.MessageLogQuery;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 public class NoOpLogRepository implements LogRepository {
 
     @Override
-    public LogResponse<ConnectionLog> searchConnectionLogs(
-        QueryContext queryContext,
-        ConnectionLogQuery query,
-        List<DefinitionVersion> definitionVersions
-    ) {
-        return new LogResponse(0L, new ArrayList<>());
-    }
-
-    @Override
-    public Optional<ConnectionLogDetail> searchConnectionLogDetail(QueryContext queryContext, ConnectionLogDetailQuery query)
-        throws AnalyticsException {
+    public Optional<ConnectionLogDetail> searchConnectionLogDetail(QueryContext queryContext, ConnectionLogDetailQuery query) {
         return Optional.empty();
     }
 
     @Override
-    public LogResponse<ConnectionLogDetail> searchConnectionLogDetails(QueryContext queryContext, ConnectionLogDetailQuery query)
-        throws AnalyticsException {
-        return new LogResponse(0L, new ArrayList<>());
+    public LogResponse<ConnectionLogDetail> searchConnectionLogDetails(QueryContext queryContext, ConnectionLogDetailQuery query) {
+        return new LogResponse<>(0L, new ArrayList<>());
     }
 
     @Override
     public LogResponse<AggregatedMessageLog> searchAggregatedMessageLog(QueryContext queryContext, MessageLogQuery query) {
-        return new LogResponse(0L, new ArrayList<>());
+        return new LogResponse<>(0L, new ArrayList<>());
     }
 }

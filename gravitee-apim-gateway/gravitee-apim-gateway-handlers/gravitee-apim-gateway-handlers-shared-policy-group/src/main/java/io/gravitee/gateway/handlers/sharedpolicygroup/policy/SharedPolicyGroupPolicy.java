@@ -19,27 +19,41 @@ import io.gravitee.gateway.handlers.sharedpolicygroup.reactor.SharedPolicyGroupR
 import io.gravitee.gateway.handlers.sharedpolicygroup.registry.SharedPolicyGroupRegistry;
 import io.gravitee.gateway.reactive.api.context.ContextAttributes;
 import io.gravitee.gateway.reactive.api.context.base.BaseExecutionContext;
+import io.gravitee.gateway.reactive.api.context.http.HttpBaseExecutionContext;
 import io.gravitee.gateway.reactive.api.context.http.HttpPlainExecutionContext;
 import io.gravitee.gateway.reactive.api.policy.http.HttpPolicy;
 import io.gravitee.gateway.reactive.policy.HttpPolicyChain;
 import io.reactivex.rxjava3.core.Completable;
 import java.util.Optional;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Yann TAVERNIER (yann.tavernier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class SharedPolicyGroupPolicy implements HttpPolicy {
 
     public static final String POLICY_ID = "shared-policy-group-policy";
 
     private final String id;
-    public final SharedPolicyGroupPolicyConfiguration policyConfiguration;
+    public final io.gravitee.definition.model.sharedpolicygroup.SharedPolicyGroupPolicyConfiguration policyConfiguration;
 
-    public SharedPolicyGroupPolicy(String id, SharedPolicyGroupPolicyConfiguration policyConfiguration) {
+    public SharedPolicyGroupPolicy() {
+        this(POLICY_ID, null);
+    }
+
+    public SharedPolicyGroupPolicy(
+        io.gravitee.definition.model.sharedpolicygroup.SharedPolicyGroupPolicyConfiguration policyConfiguration
+    ) {
+        this(POLICY_ID, policyConfiguration);
+    }
+
+    public SharedPolicyGroupPolicy(
+        String id,
+        io.gravitee.definition.model.sharedpolicygroup.SharedPolicyGroupPolicyConfiguration policyConfiguration
+    ) {
         this.id = id;
         this.policyConfiguration = policyConfiguration;
     }
@@ -53,16 +67,22 @@ public class SharedPolicyGroupPolicy implements HttpPolicy {
     public Completable onRequest(HttpPlainExecutionContext ctx) {
         return getPolicyChain(ctx)
             .map(policyChain -> policyChain.execute(ctx))
-            .orElseGet(warnNotFoundAndComplete(ctx.getAttribute(ContextAttributes.ATTR_ENVIRONMENT)));
+            .orElseGet(warnNotFoundAndComplete(ctx));
     }
 
     @Override
     public Completable onResponse(HttpPlainExecutionContext ctx) {
         return getPolicyChain(ctx)
             .map(policyChain -> policyChain.execute(ctx))
-            .orElseGet(warnNotFoundAndComplete(ctx.getAttribute(ContextAttributes.ATTR_ENVIRONMENT)));
+            .orElseGet(warnNotFoundAndComplete(ctx));
     }
 
+    /**
+     * To be removed when Message Reactor implementation will use {@link this#warnNotFoundAndComplete(HttpBaseExecutionContext)}
+     * @param environmentId
+     * @return
+     */
+    @Deprecated(forRemoval = true)
     protected Supplier<Completable> warnNotFoundAndComplete(String environmentId) {
         return () -> {
             log.warn(
@@ -74,15 +94,26 @@ public class SharedPolicyGroupPolicy implements HttpPolicy {
         };
     }
 
-    private Optional<HttpPolicyChain> getPolicyChain(BaseExecutionContext ctx) {
-        final SharedPolicyGroupRegistry sharedPolicyGroupRegistry = ctx.getComponent(SharedPolicyGroupRegistry.class);
-        return Optional
-            .ofNullable(
-                sharedPolicyGroupRegistry.get(
+    protected Supplier<Completable> warnNotFoundAndComplete(HttpBaseExecutionContext ctx) {
+        return () -> {
+            ctx
+                .withLogger(log)
+                .warn(
+                    "No Shared Policy Group found for id {} on environment {}",
                     policyConfiguration.getSharedPolicyGroupId(),
                     ctx.getAttribute(ContextAttributes.ATTR_ENVIRONMENT)
-                )
+                );
+            return Completable.complete();
+        };
+    }
+
+    private Optional<HttpPolicyChain> getPolicyChain(BaseExecutionContext ctx) {
+        final SharedPolicyGroupRegistry sharedPolicyGroupRegistry = ctx.getComponent(SharedPolicyGroupRegistry.class);
+        return Optional.ofNullable(
+            sharedPolicyGroupRegistry.get(
+                policyConfiguration.getSharedPolicyGroupId(),
+                ctx.getAttribute(ContextAttributes.ATTR_ENVIRONMENT)
             )
-            .map(SharedPolicyGroupReactor::policyChain);
+        ).map(SharedPolicyGroupReactor::policyChain);
     }
 }

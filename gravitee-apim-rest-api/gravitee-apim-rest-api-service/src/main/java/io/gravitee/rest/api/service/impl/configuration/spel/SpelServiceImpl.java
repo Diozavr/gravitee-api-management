@@ -33,18 +33,16 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 
 /**
  * @author Guillaume CUSNIEUX (guillaume.cusnieux at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class SpelServiceImpl implements SpelService {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(SpelServiceImpl.class);
 
     // Generate with EvaluableExtractor
     // TODO: replace this file by direct call
@@ -85,7 +83,7 @@ public class SpelServiceImpl implements SpelService {
 
             return actualObj;
         } catch (IOException e) {
-            LOGGER.error("Error while getting the Expression Language grammar", e);
+            log.error("Error while getting the Expression Language grammar", e);
         }
         return null;
     }
@@ -99,8 +97,7 @@ public class SpelServiceImpl implements SpelService {
 
     private void buildType(ObjectNode type, Class<?> classz) {
         final ArrayNode methodsNode = type.putArray("methods");
-        Arrays
-            .stream(securedMethodResolver.getMethods(classz))
+        Arrays.stream(securedMethodResolver.getMethods(classz))
             .filter(f -> Modifier.isPublic(f.getModifiers()))
             .forEach(method -> {
                 ObjectNode methodNode = methodsNode.addObject();
@@ -115,12 +112,10 @@ public class SpelServiceImpl implements SpelService {
         final Parameter[] parameters = method.getParameters();
         if (parameters.length > 0) {
             final ArrayNode paramsNode = methodNode.putArray("params");
-            Arrays
-                .stream(parameters)
-                .forEach(parameter -> {
-                    ObjectNode paramNode = paramsNode.addObject();
-                    fillParameter(paramNode, parameter);
-                });
+            Arrays.stream(parameters).forEach(parameter -> {
+                ObjectNode paramNode = paramsNode.addObject();
+                fillParameter(paramNode, parameter);
+            });
         }
     }
 

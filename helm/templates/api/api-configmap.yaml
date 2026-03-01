@@ -167,7 +167,7 @@ data:
           authentication:
             {{- if .Values.api.services.bridge.authentication }}
 {{ toYaml .Values.api.services.bridge.authentication | indent 12 }}
-            {{- else if .Values.api.services.bridge.username}}
+            {{- else if .Values.api.services.bridge.username }}
             type: basic
             users:
               {{ .Values.api.services.bridge.username }}: {{ .Values.api.services.bridge.password }}
@@ -197,6 +197,10 @@ data:
       {{- if .Values.api.http.client.proxy }}
       proxy:
         type: {{ .Values.api.http.client.proxy.type }}
+        {{- with .Values.api.http.client.proxy.excludeHosts }}
+        exclude-hosts:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         {{- if .Values.api.http.client.proxy.http }}
         http:
           host: {{ .Values.api.http.client.proxy.http.host }}
@@ -218,14 +222,20 @@ data:
       {{- end }}
     {{- end }}
 
-    {{- if and .Values.api.http .Values.api.http.api }}
+    {{- if and .Values.api.http .Values.api.http }}
     http:
+    {{- if and .Values.api.http .Values.api.http.api }}
       api:
         entrypoint: {{ .Values.api.http.api.entrypoint }}
         management:
           entrypoint: ${http.api.entrypoint}management
         portal:
           entrypoint: ${http.api.entrypoint}portal
+    {{- end }}
+    {{- if and .Values.api.http .Values.api.http.secureHeaders }}
+      secureHeaders:
+        {{ toYaml .Values.api.http.secureHeaders | nindent 8 | trim -}}
+    {{- end }}
     {{- end }}
 
     analytics:
@@ -543,6 +553,8 @@ data:
             username: {{ .Values.alerts.security.username }}
             password: {{ .Values.alerts.security.password }}
           {{- end }}
+          defaultFilters:
+            enabled: {{ .Values.alerts.api.ws.defaultFilters.enabled }}
     {{- else }}
     alerts:
       alert-engine-connector-ws:
@@ -556,6 +568,18 @@ data:
     {{- if .Values.api.auth }}
     auth:
       external: {{- toYaml .Values.api.auth.external | nindent 8 -}}
+    {{- end }}
+    newtai:
+      elgen:
+        enabled: {{ .Values.api.newtai.elgen.enabled }}
+    {{- if .Values.kafkaConsole.enabled }}
+    kafka:
+      console:
+        enabled: true
+        server:
+          host: {{ template "gravitee.kafkaConsole.fullname" . }}
+          port: {{ .Values.kafkaConsole.service.externalPort }}
+          scheme: http
     {{- end }}
     # Cloud connector
     {{- if .Values.cloud.enabled }}
@@ -681,6 +705,10 @@ data:
                       <appendLineSeparator>true</appendLineSeparator>
                       <timestampFormat>yyyy-MM-dd'T'HH:mm:ss.SSSXX</timestampFormat>
                   </layout>
+              </encoder>
+              {{- else if .Values.api.logging.stdout.ecs }}
+              <encoder class="co.elastic.logging.logback.EcsEncoder">
+                  <serviceName>gravitee-management-api</serviceName>
               </encoder>
               {{- else }}
               <!-- encoders are assigned the type

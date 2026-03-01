@@ -20,10 +20,12 @@ import io.gravitee.rest.api.management.v2.rest.exceptionMapper.ConstraintValidat
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.JsonMappingExceptionMapper;
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.ManagementExceptionMapper;
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.NotFoundExceptionMapper;
+import io.gravitee.rest.api.management.v2.rest.exceptionMapper.ParamExceptionMapper;
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.PreconditionFailedExceptionMapper;
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.ThrowableMapper;
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.UnrecognizedPropertyExceptionMapper;
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.ValidationExceptionMapper;
+import io.gravitee.rest.api.management.v2.rest.exceptionMapper.domain.ConflictDomainExceptionMapper;
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.domain.NotAllowedDomainExceptionMapper;
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.domain.NotFoundDomainExceptionMapper;
 import io.gravitee.rest.api.management.v2.rest.exceptionMapper.domain.TechnicalDomainExceptionMapper;
@@ -33,6 +35,8 @@ import io.gravitee.rest.api.management.v2.rest.provider.CommaSeparatedQueryParam
 import io.gravitee.rest.api.management.v2.rest.provider.ObjectMapperResolver;
 import io.gravitee.rest.api.management.v2.rest.provider.YamlWriter;
 import io.gravitee.rest.api.management.v2.rest.resource.OpenAPIResource;
+import io.gravitee.rest.api.management.v2.rest.resource.analytics.computation.AnalyticsComputationResource;
+import io.gravitee.rest.api.management.v2.rest.resource.analytics.definition.AnalyticsDefinitionResource;
 import io.gravitee.rest.api.management.v2.rest.resource.api.ApisResource;
 import io.gravitee.rest.api.management.v2.rest.resource.application.ApplicationsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.asyncjob.AsyncJobsResource;
@@ -40,6 +44,7 @@ import io.gravitee.rest.api.management.v2.rest.resource.installation.Environment
 import io.gravitee.rest.api.management.v2.rest.resource.installation.GraviteeLicenseResource;
 import io.gravitee.rest.api.management.v2.rest.resource.installation.OrganizationResource;
 import io.gravitee.rest.api.management.v2.rest.resource.integration.IntegrationsResource;
+import io.gravitee.rest.api.management.v2.rest.resource.logs.LogsSearchResource;
 import io.gravitee.rest.api.management.v2.rest.resource.plugin.ApiServicesResource;
 import io.gravitee.rest.api.management.v2.rest.resource.plugin.EndpointsResource;
 import io.gravitee.rest.api.management.v2.rest.resource.plugin.EntrypointsResource;
@@ -47,6 +52,7 @@ import io.gravitee.rest.api.management.v2.rest.resource.plugin.PoliciesResource;
 import io.gravitee.rest.api.management.v2.rest.resource.plugin.ResourcesResource;
 import io.gravitee.rest.api.management.v2.rest.resource.ui.ManagementUIResource;
 import io.gravitee.rest.api.rest.filter.GraviteeContextResponseFilter;
+import io.gravitee.rest.api.rest.filter.GraviteeLicenseFilter;
 import io.gravitee.rest.api.rest.filter.MaintenanceFilter;
 import io.gravitee.rest.api.rest.filter.PermissionsFilter;
 import io.gravitee.rest.api.rest.filter.SecurityContextFilter;
@@ -73,6 +79,9 @@ public class GraviteeManagementV2Application extends ResourceConfig {
         register(EnvironmentsResource.class);
         register(ApisResource.class);
         register(ApplicationsResource.class);
+        register(AnalyticsDefinitionResource.class);
+        register(AnalyticsComputationResource.class);
+        register(LogsSearchResource.class);
 
         // Resources deprecated at root level
         register(EndpointsResource.class);
@@ -97,16 +106,19 @@ public class GraviteeManagementV2Application extends ResourceConfig {
         register(PreconditionFailedExceptionMapper.class);
         register(ValidationExceptionMapper.class);
         register(JsonMappingExceptionMapper.class);
+        register(ParamExceptionMapper.class);
 
         register(ValidationDomainExceptionMapper.class);
         register(TechnicalDomainExceptionMapper.class);
         register(NotAllowedDomainExceptionMapper.class);
         register(NotFoundDomainExceptionMapper.class);
+        register(ConflictDomainExceptionMapper.class);
 
         register(CommaSeparatedQueryParamConverterProvider.class);
 
         register(SecurityContextFilter.class);
         register(PermissionsFilter.class);
+        register(GraviteeLicenseFilter.class);
         register(GraviteeContextResponseFilter.class);
         register(UriBuilderRequestFilter.class);
         register(ByteArrayOutputStreamWriter.class);

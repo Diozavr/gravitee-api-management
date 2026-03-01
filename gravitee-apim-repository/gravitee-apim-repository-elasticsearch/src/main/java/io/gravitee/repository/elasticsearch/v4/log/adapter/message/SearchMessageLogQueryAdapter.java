@@ -46,16 +46,15 @@ public class SearchMessageLogQueryAdapter {
         }
 
         var terms = new ArrayList<JsonObject>();
-        if (filter.getApiId() != null) {
-            terms.add(JsonObject.of("term", JsonObject.of("api-id", filter.getApiId())));
+        if (filter.apiId() != null) {
+            terms.add(JsonObject.of("term", JsonObject.of("api-id", filter.apiId())));
         }
-        if (filter.getRequestId() != null) {
-            terms.add(JsonObject.of("term", JsonObject.of("request-id", filter.getRequestId())));
+        if (filter.requestId() != null) {
+            terms.add(JsonObject.of("term", JsonObject.of("request-id", filter.requestId())));
         }
-        if (filter.getConnectorType() != null) {
-            terms.add(JsonObject.of("term", JsonObject.of("connector-type", filter.getConnectorType())));
+        if (filter.connectorType() != null) {
+            terms.add(JsonObject.of("term", JsonObject.of("connector-type", filter.connectorType())));
         }
-
         if (!terms.isEmpty()) {
             return JsonObject.of("bool", JsonObject.of("must", JsonArray.of(terms.toArray())));
         }

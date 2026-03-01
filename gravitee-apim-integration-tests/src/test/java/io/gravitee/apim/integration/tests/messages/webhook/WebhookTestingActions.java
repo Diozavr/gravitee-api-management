@@ -15,7 +15,15 @@
  */
 package io.gravitee.apim.integration.tests.messages.webhook;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.anyRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalToIgnoreCase;
+import static com.github.tomakehurst.wiremock.client.WireMock.moreThan;
+import static com.github.tomakehurst.wiremock.client.WireMock.ok;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static io.reactivex.rxjava3.core.Observable.interval;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -175,7 +183,7 @@ public class WebhookTestingActions {
         configuration.setCallbackUrl(String.format("http://localhost:%s%s", wiremock.port(), callbackPath));
         configuration.setHeaders(headers);
         configuration.getRetry().setRetryStrategy(RetryStrategy.EXPONENTIAL);
-        configuration.getRetry().setRetryOnFail(true);
+        configuration.getRetry().setRetryOption("Retry On Fail");
         configuration.getRetry().setInitialDelaySeconds(3L);
         configuration.getRetry().setMaxDelaySeconds(3L);
         wiremock.stubFor(post(callbackPath).willReturn(ok("callback body")));
@@ -191,8 +199,7 @@ public class WebhookTestingActions {
             WebhookEntrypointConnectorSubscriptionConfiguration.class
         );
         conf.setAuth(
-            WebhookSubscriptionAuthConfiguration
-                .builder()
+            WebhookSubscriptionAuthConfiguration.builder()
                 .type(SecurityType.BASIC)
                 .basic(WebhookSubscriptionAuthConfiguration.Basic.builder().username(username).password(password).build())
                 .build()
@@ -216,8 +223,7 @@ public class WebhookTestingActions {
             WebhookEntrypointConnectorSubscriptionConfiguration.class
         );
         conf.setAuth(
-            WebhookSubscriptionAuthConfiguration
-                .builder()
+            WebhookSubscriptionAuthConfiguration.builder()
                 .type(SecurityType.TOKEN)
                 .token(WebhookSubscriptionAuthConfiguration.Token.builder().value(token).build())
                 .build()
@@ -241,12 +247,10 @@ public class WebhookTestingActions {
             WebhookEntrypointConnectorSubscriptionConfiguration.class
         );
         conf.setAuth(
-            WebhookSubscriptionAuthConfiguration
-                .builder()
+            WebhookSubscriptionAuthConfiguration.builder()
                 .type(SecurityType.OAUTH2)
                 .oauth2(
-                    WebhookSubscriptionAuthConfiguration.Oauth2
-                        .builder()
+                    WebhookSubscriptionAuthConfiguration.Oauth2.builder()
                         .clientId(clientId)
                         .clientSecret(clientSecret)
                         .endpoint("http://localhost:" + wiremock.port() + "/oauth2endpoint")
@@ -271,11 +275,59 @@ public class WebhookTestingActions {
         );
     }
 
+    String jwtTokenEndpoint() {
+        return "http://localhost:" + wiremock.port() + "/jwt-token-endpoint";
+    }
+
+    void applyJwtProfileOauth2Auth(Subscription subscription, String issuer, String subject, String hmacKey)
+        throws JsonProcessingException {
+        applyJwtProfileOauth2Auth(
+            subscription,
+            WebhookSubscriptionAuthConfiguration.JwtProfile.builder()
+                .issuer(issuer)
+                .subject(subject)
+                .audience(jwtTokenEndpoint())
+                .signatureAlgorithm(WebhookSubscriptionAuthConfiguration.SignatureAlgorithm.HMAC_HS256)
+                .keyContent(hmacKey)
+                .build()
+        );
+    }
+
+    void applyJwtProfileOauth2Auth(Subscription subscription, WebhookSubscriptionAuthConfiguration.JwtProfile jwtProfile)
+        throws JsonProcessingException {
+        final SubscriptionConfiguration subscriptionConfiguration = subscription.getConfiguration();
+
+        final WebhookEntrypointConnectorSubscriptionConfiguration conf = MAPPER.readValue(
+            subscriptionConfiguration.getEntrypointConfiguration(),
+            WebhookEntrypointConnectorSubscriptionConfiguration.class
+        );
+
+        conf.setAuth(
+            WebhookSubscriptionAuthConfiguration.builder().type(SecurityType.JWT_PROFILE_OAUTH2).jwtProfileOauth2(jwtProfile).build()
+        );
+
+        subscriptionConfiguration.setEntrypointConfiguration(MAPPER.writeValueAsString(conf));
+
+        wiremock.resetAll();
+        wiremock.stubFor(
+            post(conf.getCallbackUrl().replace("http://localhost:" + wiremock.port(), ""))
+                .withHeader("Authorization", equalToIgnoreCase("Bearer token-from-jwt-profile-server"))
+                .willReturn(ok())
+        );
+
+        wiremock.stubFor(
+            post("/jwt-token-endpoint")
+                .withRequestBody(containing("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer"))
+                .willReturn(ok("{\"token_type\":\"Bearer\",\"access_token\":\"token-from-jwt-profile-server\"}"))
+        );
+    }
+
     private Subscription buildTestSubscription(String apiId, WebhookEntrypointConnectorSubscriptionConfiguration configuration)
         throws JsonProcessingException {
         Subscription subscription = new Subscription();
         subscription.setApi(apiId);
         subscription.setId(UUID.randomUUID().toString());
+        subscription.setApplication(UUID.randomUUID().toString());
         subscription.setStatus("ACCEPTED");
         subscription.setType(Subscription.Type.PUSH);
         SubscriptionConfiguration subscriptionConfiguration = new SubscriptionConfiguration(
@@ -298,9 +350,14 @@ public class WebhookTestingActions {
         wiremock.verify(messageCount, postRequestedFor(urlPathEqualTo(callbackPath)).withRequestBody(equalTo(message)));
     }
 
+    public void verifyMessagesAtLeast(int messageCount, String callbackPath, String message) {
+        wiremock.verify(moreThan(1), postRequestedFor(urlPathEqualTo(callbackPath)).withRequestBody(equalTo(message)));
+    }
+
     public void verifyMessagesWithHeaders(int messageCount, String callbackPath, String message, List<HttpHeader> headers) {
-        final RequestPatternBuilder requestPatternBuilder = postRequestedFor(urlPathEqualTo(callbackPath))
-            .withRequestBody(equalTo(message));
+        final RequestPatternBuilder requestPatternBuilder = postRequestedFor(urlPathEqualTo(callbackPath)).withRequestBody(
+            equalTo(message)
+        );
 
         for (HttpHeader header : headers) {
             requestPatternBuilder.withHeader(header.getName(), equalTo(header.getValue()));
@@ -311,8 +368,9 @@ public class WebhookTestingActions {
 
     public void verifyMessagesWithHeaders(int messageCount, String callbackPath, List<HttpHeader> headers) {
         for (int i = 0; i < messageCount; i++) {
-            final RequestPatternBuilder requestPatternBuilder = postRequestedFor(urlPathEqualTo(callbackPath))
-                .withRequestBody(equalTo("message-" + i));
+            final RequestPatternBuilder requestPatternBuilder = postRequestedFor(urlPathEqualTo(callbackPath)).withRequestBody(
+                equalTo("message-" + i)
+            );
 
             for (HttpHeader header : headers) {
                 requestPatternBuilder.withHeader(header.getName(), equalTo(header.getValue()));

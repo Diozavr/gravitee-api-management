@@ -18,11 +18,12 @@ package io.gravitee.apim.infra.adapter;
 import io.gravitee.apim.core.api.model.Api;
 import io.gravitee.apim.core.api.model.crd.ApiCRDSpec;
 import io.gravitee.apim.core.membership.model.PrimaryOwnerEntity;
-import io.gravitee.definition.model.DefinitionVersion;
+import io.gravitee.definition.model.ApiDefinition;
 import io.gravitee.definition.model.federation.FederatedAgent;
 import io.gravitee.definition.model.federation.FederatedApi;
 import io.gravitee.definition.model.v4.ApiType;
 import io.gravitee.definition.model.v4.nativeapi.NativeApi;
+import io.gravitee.node.logging.NodeLoggerFactory;
 import io.gravitee.rest.api.model.context.OriginContext;
 import io.gravitee.rest.api.model.federation.FederatedApiAgentEntity;
 import io.gravitee.rest.api.model.federation.FederatedApiEntity;
@@ -42,19 +43,27 @@ import org.mapstruct.MappingConstants;
 import org.mapstruct.ValueMapping;
 import org.mapstruct.factory.Mappers;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Mapper(uses = { PlanAdapter.class })
 @DecoratedWith(ApiAdapterDecorator.class)
 public interface ApiAdapter {
-    Logger LOGGER = LoggerFactory.getLogger(ApiAdapter.class);
+    Logger log = NodeLoggerFactory.getLogger(ApiAdapter.class);
     ApiAdapter INSTANCE = Mappers.getMapper(ApiAdapter.class);
 
-    @Mapping(target = "apiDefinitionHttpV4", expression = "java(deserializeApiDefinitionV4(source))")
-    @Mapping(target = "apiDefinition", expression = "java(deserializeApiDefinitionV2(source))")
-    @Mapping(target = "federatedApiDefinition", expression = "java(deserializeFederatedApiDefinition(source))")
-    @Mapping(target = "apiDefinitionNativeV4", expression = "java(deserializeNativeApiDefinition(source))")
+    @Mapping(target = "apiDefinitionValue", expression = "java(toApiDefinition(source))")
     Api toCoreModel(io.gravitee.repository.management.model.Api source);
+
+    default ApiDefinition toApiDefinition(io.gravitee.repository.management.model.Api source) {
+        return switch (source.getDefinitionVersion()) {
+            case V4 -> source.getType() != ApiType.NATIVE
+                ? deserialize(source, io.gravitee.definition.model.v4.Api.class)
+                : deserialize(source, NativeApi.class);
+            case FEDERATED -> deserialize(source, FederatedApi.class);
+            case FEDERATED_AGENT -> null; // TODO ???
+            case V1, V2 -> deserialize(source, io.gravitee.definition.model.Api.class);
+            case null -> deserialize(source, io.gravitee.definition.model.Api.class);
+        };
+    }
 
     Stream<Api> toCoreModelStream(Stream<io.gravitee.repository.management.model.Api> source);
 
@@ -171,44 +180,19 @@ public interface ApiAdapter {
         try {
             return GraviteeJacksonMapper.getInstance().readValue(api.getDefinition(), clazz);
         } catch (IOException ioe) {
-            LOGGER.error("Unexpected error while deserializing V4 API definition", ioe);
+            log.error("Unexpected error while deserializing V4 API definition", ioe);
             return null;
         }
     }
 
-    default io.gravitee.definition.model.v4.Api deserializeApiDefinitionV4(io.gravitee.repository.management.model.Api api) {
-        return api.getDefinitionVersion() == DefinitionVersion.V4 && api.getType() != ApiType.NATIVE
-            ? deserialize(api, io.gravitee.definition.model.v4.Api.class)
-            : null;
-    }
-
-    default io.gravitee.definition.model.Api deserializeApiDefinitionV2(io.gravitee.repository.management.model.Api api) {
-        return api.getDefinitionVersion() == DefinitionVersion.V2 || api.getDefinitionVersion() == null
-            ? deserialize(api, io.gravitee.definition.model.Api.class)
-            : null;
-    }
-
-    default io.gravitee.definition.model.federation.FederatedApi deserializeFederatedApiDefinition(
-        io.gravitee.repository.management.model.Api api
-    ) {
-        return api.getDefinitionVersion() == DefinitionVersion.FEDERATED ? deserialize(api, FederatedApi.class) : null;
-    }
-
-    default NativeApi deserializeNativeApiDefinition(io.gravitee.repository.management.model.Api api) {
-        return api.getDefinitionVersion() == DefinitionVersion.V4 && api.getType() == ApiType.NATIVE
-            ? deserialize(api, NativeApi.class)
-            : null;
-    }
-
     default String serializeApiDefinition(Api api) {
-        return switch (api.getDefinitionVersion()) {
-            case V1, V2 -> serialize(api.getApiDefinition(), "V2 API");
-            case V4 -> switch (api.getType()) {
-                case NATIVE -> serialize(api.getApiDefinitionNativeV4(), "V4 Native API");
-                case PROXY, MESSAGE -> serialize(api.getApiDefinitionHttpV4(), "V4 API");
-            };
-            case FEDERATED -> serialize(api.getFederatedApiDefinition(), "Federated API");
-            case FEDERATED_AGENT -> serialize(api.getFederatedAgent(), "Federated Agent");
+        return switch (api.getApiDefinitionValue()) {
+            case io.gravitee.definition.model.Api v2 -> serialize(v2, "V2 API");
+            case NativeApi nativeApi -> serialize(nativeApi, "V4 Native API");
+            case io.gravitee.definition.model.v4.Api v4 -> serialize(v4, "V4 API");
+            case FederatedApi federatedApi -> serialize(federatedApi, "Federated API");
+            case FederatedAgent federatedAgent -> serialize(federatedAgent, "Federated Agent");
+            default -> null;
         };
     }
 

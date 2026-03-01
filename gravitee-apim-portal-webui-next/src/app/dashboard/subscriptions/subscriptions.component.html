@@ -1,0 +1,84 @@
+<!--
+
+    Copyright (C) 2024 The Gravitee team (http://gravitee.io)
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<div class="subscriptions">
+  @if (hasSubscriptions()) {
+    <!-- Filters -->
+    <div class="subscriptions__filters">
+      <app-dropdown-search
+        class="subscriptions__filter"
+        i18n-label="@@subscriptionFilterApi"
+        label="API"
+        i18n-placeholder="@@subscriptionFilterApiPlaceholder"
+        placeholder="Search APIs..."
+        [resultsLoader]="apiResultsLoader"
+        [formControl]="apiFilter"
+        id="subscriptions-api-filter"
+      />
+
+      <app-dropdown-search
+        class="subscriptions__filter"
+        i18n-label="@@subscriptionFilterApplication"
+        label="Application"
+        i18n-placeholder="@@subscriptionFilterApplicationPlaceholder"
+        placeholder="Search Applications..."
+        [options]="applicationOptions()"
+        [formControl]="applicationFilter"
+        id="subscriptions-application-filter"
+      />
+
+      <app-dropdown-search
+        class="subscriptions__filter"
+        i18n-label="@@subscriptionFilterStatus"
+        label="Status"
+        i18n-placeholder="@@subscriptionFilterStatusPlaceholder"
+        placeholder="Search Statuses..."
+        [options]="statusOptions"
+        [formControl]="statusFilter"
+        id="subscriptions-status-filter"
+      />
+
+      <button mat-button (click)="clearFilters()" i18n="@@clearFilters">Clear filters</button>
+    </div>
+
+    @if (isLoadingSubscriptions()) {
+      <app-loader />
+    } @else if (rows().length === 0) {
+      <div class="subscriptions__empty-filtered">
+        <span class="material-icons icon-with-background m3-headline-large" aria-hidden="true">filter_list_off</span>
+        <h2 class="m3-title-large" i18n="@@subscriptionsNoResultsTitle">No subscriptions found</h2>
+        <p i18n="@@subscriptionsNoResultsDescription">Try adjusting your filters to find subscriptions.</p>
+      </div>
+    } @else {
+      <app-paginated-table
+        [columns]="tableColumns"
+        [rows]="rows()"
+        [totalElements]="totalElements()"
+        [currentPage]="currentPage()"
+        [pageSize]="pageSize()"
+        (pageChange)="onPageChange($event)"
+        (pageSizeChange)="onPageSizeChange($event)"
+      />
+    }
+  } @else {
+    <div class="subscriptions__empty-state">
+      <span class="material-icons icon-with-background m3-headline-large" aria-hidden="true">search</span>
+      <h2 class="m3-title-large" i18n="@@subscriptionsEmptyTitle">No API subscriptions yet</h2>
+      <p i18n="@@subscriptionsEmptyDescription">Browse the catalog to discover available APIs and subscribe with an application.</p>
+    </div>
+  }
+</div>

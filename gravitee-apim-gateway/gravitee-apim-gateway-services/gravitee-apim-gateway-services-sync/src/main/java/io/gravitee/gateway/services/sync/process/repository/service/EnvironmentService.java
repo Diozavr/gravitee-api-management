@@ -15,6 +15,7 @@
  */
 package io.gravitee.gateway.services.sync.process.repository.service;
 
+import io.gravitee.gateway.handlers.api.ReactableApiProduct;
 import io.gravitee.gateway.handlers.sharedpolicygroup.ReactableSharedPolicyGroup;
 import io.gravitee.gateway.reactor.ReactableApi;
 import io.gravitee.repository.management.api.EnvironmentRepository;
@@ -22,15 +23,15 @@ import io.gravitee.repository.management.api.OrganizationRepository;
 import io.gravitee.repository.management.model.Environment;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class EnvironmentService {
 
     private final EnvironmentRepository environmentRepository;
@@ -81,35 +82,52 @@ public class EnvironmentService {
         }
     }
 
-    private Environment loadEnvironment(final String environmentId) {
-        return environments.computeIfAbsent(
-            environmentId,
-            envId -> {
-                try {
-                    var environmentOpt = environmentRepository.findById(envId);
-                    if (environmentOpt.isPresent()) {
-                        Environment environment = environmentOpt.get();
-                        loadOrganization(environment);
-                        return environment;
-                    }
-                } catch (Exception e) {
-                    log.warn("An error occurred fetching the environment '{}' and its organization.", envId, e);
+    public void fill(final String environmentId, final ReactableApiProduct reactableApiProduct) {
+        if (environmentId != null) {
+            Environment apiProductEnv = loadEnvironment(environmentId);
+            if (apiProductEnv != null) {
+                reactableApiProduct.setEnvironmentId(apiProductEnv.getId());
+                reactableApiProduct.setEnvironmentHrid(
+                    apiProductEnv.getHrids() != null ? apiProductEnv.getHrids().stream().findFirst().orElse(null) : null
+                );
+
+                final io.gravitee.repository.management.model.Organization apiProductOrg = organizations.get(
+                    apiProductEnv.getOrganizationId()
+                );
+
+                if (apiProductOrg != null) {
+                    reactableApiProduct.setOrganizationId(apiProductOrg.getId());
+                    reactableApiProduct.setOrganizationHrid(
+                        apiProductOrg.getHrids() != null ? apiProductOrg.getHrids().stream().findFirst().orElse(null) : null
+                    );
                 }
-                return null;
             }
-        );
+        }
+    }
+
+    private Environment loadEnvironment(final String environmentId) {
+        return environments.computeIfAbsent(environmentId, envId -> {
+            try {
+                var environmentOpt = environmentRepository.findById(envId);
+                if (environmentOpt.isPresent()) {
+                    Environment environment = environmentOpt.get();
+                    loadOrganization(environment);
+                    return environment;
+                }
+            } catch (Exception e) {
+                log.warn("An error occurred fetching the environment '{}' and its organization.", envId, e);
+            }
+            return null;
+        });
     }
 
     private void loadOrganization(final Environment environment) {
-        organizations.computeIfAbsent(
-            environment.getOrganizationId(),
-            orgId -> {
-                try {
-                    return organizationRepository.findById(orgId).orElse(null);
-                } catch (Exception e) {
-                    return null;
-                }
+        organizations.computeIfAbsent(environment.getOrganizationId(), orgId -> {
+            try {
+                return organizationRepository.findById(orgId).orElse(null);
+            } catch (Exception e) {
+                return null;
             }
-        );
+        });
     }
 }

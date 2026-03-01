@@ -16,51 +16,36 @@
 package io.gravitee.apim.core.log.use_case;
 
 import io.gravitee.apim.core.UseCase;
-import io.gravitee.apim.core.log.crud_service.MessageLogCrudService;
-import io.gravitee.apim.core.log.model.AggregatedMessageLog;
+import io.gravitee.apim.core.log.crud_service.MessageLogsCrudService;
+import io.gravitee.apim.core.log.model.MessageLog;
+import io.gravitee.rest.api.model.analytics.SearchMessageLogsFilters;
 import io.gravitee.rest.api.model.common.Pageable;
-import io.gravitee.rest.api.model.common.PageableImpl;
-import io.gravitee.rest.api.model.v4.log.SearchLogsResponse;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import java.util.List;
-import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 
 /**
- * @author Yann TAVERNIER (yann.tavernier at graviteesource.com)
+ * @author Benoit BORDIGONI (benoit.bordigoni at graviteesource.com)
  * @author GraviteeSource Team
  */
+
 @UseCase
+@RequiredArgsConstructor
 public class SearchApiMessageLogsUseCase {
 
-    private final MessageLogCrudService messageLogCrudService;
+    private final MessageLogsCrudService messageMetricsCrudService;
 
-    public SearchApiMessageLogsUseCase(MessageLogCrudService messageLogCrudService) {
-        this.messageLogCrudService = messageLogCrudService;
-    }
+    public record Input(String apiId, SearchMessageLogsFilters searchMessageMetricsFilters, Pageable pageable) {}
+
+    public record Output(long total, List<MessageLog> data) {}
 
     public Output execute(ExecutionContext executionContext, Input input) {
-        var pageable = input.pageable.orElse(new PageableImpl(1, 20));
-
-        var response = messageLogCrudService.searchApiMessageLog(executionContext, input.apiId(), input.requestId(), pageable);
-        return mapToResponse(response);
+        var response = messageMetricsCrudService.searchApiMessageLogs(
+            executionContext,
+            input.apiId(),
+            input.searchMessageMetricsFilters(),
+            input.pageable()
+        );
+        return new Output(response.total(), response.logs());
     }
-
-    private Output mapToResponse(SearchLogsResponse<AggregatedMessageLog> logs) {
-        var total = logs.total();
-        var data = logs.logs();
-
-        return new Output(total, data);
-    }
-
-    public record Input(String apiId, String requestId, Optional<Pageable> pageable) {
-        public Input(String apiId, String requestId) {
-            this(apiId, requestId, Optional.empty());
-        }
-
-        public Input(String apiId, String requestId, Pageable pageable) {
-            this(apiId, requestId, Optional.of(pageable));
-        }
-    }
-
-    public record Output(long total, List<AggregatedMessageLog> data) {}
 }

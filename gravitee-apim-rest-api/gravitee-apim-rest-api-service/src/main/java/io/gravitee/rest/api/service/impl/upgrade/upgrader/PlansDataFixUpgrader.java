@@ -39,7 +39,7 @@ import io.gravitee.rest.api.service.v4.PrimaryOwnerService;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -49,7 +49,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class PlansDataFixUpgrader implements Upgrader {
 
     private static final String PLAN_DESCRIPTION =
@@ -218,12 +218,12 @@ public class PlansDataFixUpgrader implements Upgrader {
     private Plan planFromDefinitionPlan(io.gravitee.definition.model.Plan definitionPlan, String apiId) {
         Plan plan = new Plan();
         plan.setId(UuidString.generateRandom());
-        plan.setType(Plan.PlanType.API);
         plan.setValidation(Plan.PlanValidationType.MANUAL);
         plan.setStatus(Plan.Status.DEPRECATED);
         plan.setName(definitionPlan.getName().concat(PLAN_NAME_SUFFIX));
         plan.setDescription(PLAN_DESCRIPTION);
-        plan.setApi(apiId);
+        plan.setReferenceId(apiId);
+        plan.setReferenceType(Plan.PlanReferenceType.API);
         plan.setSecurityDefinition(definitionPlan.getSecurityDefinition());
         plan.setSelectionRule(definitionPlan.getSelectionRule());
         plan.setTags(definitionPlan.getTags());
@@ -248,24 +248,27 @@ public class PlansDataFixUpgrader implements Upgrader {
     }
 
     private boolean hasPlansDataAnomaly(Set<Plan> apiPlans, List<io.gravitee.definition.model.Plan> definitionPlans) {
-        List<String> apiPlansIds = apiPlans.stream().filter(plan -> plan.getStatus() != Plan.Status.CLOSED).map(Plan::getId).toList();
+        List<String> apiPlansIds = apiPlans
+            .stream()
+            .filter(plan -> plan.getStatus() != Plan.Status.CLOSED)
+            .map(Plan::getId)
+            .toList();
         List<String> definitionPlansIds = definitionPlans.stream().map(io.gravitee.definition.model.Plan::getId).toList();
         return apiPlansIds.size() != definitionPlansIds.size() || !definitionPlansIds.containsAll(apiPlansIds);
     }
 
     protected void sendEmailToApiOwner(ExecutionContext executionContext, Api api, List<Plan> createdPlans, List<Plan> closedPlans) {
-        getApiOwnerEmail(executionContext.getOrganizationId(), api)
-            .ifPresent(apiOwnerEmail -> {
-                log.debug("Sending report email to api {} owner", api.getId());
-                emailService.sendAsyncEmailNotification(
-                    executionContext,
-                    new EmailNotificationBuilder()
-                        .params(Map.of("api", api, "closedPlans", closedPlans, "createdPlans", createdPlans))
-                        .to(apiOwnerEmail)
-                        .template(EmailNotificationBuilder.EmailTemplate.API_PLANS_DATA_FIXED)
-                        .build()
-                );
-            });
+        getApiOwnerEmail(executionContext.getOrganizationId(), api).ifPresent(apiOwnerEmail -> {
+            log.debug("Sending report email to api {} owner", api.getId());
+            emailService.sendAsyncEmailNotification(
+                executionContext,
+                new EmailNotificationBuilder()
+                    .params(Map.of("api", api, "closedPlans", closedPlans, "createdPlans", createdPlans))
+                    .to(apiOwnerEmail)
+                    .template(EmailNotificationBuilder.EmailTemplate.API_PLANS_DATA_FIXED)
+                    .build()
+            );
+        });
     }
 
     private Optional<String> getApiOwnerEmail(String organizationId, Api api) {
@@ -288,16 +291,13 @@ public class PlansDataFixUpgrader implements Upgrader {
     }
 
     private ExecutionContext getApiExecutionContext(Api api) {
-        return executionContextByEnvironment.computeIfAbsent(
-            api.getEnvironmentId(),
-            envId -> {
-                try {
-                    return environmentRepository.findById(api.getEnvironmentId()).map(ExecutionContext::new).orElse(null);
-                } catch (TechnicalException e) {
-                    log.error("failed to find environment {}", api.getEnvironmentId(), e);
-                    return null;
-                }
+        return executionContextByEnvironment.computeIfAbsent(api.getEnvironmentId(), envId -> {
+            try {
+                return environmentRepository.findById(api.getEnvironmentId()).map(ExecutionContext::new).orElse(null);
+            } catch (TechnicalException e) {
+                log.error("failed to find environment {}", api.getEnvironmentId(), e);
+                return null;
             }
-        );
+        });
     }
 }

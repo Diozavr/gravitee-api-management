@@ -16,6 +16,9 @@
 
 import { Component, Input, OnInit } from '@angular/core';
 import * as Highcharts from 'highcharts';
+import { round } from 'lodash';
+
+import { GioChartAbstractComponent } from '../gio-chart-abstract/gio-chart-abstract.component';
 
 export interface GioChartLineData {
   name: string;
@@ -24,7 +27,15 @@ export interface GioChartLineData {
 export interface GioChartLineOptions {
   pointStart: number;
   pointInterval: number;
+  enableMarkers?: boolean;
+  useSharpCorners?: boolean;
 }
+
+export const colors = ['#2B72FB', '#64BDC6', '#EECA34', '#FA4B42', '#FE6A35'];
+
+export const defineLineColors = (code: string) => {
+  return colors[Math.floor(+code / 100) - 1];
+};
 
 @Component({
   selector: 'gio-chart-line',
@@ -32,29 +43,25 @@ export interface GioChartLineOptions {
   styleUrls: ['./gio-chart-line.component.scss'],
   standalone: false,
 })
-export class GioChartLineComponent implements OnInit {
+export class GioChartLineComponent extends GioChartAbstractComponent implements OnInit {
   @Input()
   public data: GioChartLineData[];
 
   @Input()
   public options: GioChartLineOptions;
 
-  Highcharts: typeof Highcharts = Highcharts;
   chartOptions: Highcharts.Options;
 
-  callbackFunction: Highcharts.ChartCallbackFunction = function (chart) {
-    // Redraw the chart after the component is loaded. to fix the issue of the chart display with bad size
-    setTimeout(() => {
-      chart?.reflow();
-    }, 0);
-  };
-
   ngOnInit() {
+    const markersEnabled = this.options?.enableMarkers ?? false;
+
     this.chartOptions = {
       credits: { enabled: false },
+      time: { useUTC: false },
       chart: {
-        backgroundColor: 'transparent',
-        type: 'spline',
+        plotBackgroundColor: '#F7F7F8',
+        type: this.options?.useSharpCorners ? 'line' : 'spline',
+        marginTop: 32,
       },
 
       title: {
@@ -78,17 +85,40 @@ export class GioChartLineComponent implements OnInit {
 
       plotOptions: {
         series: {
-          marker: { enabled: false },
+          marker: {
+            enabled: markersEnabled,
+            radius: markersEnabled ? 4 : 0,
+            symbol: 'circle',
+          },
           pointStart: Math.floor(this.options?.pointStart / this.options?.pointInterval) * this.options?.pointInterval,
           pointInterval: this.options?.pointInterval,
         },
-        line: {},
+        line: {
+          marker: {
+            enabled: markersEnabled,
+            radius: markersEnabled ? 4 : 0,
+            symbol: 'circle',
+          },
+        },
+        spline: {
+          marker: {
+            enabled: markersEnabled,
+            radius: markersEnabled ? 4 : 0,
+            symbol: 'circle',
+          },
+        },
       },
 
-      series: this.data?.map((item) => ({
+      series: this.data?.map(item => ({
         name: item.name,
-        data: item.values,
-        type: 'spline',
+        data: item.values?.map(value => (value === null ? null : round(value, 2))),
+        type: this.options?.useSharpCorners ? 'line' : 'spline',
+        color: defineLineColors(item.name),
+        marker: {
+          enabled: markersEnabled,
+          radius: markersEnabled ? 4 : 0,
+          symbol: 'circle',
+        },
       })),
     };
   }

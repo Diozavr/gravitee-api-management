@@ -74,8 +74,8 @@ class RevokeSubscriptionApiKeyUseCaseTest {
 
     ApplicationCrudServiceInMemory applicationCrudService = new ApplicationCrudServiceInMemory();
     ApiKeyCrudServiceInMemory apiKeyCrudService = new ApiKeyCrudServiceInMemory();
-    ApiKeyQueryServiceInMemory apiKeyQueryService = new ApiKeyQueryServiceInMemory(apiKeyCrudService);
     SubscriptionCrudServiceInMemory subscriptionCrudService = new SubscriptionCrudServiceInMemory();
+    ApiKeyQueryServiceInMemory apiKeyQueryService = new ApiKeyQueryServiceInMemory(apiKeyCrudService, subscriptionCrudService);
     AuditCrudServiceInMemory auditCrudService = new AuditCrudServiceInMemory();
     TriggerNotificationDomainServiceInMemory triggerNotificationDomainService = new TriggerNotificationDomainServiceInMemory();
     RevokeSubscriptionApiKeyUseCase usecase;
@@ -100,13 +100,12 @@ class RevokeSubscriptionApiKeyUseCaseTest {
             auditDomainService,
             triggerNotificationDomainService
         );
-        usecase =
-            new RevokeSubscriptionApiKeyUseCase(
-                subscriptionCrudService,
-                applicationCrudService,
-                apiKeyQueryService,
-                revokeApiKeyDomainService
-            );
+        usecase = new RevokeSubscriptionApiKeyUseCase(
+            subscriptionCrudService,
+            applicationCrudService,
+            apiKeyQueryService,
+            revokeApiKeyDomainService
+        );
     }
 
     @AfterEach
@@ -119,7 +118,7 @@ class RevokeSubscriptionApiKeyUseCaseTest {
         // Given no subscription
 
         // When
-        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, AUDIT_INFO)));
+        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, API_ID, "API", AUDIT_INFO)));
 
         // Then
         assertThat(throwable)
@@ -133,7 +132,7 @@ class RevokeSubscriptionApiKeyUseCaseTest {
         givenASubscription();
 
         // When
-        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, AUDIT_INFO)));
+        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, API_ID, "API", AUDIT_INFO)));
 
         // Then
         assertThat(throwable).isInstanceOf(ApiKeyNotFoundException.class).hasMessage("No API Key can be found.");
@@ -146,7 +145,7 @@ class RevokeSubscriptionApiKeyUseCaseTest {
         givenAnApiKey(anApiKey().toBuilder().key(KEY).subscriptions(List.of("another-subscription")).build());
 
         // When
-        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, AUDIT_INFO)));
+        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, API_ID, "API", AUDIT_INFO)));
 
         // Then
         assertThat(throwable).isInstanceOf(ApiKeyNotFoundException.class).hasMessage("No API Key can be found.");
@@ -159,7 +158,7 @@ class RevokeSubscriptionApiKeyUseCaseTest {
         givenAnApiKey(anApiKey().toBuilder().key(KEY).subscriptions(List.of(subscription.getId())).build());
 
         // When
-        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, AUDIT_INFO)));
+        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, API_ID, "API", AUDIT_INFO)));
 
         // Then
         assertThat(throwable)
@@ -177,7 +176,7 @@ class RevokeSubscriptionApiKeyUseCaseTest {
         );
 
         // When
-        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, AUDIT_INFO)));
+        var throwable = catchThrowable(() -> usecase.execute(new Input(SUBSCRIPTION_ID, KEY, API_ID, "API", AUDIT_INFO)));
 
         // Then
         assertThat(throwable)
@@ -197,7 +196,7 @@ class RevokeSubscriptionApiKeyUseCaseTest {
         );
 
         // When
-        var result = usecase.execute(new Input(SUBSCRIPTION_ID, KEY, AUDIT_INFO));
+        var result = usecase.execute(new Input(SUBSCRIPTION_ID, KEY, API_ID, "API", AUDIT_INFO));
 
         // Then
         SoftAssertions.assertSoftly(soft -> {
@@ -218,7 +217,7 @@ class RevokeSubscriptionApiKeyUseCaseTest {
         );
 
         // When
-        var result = usecase.execute(new Input(SUBSCRIPTION_ID, KEY, AUDIT_INFO));
+        var result = usecase.execute(new Input(SUBSCRIPTION_ID, KEY, API_ID, "API", AUDIT_INFO));
 
         // Then
         assertThat(auditCrudService.storage())
@@ -250,17 +249,17 @@ class RevokeSubscriptionApiKeyUseCaseTest {
         );
 
         // When
-        usecase.execute(new Input(SUBSCRIPTION_ID, KEY, AUDIT_INFO));
+        usecase.execute(new Input(SUBSCRIPTION_ID, KEY, API_ID, "API", AUDIT_INFO));
 
         // Then
-        assertThat(triggerNotificationDomainService.getApiNotifications())
-            .containsExactly(new ApiKeyRevokedApiHookContext(API_ID, APPLICATION_ID, PLAN_1, apiKey.getKey()));
+        assertThat(triggerNotificationDomainService.getApiNotifications()).containsExactly(
+            new ApiKeyRevokedApiHookContext(API_ID, APPLICATION_ID, PLAN_1, apiKey.getKey())
+        );
     }
 
     private SubscriptionEntity givenASubscription() {
         return givenASubscription(
-            SubscriptionFixtures
-                .aSubscription()
+            SubscriptionFixtures.aSubscription()
                 .toBuilder()
                 .id(SUBSCRIPTION_ID)
                 .apiId(API_ID)

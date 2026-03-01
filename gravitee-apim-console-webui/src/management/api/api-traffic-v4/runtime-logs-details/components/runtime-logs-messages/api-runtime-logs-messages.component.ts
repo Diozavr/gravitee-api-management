@@ -69,13 +69,7 @@ export class ApiRuntimeLogsMessagesComponent implements OnInit, OnDestroy {
     return this.apiLogsService
       .searchConnectionLogDetail(this.activatedRoute.snapshot.params.apiId, this.activatedRoute.snapshot.params.requestId)
       .pipe(
-        catchError((err) => {
-          // normally 404 is intercepted by the HttpErrorInterceptor and displayed as a snack error, but on this page, it should be dismissed.
-          if (err.status === 404) {
-            this.matSnackBar.dismiss();
-          }
-          return of(undefined);
-        }),
+        catchError(() => of(undefined)),
         takeUntil(this.unsubscribe$),
       );
   }
@@ -84,15 +78,15 @@ export class ApiRuntimeLogsMessagesComponent implements OnInit, OnDestroy {
     this.apiLogsService
       .searchMessageLogs(this.activatedRoute.snapshot.params.apiId, this.activatedRoute.snapshot.params.requestId, pageIndex, this.pageSize)
       .pipe(
-        map((messageLogs) => {
+        map(messageLogs => {
           this.messageLogs$.next([...this.messageLogs$.getValue(), ...messageLogs.data]);
           this.pageIndex += 1;
           this.pageCount = messageLogs.pagination.pageCount;
           return messageLogs.data;
         }),
-        switchMap((messageLogs) =>
+        switchMap(messageLogs =>
           uniqBy(
-            messageLogs.flatMap((messageLog) => [
+            messageLogs.flatMap(messageLog => [
               {
                 connectorType: 'ENTRYPOINT',
                 connectorId: messageLog.entrypoint?.connectorId,

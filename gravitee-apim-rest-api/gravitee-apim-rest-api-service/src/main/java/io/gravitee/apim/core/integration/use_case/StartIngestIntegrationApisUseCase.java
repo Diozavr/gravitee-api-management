@@ -40,6 +40,7 @@ import io.gravitee.apim.core.plan.domain_service.UpdatePlanDomainService;
 import io.gravitee.apim.core.plan.model.Plan;
 import io.gravitee.common.utils.TimeProvider;
 import io.gravitee.definition.model.DefinitionVersion;
+import io.gravitee.definition.model.federation.FederatedAgent;
 import io.gravitee.definition.model.federation.FederatedPlan;
 import io.gravitee.definition.model.v4.plan.PlanSecurity;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
@@ -53,11 +54,11 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @UseCase
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class StartIngestIntegrationApisUseCase {
 
@@ -90,8 +91,7 @@ public class StartIngestIntegrationApisUseCase {
             return Single.error(new IntegrationNotFoundException(integrationId));
         }
         return switch (integ.get()) {
-            case Integration.ApiIntegration apiIntegration -> Single
-                .just(apiIntegration)
+            case Integration.ApiIntegration apiIntegration -> Single.just(apiIntegration)
                 .flatMap(integration -> startApiIngestion(input, integration, auditInfo))
                 .doOnError(throwable -> log.error("Error to start ingest {}", integrationId, throwable));
             case Integration.A2aIntegration a2aIntegration -> a2aIngestions(a2aIntegration, auditInfo);
@@ -119,8 +119,7 @@ public class StartIngestIntegrationApisUseCase {
 
     private Single<AsyncJob.Status> a2aIngestions(Integration.A2aIntegration a2aIntegration, AuditInfo auditInfo) {
         try (var bulk = apiIndexerDomainService.bulk(auditInfo)) {
-            return Flowable
-                .fromIterable(a2aIntegration.wellKnownUrls())
+            return Flowable.fromIterable(a2aIntegration.wellKnownUrls())
                 .flatMapMaybe(url -> a2aIngestion(bulk, url.url(), a2aIntegration, auditInfo))
                 .toList()
                 .flatMap(failedUrls -> {
@@ -157,8 +156,7 @@ public class StartIngestIntegrationApisUseCase {
                     federatedAgent.getUrl()
                 );
 
-                Api api = Api
-                    .builder()
+                Api api = Api.builder()
                     .id(id)
                     .name(federatedAgent.getName())
                     .description(federatedAgent.getDescription())
@@ -168,7 +166,7 @@ public class StartIngestIntegrationApisUseCase {
                     .definitionVersion(DefinitionVersion.FEDERATED_AGENT)
                     .environmentId(a2aIntegration.environmentId())
                     .originContext(new OriginContext.Integration(a2aIntegration.id(), a2aIntegration.name(), a2aIntegration.provider()))
-                    .federatedAgent(federatedAgent)
+                    .apiDefinitionValue(federatedAgent)
                     .build();
                 UnaryOperator<Api> updater = update(api);
 
@@ -186,7 +184,7 @@ public class StartIngestIntegrationApisUseCase {
                             )
                     );
 
-                Plan plan = fromIntegration(api);
+                Plan plan = fromIntegration(api, federatedAgent);
                 planCrudService
                     .findById(plan.getId())
                     .ifPresentOrElse(
@@ -201,8 +199,7 @@ public class StartIngestIntegrationApisUseCase {
 
     public AsyncJob newIngestJob(String id, Integration integration, String initiatorId, Long total) {
         var now = TimeProvider.now();
-        return AsyncJob
-            .builder()
+        return AsyncJob.builder()
             .id(id)
             .sourceId(integration.id())
             .environmentId(integration.environmentId())
@@ -223,23 +220,22 @@ public class StartIngestIntegrationApisUseCase {
                 .name(newOne.getName())
                 .description(newOne.getDescription())
                 .version(newOne.getVersion())
-                .federatedAgent(newOne.getFederatedAgent())
+                .apiDefinitionValue(newOne.getApiDefinitionValue())
                 .build();
     }
 
-    public static Plan fromIntegration(Api api) {
+    public static Plan fromIntegration(Api api, FederatedAgent federatedAgent) {
         var id = UuidString.generateForEnvironment(api.getId(), PlanSecurityType.KEY_LESS.getLabel());
         var now = TimeProvider.now();
-        var oid = api.getFederatedAgent().getProvider() != null ? api.getFederatedAgent().getProvider().organization() : null;
-        return Plan
-            .builder()
+        var oid = federatedAgent.getProvider() != null ? federatedAgent.getProvider().organization() : null;
+        return Plan.builder()
             .id(id)
             .name("Key less plan")
             .description("Default plan")
-            .apiId(api.getId())
+            .referenceId(api.getId())
+            .referenceType(io.gravitee.rest.api.model.v4.plan.GenericPlanEntity.ReferenceType.API)
             .federatedPlanDefinition(
-                FederatedPlan
-                    .builder()
+                FederatedPlan.builder()
                     .id(id)
                     .providerId(oid)
                     .security(PlanSecurity.builder().type(PlanSecurityType.KEY_LESS.getLabel()).build())

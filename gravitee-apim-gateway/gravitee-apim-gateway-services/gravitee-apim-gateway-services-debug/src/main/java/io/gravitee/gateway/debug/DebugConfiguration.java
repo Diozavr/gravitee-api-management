@@ -38,6 +38,7 @@ import io.gravitee.gateway.env.RequestTimeoutConfiguration;
 import io.gravitee.gateway.flow.FlowPolicyResolverFactory;
 import io.gravitee.gateway.handlers.accesspoint.manager.AccessPointManager;
 import io.gravitee.gateway.handlers.api.definition.Api;
+import io.gravitee.gateway.handlers.api.registry.ApiProductRegistry;
 import io.gravitee.gateway.platform.organization.flow.OrganizationFlowResolver;
 import io.gravitee.gateway.platform.organization.manager.OrganizationManager;
 import io.gravitee.gateway.platform.organization.policy.OrganizationPolicyChainFactoryManager;
@@ -49,6 +50,7 @@ import io.gravitee.gateway.policy.ConfigurablePolicyChainProvider;
 import io.gravitee.gateway.policy.PolicyChainProviderLoader;
 import io.gravitee.gateway.policy.PolicyPluginFactory;
 import io.gravitee.gateway.policy.impl.PolicyFactoryCreatorImpl;
+import io.gravitee.gateway.reactive.core.connection.ConnectionDrainManager;
 import io.gravitee.gateway.reactive.debug.DebugReactorEventListener;
 import io.gravitee.gateway.reactive.debug.handlers.api.v4.DebugV4ApiReactorHandlerFactory;
 import io.gravitee.gateway.reactive.debug.policy.condition.DebugExpressionLanguageConditionFilter;
@@ -91,6 +93,7 @@ import io.gravitee.repository.management.api.EventRepository;
 import io.vertx.core.Vertx;
 import java.util.List;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
@@ -318,7 +321,8 @@ public class DebugConfiguration {
         NotFoundProcessorChainFactory notFoundProcessorChainFactory,
         RequestTimeoutConfiguration requestTimeoutConfiguration,
         RequestClientAuthConfiguration requestClientAuthConfiguration,
-        Vertx vertx
+        Vertx vertx,
+        @Value("${reporters.warnings.enabled:true}") boolean warningsEnabled
     ) {
         return new DebugHttpRequestDispatcher(
             gatewayConfiguration,
@@ -331,7 +335,8 @@ public class DebugConfiguration {
             notFoundProcessorChainFactory,
             requestTimeoutConfiguration,
             requestClientAuthConfiguration,
-            vertx
+            vertx,
+            warningsEnabled
         );
     }
 
@@ -353,7 +358,8 @@ public class DebugConfiguration {
         @Value("${debug.http.port:8482}") String httpPort,
         GatewayConfiguration gatewayConfiguration,
         EventRepository eventRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        ConnectionDrainManager connectionDrainManager
     ) {
         return new DebugPlatformProcessorChainFactory(
             transactionHandlerFactory,
@@ -366,7 +372,8 @@ public class DebugConfiguration {
             false,
             gatewayConfiguration,
             eventRepository,
-            objectMapper
+            objectMapper,
+            connectionDrainManager
         );
     }
 
@@ -446,7 +453,9 @@ public class DebugConfiguration {
         AccessPointManager accessPointManager,
         EventManager eventManager,
         GatewayConfiguration gatewayConfiguration,
-        final DictionaryManager dictionaryManager
+        final DictionaryManager dictionaryManager,
+        ConnectionDrainManager connectionDrainManager,
+        @Autowired(required = false) ApiProductRegistry apiProductRegistry
     ) {
         return new DebugV4ApiReactorHandlerFactory(
             applicationContext.getParent(),
@@ -465,7 +474,9 @@ public class DebugConfiguration {
             eventManager,
             new HttpAcceptorFactory(false),
             gatewayConfiguration,
-            dictionaryManager
+            dictionaryManager,
+            connectionDrainManager,
+            apiProductRegistry
         );
     }
 }

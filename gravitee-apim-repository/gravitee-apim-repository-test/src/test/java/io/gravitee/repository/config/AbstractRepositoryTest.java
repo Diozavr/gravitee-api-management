@@ -20,6 +20,7 @@ import static org.springframework.util.StringUtils.capitalize;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.gravitee.repository.exceptions.TechnicalException;
 import jakarta.inject.Inject;
 import java.io.File;
@@ -49,7 +50,9 @@ import org.springframework.test.context.support.AnnotationConfigContextLoader;
 public abstract class AbstractRepositoryTest {
 
     private static final String JSON_EXTENSION = "json";
-    private static final ObjectMapper MAPPER = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+        .registerModule(new JavaTimeModule())
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     @Inject
     private TestRepositoryInitializer testRepositoryInitializer;
@@ -73,8 +76,8 @@ public abstract class AbstractRepositoryTest {
 
             final File directory = new File(testCaseResource.toURI());
 
-            final File[] files = directory.listFiles(pathname ->
-                pathname.isFile() && JSON_EXTENSION.equalsIgnoreCase(FilenameUtils.getExtension(pathname.toString()))
+            final File[] files = directory.listFiles(
+                pathname -> pathname.isFile() && JSON_EXTENSION.equalsIgnoreCase(FilenameUtils.getExtension(pathname.toString()))
             );
 
             for (final File file : getSortedFilesList(files)) {
@@ -102,7 +105,9 @@ public abstract class AbstractRepositoryTest {
     }
 
     private List<File> getSortedFilesList(File[] files) {
-        return Stream.of(files).sorted((o1, o2) -> o2.getName().compareTo(o1.getName())).collect(Collectors.toList());
+        return Stream.of(files)
+            .sorted((o1, o2) -> o2.getName().compareTo(o1.getName()))
+            .collect(Collectors.toList());
     }
 
     private void createModels(File file) throws Exception {

@@ -87,6 +87,8 @@ public enum RolePermission {
     ENVIRONMENT_IDENTITY_PROVIDER_ACTIVATION(RoleScope.ENVIRONMENT, EnvironmentPermission.IDENTITY_PROVIDER_ACTIVATION),
     ENVIRONMENT_INTEGRATION(RoleScope.ENVIRONMENT, EnvironmentPermission.INTEGRATION),
     ENVIRONMENT_SHARED_POLICY_GROUP(RoleScope.ENVIRONMENT, EnvironmentPermission.SHARED_POLICY_GROUP),
+    ENVIRONMENT_CLUSTER(RoleScope.ENVIRONMENT, EnvironmentPermission.CLUSTER),
+    ENVIRONMENT_API_PRODUCT(RoleScope.ENVIRONMENT, EnvironmentPermission.API_PRODUCT),
 
     ORGANIZATION_USERS(RoleScope.ORGANIZATION, OrganizationPermission.USER),
     ORGANIZATION_USERS_TOKEN(RoleScope.ORGANIZATION, OrganizationPermission.USER_TOKEN),
@@ -103,10 +105,20 @@ public enum RolePermission {
     ORGANIZATION_ENTRYPOINT(RoleScope.ORGANIZATION, OrganizationPermission.ENTRYPOINT),
     ORGANIZATION_POLICIES(RoleScope.ORGANIZATION, OrganizationPermission.POLICIES),
     ORGANIZATION_AUDIT(RoleScope.ORGANIZATION, OrganizationPermission.AUDIT),
+    ORGANIZATION_DASHBOARD(RoleScope.ORGANIZATION, OrganizationPermission.DASHBOARD),
     ORGANIZATION_LICENSE_MANAGEMENT(RoleScope.ORGANIZATION, OrganizationPermission.LICENSE_MANAGEMENT),
 
     INTEGRATION_DEFINITION(RoleScope.INTEGRATION, IntegrationPermission.DEFINITION),
-    INTEGRATION_MEMBER(RoleScope.INTEGRATION, IntegrationPermission.MEMBER);
+    INTEGRATION_MEMBER(RoleScope.INTEGRATION, IntegrationPermission.MEMBER),
+
+    CLUSTER_ANALYTICS(RoleScope.CLUSTER, ClusterPermission.ANALYTICS),
+    CLUSTER_CONFIGURATION(RoleScope.CLUSTER, ClusterPermission.CONFIGURATION),
+    CLUSTER_DEFINITION(RoleScope.CLUSTER, ClusterPermission.DEFINITION),
+    CLUSTER_MEMBER(RoleScope.CLUSTER, ClusterPermission.MEMBER),
+
+    API_PRODUCT_DEFINITION(RoleScope.API_PRODUCT, ApiProductPermission.DEFINITION),
+    API_PRODUCT_PLAN(RoleScope.API_PRODUCT, ApiProductPermission.PLAN),
+    API_PRODUCT_SUBSCRIPTION(RoleScope.API_PRODUCT, ApiProductPermission.SUBSCRIPTION);
 
     final RoleScope scope;
     final Permission permission;

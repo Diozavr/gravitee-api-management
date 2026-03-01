@@ -23,7 +23,7 @@ import io.gravitee.repository.management.api.search.SubscriptionCriteria;
 import io.gravitee.repository.management.model.Plan;
 import io.gravitee.repository.management.model.Subscription;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -32,7 +32,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class ClientIdInApiKeySubscriptionsUpgrader implements Upgrader {
 
     private final SubscriptionRepository subscriptionRepository;
@@ -50,13 +50,13 @@ public class ClientIdInApiKeySubscriptionsUpgrader implements Upgrader {
     @Override
     public boolean upgrade() throws UpgraderException {
         return this.wrapException(() -> {
-                SubscriptionCriteria.SubscriptionCriteriaBuilder criteriaBuilder = SubscriptionCriteria.builder();
-                criteriaBuilder.planSecurityTypes(List.of(Plan.PlanSecurityType.API_KEY.name()));
-                for (Subscription subscription : subscriptionRepository.search(criteriaBuilder.build())) {
-                    updateApiKeySubscriptions(subscription);
-                }
-                return true;
-            });
+            SubscriptionCriteria.SubscriptionCriteriaBuilder criteriaBuilder = SubscriptionCriteria.builder();
+            criteriaBuilder.planSecurityTypes(List.of(Plan.PlanSecurityType.API_KEY.name()));
+            for (Subscription subscription : subscriptionRepository.search(criteriaBuilder.build())) {
+                updateApiKeySubscriptions(subscription);
+            }
+            return true;
+        });
     }
 
     @SuppressWarnings("removal")

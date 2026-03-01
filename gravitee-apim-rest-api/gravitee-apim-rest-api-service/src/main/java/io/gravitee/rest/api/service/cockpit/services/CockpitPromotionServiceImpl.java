@@ -30,13 +30,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class CockpitPromotionServiceImpl implements CockpitPromotionService {
 
     private final BridgeCommandFactory bridgeCommandFactory;
@@ -60,8 +60,10 @@ public class CockpitPromotionServiceImpl implements CockpitPromotionService {
             .filter(bridgeReplyContent -> bridgeReplyContent.getContent() != null)
             .map(bridgeReplyContent -> {
                 try {
-                    final EnvironmentEntity environmentEntity =
-                        this.objectMapper.readValue(bridgeReplyContent.getContent(), EnvironmentEntity.class);
+                    final EnvironmentEntity environmentEntity = this.objectMapper.readValue(
+                        bridgeReplyContent.getContent(),
+                        EnvironmentEntity.class
+                    );
 
                     // Be careful with env and org ids, we need to use the one from the reply and not the payload
                     // because cockpit has updated them to handle the case were id is "DEFAULT"
@@ -94,13 +96,12 @@ public class CockpitPromotionServiceImpl implements CockpitPromotionService {
             log.warn("Problem while serializing promotion {}", promotionEntity.getId());
         }
 
-        final BridgeCommand promoteApiCommand =
-            this.bridgeCommandFactory.createPromoteApiCommand(
-                    executionContext.getOrganizationId(),
-                    executionContext.getEnvironmentId(),
-                    promotionEntity.getTargetEnvCockpitId(),
-                    serializedPromotion
-                );
+        final BridgeCommand promoteApiCommand = this.bridgeCommandFactory.createPromoteApiCommand(
+            executionContext.getOrganizationId(),
+            executionContext.getEnvironmentId(),
+            promotionEntity.getTargetEnvCockpitId(),
+            serializedPromotion
+        );
         BridgeReply bridgeReply = cockpitCommandService.send(promoteApiCommand);
 
         if (bridgeReply.getCommandStatus() != CommandStatus.SUCCEEDED) {
@@ -120,13 +121,12 @@ public class CockpitPromotionServiceImpl implements CockpitPromotionService {
             log.warn("Problem while serializing promotion {}", promotionEntity.getId());
         }
 
-        final BridgeCommand processPromotionCommand =
-            this.bridgeCommandFactory.createProcessPromotionCommand(
-                    executionContext.getOrganizationId(),
-                    executionContext.getEnvironmentId(),
-                    promotionEntity.getSourceEnvCockpitId(),
-                    serializedPromotion
-                );
+        final BridgeCommand processPromotionCommand = this.bridgeCommandFactory.createProcessPromotionCommand(
+            executionContext.getOrganizationId(),
+            executionContext.getEnvironmentId(),
+            promotionEntity.getSourceEnvCockpitId(),
+            serializedPromotion
+        );
         final BridgeReply bridgeReply = cockpitCommandService.send(processPromotionCommand);
 
         if (bridgeReply.getCommandStatus() != CommandStatus.SUCCEEDED) {

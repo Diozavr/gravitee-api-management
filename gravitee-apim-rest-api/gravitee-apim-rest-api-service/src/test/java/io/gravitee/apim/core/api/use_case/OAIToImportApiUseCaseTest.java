@@ -62,13 +62,12 @@ class OAIToImportApiUseCaseTest {
     private static final String ORGANIZATION_ID = "organization-id";
     private static final String ENVIRONMENT_ID = "environment-id";
     private static final String SHARED_CONFIGURATION = """
-        { "description": "this is a dumb shared configuration" }
-    """;
+            { "description": "this is a dumb shared configuration" }
+        """;
     private static final String USER_ID = "user-id";
     private static final String USER_EMAIL = "jane.doe@gravitee.io";
     private static final AuditInfo AUDIT_INFO = AuditInfoFixtures.anAuditInfo(ORGANIZATION_ID, ENVIRONMENT_ID, USER_ID);
     private final PolicyOperationVisitorManagerImpl policyOperationVisitorManager = new PolicyOperationVisitorManagerImpl();
-    private final OAIDomainServiceImpl oaiDomainService = new OAIDomainServiceImpl(policyOperationVisitorManager);
     private final EndpointConnectorPluginDomainService endpointConnectorPluginService = mock(EndpointConnectorPluginDomainService.class);
     private OAIToImportApiUseCase useCase;
     ImportDefinitionCreateDomainServiceTestInitializer importDefinitionCreateDomainServiceTestInitializer;
@@ -97,7 +96,7 @@ class OAIToImportApiUseCaseTest {
                     ParameterReferenceType.ENVIRONMENT,
                     ApiPrimaryOwnerMode.USER.name()
                 ),
-                new Parameter(Key.PLAN_SECURITY_APIKEY_ENABLED.key(), ENVIRONMENT_ID, ParameterReferenceType.ENVIRONMENT, "true")
+                new Parameter(Key.PLAN_SECURITY_KEYLESS_ENABLED.key(), ENVIRONMENT_ID, ParameterReferenceType.ENVIRONMENT, "true")
             )
         );
         importDefinitionCreateDomainServiceTestInitializer.userCrudService.initWith(
@@ -110,18 +109,18 @@ class OAIToImportApiUseCaseTest {
                 any(),
                 any()
             )
-        )
-            .thenAnswer(invocation -> invocation.getArgument(0));
+        ).thenAnswer(invocation -> invocation.getArgument(0));
 
-        useCase =
-            new OAIToImportApiUseCase(
-                oaiDomainService,
+        useCase = new OAIToImportApiUseCase(
+            new OAIDomainServiceImpl(
+                policyOperationVisitorManager,
                 groupQueryService,
                 tagQueryService,
                 endpointConnectorPluginService,
-                importDefinitionCreateDomainServiceTestInitializer.initialize(),
                 policyPluginCrudService
-            );
+            ),
+            importDefinitionCreateDomainServiceTestInitializer.initialize()
+        );
     }
 
     @Test
@@ -252,8 +251,7 @@ class OAIToImportApiUseCaseTest {
 
             // When
             var output = useCase.execute(
-                OAIToImportApiUseCase.Input
-                    .builder()
+                OAIToImportApiUseCase.Input.builder()
                     .importSwaggerDescriptor(importSwaggerDescriptor)
                     .withOASValidationPolicy(true)
                     .auditInfo(AUDIT_INFO)
@@ -301,8 +299,7 @@ class OAIToImportApiUseCaseTest {
             // When
             var throwable = catchThrowable(() ->
                 useCase.execute(
-                    OAIToImportApiUseCase.Input
-                        .builder()
+                    OAIToImportApiUseCase.Input.builder()
                         .importSwaggerDescriptor(importSwaggerDescriptor)
                         .withOASValidationPolicy(true)
                         .auditInfo(AUDIT_INFO)
@@ -327,8 +324,7 @@ class OAIToImportApiUseCaseTest {
 
             // When
             var output = useCase.execute(
-                OAIToImportApiUseCase.Input
-                    .builder()
+                OAIToImportApiUseCase.Input.builder()
                     .importSwaggerDescriptor(importSwaggerDescriptor)
                     .withOASValidationPolicy(false)
                     .auditInfo(AUDIT_INFO)
@@ -341,8 +337,9 @@ class OAIToImportApiUseCaseTest {
             var importDefinition = output.apiWithFlows();
             assertThat(importDefinition).isNotNull();
             // Check that the OAS validation policy is not added
-            assertThat(importDefinition.getApiDefinitionHttpV4().getFlows())
-                .noneMatch(flow -> flow.getName().equals("OpenAPI Specification Validation"));
+            assertThat(importDefinition.getApiDefinitionHttpV4().getFlows()).noneMatch(flow ->
+                flow.getName().equals("OpenAPI Specification Validation")
+            );
             // Check that the Resource is not added
             assertThat(importDefinition.getApiDefinitionHttpV4().getResources()).isEmpty();
         }

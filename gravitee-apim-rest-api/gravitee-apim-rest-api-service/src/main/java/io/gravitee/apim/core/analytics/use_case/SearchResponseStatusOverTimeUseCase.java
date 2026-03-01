@@ -29,10 +29,10 @@ import io.gravitee.rest.api.service.common.ExecutionContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 @UseCase
 public class SearchResponseStatusOverTimeUseCase {
@@ -67,7 +67,7 @@ public class SearchResponseStatusOverTimeUseCase {
     }
 
     private void validateApiIsNotTcp(Api api) {
-        if (api.getApiDefinitionHttpV4().isTcpProxy()) {
+        if (api.isTcpProxy()) {
             throw new TcpProxyNotSupportedException(api.getId());
         }
     }

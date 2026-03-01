@@ -39,14 +39,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author GraviteeSource Team
  */
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class HeartbeatService extends AbstractService<HeartbeatService> {
 
     public static final String EVENT_LAST_HEARTBEAT_PROPERTY = "last_heartbeat_at";
@@ -61,14 +61,13 @@ public class HeartbeatService extends AbstractService<HeartbeatService> {
     @Override
     protected void doStart() throws Exception {
         if (heartbeatStrategyConfiguration.enabled()) {
-            heartbeatStrategyScheduler =
-                new HeartbeatEventScheduler(
-                    heartbeatStrategyConfiguration.clusterManager(),
-                    heartbeatStrategyConfiguration.eventRepository(),
-                    heartbeatStrategyConfiguration.delay(),
-                    heartbeatStrategyConfiguration.unit(),
-                    prepareEvent()
-                );
+            heartbeatStrategyScheduler = new HeartbeatEventScheduler(
+                heartbeatStrategyConfiguration.clusterManager(),
+                heartbeatStrategyConfiguration.eventRepository(),
+                heartbeatStrategyConfiguration.delay(),
+                heartbeatStrategyConfiguration.unit(),
+                prepareEvent()
+            );
             heartbeatStrategyScheduler.start();
         }
     }
@@ -172,8 +171,7 @@ public class HeartbeatService extends AbstractService<HeartbeatService> {
 
     private Map<String, String> getSystemProperties() {
         if (heartbeatStrategyConfiguration.storeSystemProperties()) {
-            return System
-                .getProperties()
+            return System.getProperties()
                 .entrySet()
                 .stream()
                 .filter(entry -> !entry.getKey().toString().toUpperCase().startsWith("GRAVITEE"))

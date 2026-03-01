@@ -37,7 +37,7 @@ describe('GroupV2Service', () => {
   });
 
   describe('get members', () => {
-    it('should call the API', (done) => {
+    it('should call the API', done => {
       const fakeMembersResponse: MembersResponse = {
         data: [fakeMember()],
         metadata: {},
@@ -50,7 +50,7 @@ describe('GroupV2Service', () => {
         },
       };
 
-      groupService.getMembers(GROUP_ID).subscribe((groups) => {
+      groupService.getMembers(GROUP_ID).subscribe(groups => {
         expect(groups).toMatchObject(fakeMembersResponse);
         done();
       });
@@ -61,7 +61,7 @@ describe('GroupV2Service', () => {
       req.flush(fakeMembersResponse);
     });
 
-    it('should allow custom pagination', (done) => {
+    it('should allow custom pagination', done => {
       const fakeMembersResponse: MembersResponse = {
         data: [fakeMember()],
         metadata: {
@@ -76,7 +76,7 @@ describe('GroupV2Service', () => {
         },
       };
 
-      groupService.getMembers(GROUP_ID, 2, 1).subscribe((groups) => {
+      groupService.getMembers(GROUP_ID, 2, 1).subscribe(groups => {
         expect(groups).toMatchObject(fakeMembersResponse);
         done();
       });
@@ -89,10 +89,10 @@ describe('GroupV2Service', () => {
   });
 
   describe('list groups', () => {
-    it('should call API', (done) => {
+    it('should call API', done => {
       const groupsResponse: GroupsResponse = fakeGroupsResponse({ pagination: { page: 1, perPage: 10 } });
 
-      groupService.list().subscribe((groups) => {
+      groupService.list().subscribe(groups => {
         expect(groups).toMatchObject(groupsResponse);
         done();
       });
@@ -103,10 +103,10 @@ describe('GroupV2Service', () => {
       req.flush(groupsResponse);
     });
 
-    it('should allow custom pagination', (done) => {
+    it('should allow custom pagination', done => {
       const groupsResponse: GroupsResponse = fakeGroupsResponse({ pagination: { page: 2, perPage: 1 } });
 
-      groupService.list(2, 1).subscribe((groups) => {
+      groupService.list(2, 1).subscribe(groups => {
         expect(groups).toMatchObject(groupsResponse);
         done();
       });
@@ -115,6 +115,87 @@ describe('GroupV2Service', () => {
       expect(req.request.method).toEqual('GET');
 
       req.flush(groupsResponse);
+    });
+  });
+
+  describe('listById', () => {
+    it('should call API with a valid idList', done => {
+      const validIdList = ['id1', 'id2'];
+      const groupsResponse: GroupsResponse = fakeGroupsResponse();
+
+      groupService.listById(validIdList).subscribe(groups => {
+        expect(groups).toMatchObject(groupsResponse);
+        done();
+      });
+
+      const req = httpTestingController.expectOne(`${CONSTANTS_TESTING.env.v2BaseURL}/groups/_search?page=1&perPage=10`);
+      expect(req.request.method).toEqual('POST');
+      expect(req.request.body).toEqual({ ids: validIdList });
+
+      req.flush(groupsResponse);
+    });
+
+    it('should call API with an empty idList', done => {
+      const groupsResponse: GroupsResponse = fakeGroupsResponse();
+
+      groupService.listById([]).subscribe(groups => {
+        expect(groups).toMatchObject(groupsResponse);
+        done();
+      });
+
+      const req = httpTestingController.expectOne(`${CONSTANTS_TESTING.env.v2BaseURL}/groups/_search?page=1&perPage=10`);
+      expect(req.request.method).toEqual('POST');
+      expect(req.request.body).toEqual({ ids: [] });
+
+      req.flush(groupsResponse);
+    });
+
+    it('should call API with default empty idList when no parameter is provided', done => {
+      const groupsResponse: GroupsResponse = fakeGroupsResponse();
+
+      groupService.listById().subscribe(groups => {
+        expect(groups).toMatchObject(groupsResponse);
+        done();
+      });
+
+      const req = httpTestingController.expectOne(`${CONSTANTS_TESTING.env.v2BaseURL}/groups/_search?page=1&perPage=10`);
+      expect(req.request.method).toEqual('POST');
+      expect(req.request.body).toEqual({ ids: [] });
+
+      req.flush(groupsResponse);
+    });
+
+    it('should allow custom pagination', done => {
+      const validIdList = ['id1', 'id2'];
+      const groupsResponse: GroupsResponse = fakeGroupsResponse({ pagination: { page: 2, perPage: 5 } });
+
+      groupService.listById(validIdList, 2, 5).subscribe(groups => {
+        expect(groups).toMatchObject(groupsResponse);
+        done();
+      });
+
+      const req = httpTestingController.expectOne(`${CONSTANTS_TESTING.env.v2BaseURL}/groups/_search?page=2&perPage=5`);
+      expect(req.request.method).toEqual('POST');
+      expect(req.request.body).toEqual({ ids: validIdList });
+
+      req.flush(groupsResponse);
+    });
+
+    it('should handle error response', done => {
+      const validIdList = ['id1', 'id2'];
+      const errorMessage = 'Error occurred while fetching groups by ID';
+      const emptyGroupResponse: GroupsResponse = { data: [] };
+
+      groupService.listById(validIdList).subscribe({
+        next: groups => {
+          expect(groups).toEqual(emptyGroupResponse);
+          done();
+        },
+        error: () => done(),
+      });
+
+      const req = httpTestingController.expectOne(`${CONSTANTS_TESTING.env.v2BaseURL}/groups/_search?page=1&perPage=10`);
+      req.flush({ message: errorMessage }, { status: 500, statusText: 'Internal Server Error' });
     });
   });
 

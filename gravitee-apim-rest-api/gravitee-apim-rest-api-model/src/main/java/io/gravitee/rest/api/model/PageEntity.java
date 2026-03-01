@@ -45,6 +45,7 @@ public class PageEntity implements Indexable {
      * Pages promoted between environments will share the same crossId.
      */
     private String crossId;
+    private String hrid;
 
     private String name;
     private String type;
@@ -59,6 +60,7 @@ public class PageEntity implements Indexable {
     private Map<String, String> configuration;
     private boolean homepage;
     private String parentId;
+    private String parentHrid;
     private String parentPath;
 
     @JsonProperty("excluded_groups")
@@ -220,6 +222,14 @@ public class PageEntity implements Indexable {
         this.parentId = parentId;
     }
 
+    public void setParentHrid(String parentHrid) {
+        this.parentHrid = parentHrid;
+    }
+
+    public String getParentHrid() {
+        return parentHrid;
+    }
+
     public String getParentPath() {
         return parentPath;
     }
@@ -314,6 +324,14 @@ public class PageEntity implements Indexable {
 
     public void setCrossId(String crossId) {
         this.crossId = crossId;
+    }
+
+    public String getHrid() {
+        return hrid;
+    }
+
+    public void setHrid(String hrid) {
+        this.hrid = hrid;
     }
 
     @Override

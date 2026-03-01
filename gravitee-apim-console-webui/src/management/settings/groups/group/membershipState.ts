@@ -24,10 +24,12 @@ export enum RoleName {
 export enum RoleScope {
   API = 'API',
   APPLICATION = 'APPLICATION',
+  CLUSTER = 'CLUSTER',
+  INTEGRATION = 'INTEGRATION',
 }
 
 export type Roles = {
-  [scope in RoleScope]: RoleName;
+  [scope in RoleScope]: RoleName | string;
 };
 
 export interface Member {
@@ -79,15 +81,15 @@ export class MembershipState {
   }
 
   getPrimaryOwner(): Member {
-    return this.members.find((member) => member.roles[RoleScope.API] === RoleName.PRIMARY_OWNER);
+    return this.members.find(member => member.roles[RoleScope.API] === RoleName.PRIMARY_OWNER);
   }
 
   hasPrimaryOwner(): boolean {
-    return this.members.some((member) => member.roles[RoleScope.API] === RoleName.PRIMARY_OWNER);
+    return this.members.some(member => member.roles[RoleScope.API] === RoleName.PRIMARY_OWNER);
   }
 
   findByRef(memberRef): Member | undefined {
-    return this.members.find((member) => member.id === memberRef.id);
+    return this.members.find(member => member.id === memberRef.id);
   }
 
   findAll(): Member[] {

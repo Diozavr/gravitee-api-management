@@ -50,18 +50,16 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.CustomLog;
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class ApiExportServiceImpl extends AbstractService implements ApiExportService {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(ApiExportServiceImpl.class);
 
     private final ObjectMapper objectMapper;
     private final PageService pageService;
@@ -103,7 +101,7 @@ public class ApiExportServiceImpl extends AbstractService implements ApiExportSe
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(apiEntity);
         } catch (final Exception e) {
-            LOGGER.error("An error occurs while trying to JSON serialize the API {}", apiEntity, e);
+            log.error("An error occurs while trying to JSON serialize the API {}", apiEntity, e);
         }
         return "";
     }
@@ -149,15 +147,15 @@ public class ApiExportServiceImpl extends AbstractService implements ApiExportSe
             }
 
             ((ObjectNode) jsonNode).set(
-                    "notifyMembers",
-                    BooleanNode.valueOf(!jsonNode.get("disable_membership_notifications").asBoolean())
-                );
+                "notifyMembers",
+                BooleanNode.valueOf(!jsonNode.get("disable_membership_notifications").asBoolean())
+            );
 
             ((ObjectNode) jsonNode).remove("disable_membership_notifications");
 
             return customResourceDefinitionMapper.toCustomResourceDefinition(apiDefinitionResource);
         } catch (final Exception e) {
-            LOGGER.error(String.format("An error occurs while trying to convert API %s to CRD", apiId), e);
+            log.error(String.format("An error occurs while trying to convert API %s to CRD", apiId), e);
             throw new TechnicalManagementException(e);
         }
     }
@@ -204,33 +202,37 @@ public class ApiExportServiceImpl extends AbstractService implements ApiExportSe
             Map.Entry<String, JsonNode> pageJsonNode = iterator.next();
             PageEntity page = objectMapper.treeToValue(pageJsonNode.getValue(), PageEntity.class);
 
-            if (
-                (PageType.MARKDOWN.name().equals(page.getType()) || PageType.SWAGGER.name().equals(page.getType())) &&
-                page.getSource() != null &&
-                "github-fetcher".equals(page.getSource().getType())
-            ) {
-                // Remove auto-fetched pages that was generated from ROOT github source
-                if (page.getMetadata() != null && "auto_fetched".equals(page.getMetadata().get("graviteeio/fetcher_type"))) {
-                    iterator.remove();
-                } else {
-                    ((ObjectNode) pageJsonNode.getValue()).remove("content");
-                    ((ObjectNode) pageJsonNode.getValue()).remove("metadata");
-                }
-            } else if (
-                PageType.FOLDER.name().equals(page.getType()) &&
-                page.getSource() != null &&
-                "github-fetcher".equals(page.getSource().getType())
-            ) {
-                // Remove auto-generated folders generated from ROOT github fetcher
+            if (page.getSource() != null) {
+                clearAutoFetchedContent(page, iterator, pageJsonNode);
+            }
+        }
+    }
+
+    private void clearAutoFetchedContent(
+        PageEntity page,
+        Iterator<Map.Entry<String, JsonNode>> iterator,
+        Map.Entry<String, JsonNode> pageJsonNode
+    ) {
+        String pageType = page.getSource().getType();
+        boolean isMarkdownOrSwagger = PageType.SWAGGER.name().equals(page.getType()) || PageType.MARKDOWN.name().equals(page.getType());
+        boolean isAutoFetch =
+            "github-fetcher".equals(pageType) ||
+            "gitlab-fetcher".equals(pageType) ||
+            "git-fetcher".equals(pageType) ||
+            "http-fetcher".equals(pageType) ||
+            "bitbucket-fetcher".equals(pageType);
+
+        if (isMarkdownOrSwagger && isAutoFetch) {
+            // Remove auto-fetched pages that was generated from ROOT github source
+            if (page.getMetadata() != null && "auto_fetched".equals(page.getMetadata().get("graviteeio/fetcher_type"))) {
                 iterator.remove();
-            } else if (
-                (PageType.SWAGGER.name().equals(page.getType()) || PageType.MARKDOWN.name().equals(page.getType())) &&
-                page.getSource() != null &&
-                ("http-fetcher".equals(page.getSource().getType()))
-            ) {
+            } else {
                 ((ObjectNode) pageJsonNode.getValue()).remove("content");
                 ((ObjectNode) pageJsonNode.getValue()).remove("metadata");
             }
+        } else if (PageType.FOLDER.name().equals(page.getType()) && isAutoFetch) {
+            // Remove auto-generated folders generated from ROOT github fetcher
+            iterator.remove();
         }
     }
 

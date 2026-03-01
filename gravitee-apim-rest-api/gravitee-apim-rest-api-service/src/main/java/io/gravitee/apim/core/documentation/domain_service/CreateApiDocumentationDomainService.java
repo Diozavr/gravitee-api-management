@@ -29,10 +29,10 @@ import io.gravitee.apim.core.search.Indexer.IndexationContext;
 import io.gravitee.apim.core.search.model.IndexablePage;
 import java.time.ZoneId;
 import java.util.Map;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @DomainService
 @RequiredArgsConstructor
 public class CreateApiDocumentationDomainService {
@@ -52,8 +52,7 @@ public class CreateApiDocumentationDomainService {
         }
 
         auditDomainService.createApiAuditLog(
-            ApiAuditLogEntity
-                .builder()
+            ApiAuditLogEntity.builder()
                 .apiId(page.getReferenceId())
                 .event(PageAuditEvent.PAGE_CREATED)
                 .createdAt(page.getCreatedAt().toInstant().atZone(ZoneId.of("UTC")))

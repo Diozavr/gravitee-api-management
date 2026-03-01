@@ -35,9 +35,9 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 @UseCase
 @AllArgsConstructor
 public class SearchEnvironmentResponseStatusRangesUseCase {
@@ -63,8 +63,7 @@ public class SearchEnvironmentResponseStatusRangesUseCase {
     private Map<DefinitionVersion, List<String>> apisIdsForEnv(String envId) {
         return apiQueryService
             .search(
-                ApiSearchCriteria
-                    .builder()
+                ApiSearchCriteria.builder()
                     .environmentId(envId)
                     .definitionVersion(EnumSet.of(DefinitionVersion.V4, DefinitionVersion.V2))
                     .build(),

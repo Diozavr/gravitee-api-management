@@ -24,13 +24,13 @@ import static io.gravitee.gateway.api.http.HttpHeaderNames.PROXY_CONNECTION;
 import static io.gravitee.gateway.api.http.HttpHeaderNames.TE;
 import static io.gravitee.gateway.api.http.HttpHeaderNames.TRAILER;
 import static io.gravitee.gateway.api.http.HttpHeaderNames.UPGRADE;
-import static io.gravitee.gateway.http.utils.RequestUtils.hasStreamingContentType;
 import static io.gravitee.gateway.reactive.api.context.ContextAttributes.ATTR_REQUEST_ENDPOINT;
 import static io.gravitee.gateway.reactive.api.context.ContextAttributes.ATTR_REQUEST_ENDPOINT_OVERRIDE;
 import static io.gravitee.plugin.endpoint.http.proxy.client.UriHelper.URI_QUERY_DELIMITER_CHAR;
 import static io.gravitee.plugin.endpoint.http.proxy.client.UriHelper.URI_QUERY_DELIMITER_CHAR_SEQUENCE;
 
 import io.gravitee.common.http.HttpHeader;
+import io.gravitee.common.util.LinkedMultiValueMap;
 import io.gravitee.common.util.MultiValueMap;
 import io.gravitee.common.util.URIUtils;
 import io.gravitee.gateway.api.buffer.Buffer;
@@ -48,24 +48,32 @@ import io.gravitee.plugin.endpoint.http.proxy.client.HttpClientFactory;
 import io.gravitee.plugin.endpoint.http.proxy.client.UriHelper;
 import io.gravitee.plugin.endpoint.http.proxy.configuration.HttpProxyEndpointConnectorConfiguration;
 import io.gravitee.plugin.endpoint.http.proxy.configuration.HttpProxyEndpointConnectorSharedConfiguration;
+import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Flowable;
+import io.reactivex.rxjava3.core.Single;
 import io.vertx.core.MultiMap;
+import io.vertx.core.buffer.impl.BufferImpl;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpVersion;
 import io.vertx.core.http.RequestOptions;
+import io.vertx.core.http.StreamResetException;
 import io.vertx.core.http.impl.headers.HeadersMultiMap;
 import io.vertx.rxjava3.core.http.HttpClientRequest;
+import io.vertx.rxjava3.core.http.HttpClientResponse;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import lombok.CustomLog;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class HttpConnector implements ProxyConnector {
 
     /**
@@ -82,8 +90,8 @@ public class HttpConnector implements ProxyConnector {
         UPGRADE
     );
     private final String relativeTarget;
-    private final String defaultHost;
-    private final int defaultPort;
+    protected final String defaultHost;
+    protected final int defaultPort;
     private final boolean defaultSsl;
     private final MultiValueMap<String, String> targetParameters;
     protected final HttpProxyEndpointConnectorConfiguration configuration;
@@ -128,13 +136,7 @@ public class HttpConnector implements ProxyConnector {
                 .map(this::customizeHttpClientRequest)
                 .flatMap(httpClientRequest -> {
                     observableHttpClientRequest.httpClientRequest(httpClientRequest.getDelegate());
-                    if (requestWithBody(request)) {
-                        return httpClientRequest.rxSend(
-                            request.chunks().map(buffer -> io.vertx.rxjava3.core.buffer.Buffer.buffer(buffer.getNativeBuffer()))
-                        );
-                    } else {
-                        return httpClientRequest.rxSend();
-                    }
+                    return sendEndpointRequestChunks(httpClientRequest, request);
                 })
                 .doOnSuccess(endpointResponse -> {
                     response.status(endpointResponse.statusCode());
@@ -146,15 +148,10 @@ public class HttpConnector implements ProxyConnector {
                             ((VertxHttpServerResponse) response).getNativeResponse().writeCustomFrame(frame)
                         );
                     }
-                    response.chunks(
-                        endpointResponse
-                            .toFlowable()
-                            .map(Buffer::buffer)
-                            .doOnComplete(() ->
-                                // Write trailers when chunks are completed
-                                copyHeaders(endpointResponse.trailers(), response.trailers())
-                            )
-                    );
+
+                    // Assign the response chunks from the endpoint's response to the gateway response.
+                    response.chunks(getEndpointResponseChunks(ctx, endpointResponse, response, absoluteUri));
+
                     ObservableHttpClientResponse observableHttpClientResponse = new ObservableHttpClientResponse(
                         endpointResponse.getDelegate()
                     );
@@ -165,6 +162,55 @@ public class HttpConnector implements ProxyConnector {
         } catch (Exception e) {
             return Completable.error(e);
         }
+    }
+
+    private Single<HttpClientResponse> sendEndpointRequestChunks(HttpClientRequest httpClientRequest, HttpRequest request) {
+        if (hasBodyHeaders(request) || request.version() == io.gravitee.common.http.HttpVersion.HTTP_2) {
+            // For HTTP1.1, the presence of a message body in a request is signaled by a Content-Length or Transfer-Encoding header (https://www.rfc-editor.org/rfc/rfc9112#section-6-4).
+            // For HTTP2, Data frames are used (https://www.rfc-editor.org/rfc/rfc9113#section-8.1-7).
+            return httpClientRequest.rxSend(
+                request.chunks().map(buffer -> new io.vertx.rxjava3.core.buffer.Buffer(BufferImpl.buffer(buffer.getNativeBuffer())))
+            );
+        } else {
+            // Always consume the request body, even when empty, to ensure resources are released and metrics are updated correctly.
+            return request.chunks().ignoreElements().andThen(httpClientRequest.rxSend());
+        }
+    }
+
+    private @NonNull Flowable<Buffer> getEndpointResponseChunks(
+        HttpExecutionContext ctx,
+        HttpClientResponse endpointResponse,
+        HttpResponse response,
+        String absoluteUri
+    ) {
+        return endpointResponse
+            .toFlowable()
+            .map(Buffer::buffer)
+            .doOnComplete(() ->
+                // Write trailers when chunks are completed
+                copyHeaders(endpointResponse.trailers(), response.trailers())
+            )
+            .onErrorResumeNext(throwable -> {
+                if (throwable instanceof StreamResetException) {
+                    // Means that we have manually reset the stream because the downstream request has been cancelled (see doOnCancel).
+                    ctx.withLogger(log).debug("Stream reset to the backend [{}]", absoluteUri);
+                } else {
+                    ctx
+                        .withLogger(log)
+                        .error("Exception occurred while handling response chunk from upstream [{}]", absoluteUri, throwable);
+                }
+                return Flowable.empty();
+            })
+            .doOnCancel(() -> {
+                try {
+                    ctx.withLogger(log).debug("Downstream request has been cancelled, cancelling upstream request to [{}]", absoluteUri);
+
+                    // Reset forces the upstream connection to be closed and avoid consuming the response while downstream is already gone.
+                    endpointResponse.request().reset();
+                } catch (Exception e) {
+                    ctx.withLogger(log).debug("Can't properly reset endpoint request to backend [{}]", absoluteUri, e);
+                }
+            });
     }
 
     protected HttpClientRequest customizeHttpClientRequest(final HttpClientRequest httpClientRequest) {
@@ -240,7 +286,8 @@ public class HttpConnector implements ProxyConnector {
 
     private void prepareUriAndQueryParameters(final HttpExecutionContext ctx, final RequestOptions requestOptions) {
         final HttpRequest request = ctx.request();
-        final MultiValueMap<String, String> requestParameters = request.parameters();
+        final MultiValueMap<String, String> requestParameters = new LinkedMultiValueMap<>();
+        request.parameters().forEach((k, v) -> v.forEach(value -> requestParameters.add(k, value)));
         addParameters(requestParameters, targetParameters);
 
         String customEndpointTarget = ctx.getAttribute(ATTR_REQUEST_ENDPOINT);
@@ -281,11 +328,10 @@ public class HttpConnector implements ProxyConnector {
         }
     }
 
-    private static boolean requestWithBody(HttpRequest request) {
+    private static boolean hasBodyHeaders(HttpRequest request) {
         return (
-            request.headers().contains(HttpHeaderNames.TRANSFER_ENCODING) ||
-            request.headers().contains(HttpHeaderNames.CONTENT_LENGTH) ||
-            hasStreamingContentType(request.headers())
+            request.headers().get(HttpHeaderNames.TRANSFER_ENCODING) != null ||
+            request.headers().get(HttpHeaderNames.CONTENT_LENGTH) != null
         );
     }
 }

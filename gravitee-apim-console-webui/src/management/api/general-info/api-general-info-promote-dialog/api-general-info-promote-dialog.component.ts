@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-import { Component, Inject, OnDestroy } from '@angular/core';
-import { UntypedFormControl, Validators } from '@angular/forms';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { FormControl, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { combineLatest, EMPTY, Subject } from 'rxjs';
-import { catchError, map, takeUntil, tap } from 'rxjs/operators';
+import { combineLatest, EMPTY } from 'rxjs';
+import { catchError, map, tap } from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
-import { ApiService } from '../../../../services-ngx/api.service';
 import { CockpitService, UtmCampaign } from '../../../../services-ngx/cockpit.service';
 import { PromotionService } from '../../../../services-ngx/promotion.service';
 import { SnackBarService } from '../../../../services-ngx/snack-bar.service';
-import { ApiV2 } from '../../../../entities/management-api-v2';
+import { Api } from '../../../../entities/management-api-v2';
 
 export type ApiPortalDetailsPromoteDialogData = {
-  api: ApiV2;
+  api: Api;
 };
 
 @Component({
@@ -36,11 +36,15 @@ export type ApiPortalDetailsPromoteDialogData = {
   styleUrls: ['./api-general-info-promote-dialog.component.scss'],
   standalone: false,
 })
-export class ApiGeneralInfoPromoteDialogComponent implements OnDestroy {
-  private unsubscribe$: Subject<boolean> = new Subject<boolean>();
+export class ApiGeneralInfoPromoteDialogComponent {
+  private readonly dialogRef = inject(MatDialogRef<ApiPortalDetailsPromoteDialogData>);
+  private readonly dialogData = inject(MAT_DIALOG_DATA);
+  private readonly promotionService = inject(PromotionService);
+  private readonly snackBarService = inject(SnackBarService);
+  private readonly cockpitService = inject(CockpitService);
+  private readonly destroyRef = inject(DestroyRef);
 
   public state: 'loading' | 'hasCockpit' | 'meetCockpit' = 'loading';
-
   public apiId: string;
   public promotionTargets: {
     id: string;
@@ -49,18 +53,10 @@ export class ApiGeneralInfoPromoteDialogComponent implements OnDestroy {
   }[] = [];
   public hasPromotionInProgress = false;
   public cockpitURL: string;
+  public promoteControl = new FormControl('', [Validators.required]);
 
-  public promoteControl = new UntypedFormControl('', [Validators.required]);
-
-  constructor(
-    private readonly dialogRef: MatDialogRef<ApiPortalDetailsPromoteDialogData>,
-    @Inject(MAT_DIALOG_DATA) dialogData: ApiPortalDetailsPromoteDialogData,
-    private readonly apiService: ApiService,
-    private readonly promotionService: PromotionService,
-    private readonly snackBarService: SnackBarService,
-    private readonly cockpitService: CockpitService,
-  ) {
-    this.apiId = dialogData.api.id;
+  constructor() {
+    this.apiId = this.dialogData.api.id;
 
     combineLatest([
       this.promotionService.listPromotionTargets(),
@@ -72,20 +68,20 @@ export class ApiGeneralInfoPromoteDialogComponent implements OnDestroy {
       .pipe(
         map(([targetEnvs, promotions]) => {
           this.promotionTargets = targetEnvs
-            .map((promotionTarget) => ({
+            .map(promotionTarget => ({
               id: promotionTarget.id,
               name: promotionTarget.name,
-              promotionInProgress: promotions.some((promotion) => promotion.targetEnvCockpitId === promotionTarget.id),
+              promotionInProgress: promotions.some(promotion => promotion.targetEnvCockpitId === promotionTarget.id),
             }))
             .sort((target1, target2) => target1.name.localeCompare(target2.name));
 
-          this.hasPromotionInProgress = this.promotionTargets.some((target) => target.promotionInProgress);
+          this.hasPromotionInProgress = this.promotionTargets.some(target => target.promotionInProgress);
 
-          this.promoteControl.setValue(this.promotionTargets.find((target) => !target.promotionInProgress)?.id);
+          this.promoteControl.setValue(this.promotionTargets.find(target => !target.promotionInProgress)?.id);
 
           this.state = 'hasCockpit';
         }),
-        catchError((error) => {
+        catchError(error => {
           if (error.error?.technicalCode === 'installation.notAccepted') {
             const { cockpitURL } = error.error.parameters;
             this.cockpitURL = this.cockpitService.addQueryParamsForAnalytics(cockpitURL, UtmCampaign.API_PROMOTION);
@@ -96,18 +92,13 @@ export class ApiGeneralInfoPromoteDialogComponent implements OnDestroy {
           this.snackBarService.error(error.error?.message ?? error.message ?? 'An error occurred while loading promotion targets.');
           return EMPTY;
         }),
-        takeUntil(this.unsubscribe$),
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe();
   }
 
-  ngOnDestroy() {
-    this.unsubscribe$.next(true);
-    this.unsubscribe$.unsubscribe();
-  }
-
   onPromote() {
-    const promotionTarget = this.promotionTargets.find((target) => target.id === this.promoteControl.value);
+    const promotionTarget = this.promotionTargets.find(target => target.id === this.promoteControl.value);
 
     this.promotionService
       .promote(this.apiId, promotionTarget)
@@ -115,11 +106,11 @@ export class ApiGeneralInfoPromoteDialogComponent implements OnDestroy {
         tap(() => {
           this.snackBarService.success('Promotion requested.');
         }),
-        catchError((error) => {
+        catchError(error => {
           this.snackBarService.error(error.error?.message ?? error.message ?? 'An error occurred while requesting promotion.');
           return EMPTY;
         }),
-        takeUntil(this.unsubscribe$),
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => this.dialogRef.close());
   }

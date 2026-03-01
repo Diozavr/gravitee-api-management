@@ -140,7 +140,7 @@ describe('DocumentationEditPageComponent', () => {
 
         it('should have 2 taps', async () => {
           const tabs = await harnessLoader.getAllHarnesses(MatTabHarness);
-          const tabLabels = await Promise.all(tabs.map(async (t) => await t.getLabel()));
+          const tabLabels = await Promise.all(tabs.map(async t => await t.getLabel()));
           expect(tabLabels.length).toEqual(2);
           expect(await tabLabels[0]).toEqual('Configure Page');
           expect(await tabLabels[1]).toEqual('Content');
@@ -157,13 +157,11 @@ describe('DocumentationEditPageComponent', () => {
           const pageConfiguration = await harnessLoader.getHarness(ApiDocumentationV4PageConfigurationHarness);
 
           await pageConfiguration.setName(' Other-page-Name  ');
-          expect(await harness.getPublishChangesButton().then((btn) => btn.isDisabled())).toEqual(true);
+          expect(await harness.getPublishChangesButton().then(btn => btn.isDisabled())).toEqual(true);
         });
 
         it('should show markdown editor with existing content', async () => {
-          const editor = await harnessLoader
-            .getHarness(ApiDocumentationV4ContentEditorHarness)
-            .then((harness) => harness.getContentEditor());
+          const editor = await harnessLoader.getHarness(ApiDocumentationV4ContentEditorHarness).then(harness => harness.getContentEditor());
           expect(editor).toBeDefined();
           expect(await editor.getValue()).toEqual(PAGE.content);
         });
@@ -185,8 +183,8 @@ describe('DocumentationEditPageComponent', () => {
           await harness.openContentTab();
           await harnessLoader
             .getHarness(ApiDocumentationV4ContentEditorHarness)
-            .then((harness) => harness.getContentEditor())
-            .then((editor) => editor.setValue('New content'));
+            .then(harness => harness.getContentEditor())
+            .then(editor => editor.setValue('New content'));
 
           const saveBtn = await harness.getPublishChangesButton();
           expect(await saveBtn.isDisabled()).toEqual(false);
@@ -374,9 +372,7 @@ describe('DocumentationEditPageComponent', () => {
         it('should not allow editing content', async () => {
           await harness.openContentTab();
 
-          const editor = await harnessLoader
-            .getHarness(ApiDocumentationV4ContentEditorHarness)
-            .then((harness) => harness.getContentEditor());
+          const editor = await harnessLoader.getHarness(ApiDocumentationV4ContentEditorHarness).then(harness => harness.getContentEditor());
           expect(editor).toBeDefined();
           expect(await editor.isDisabled()).toEqual(true);
         });
@@ -546,6 +542,7 @@ describe('DocumentationEditPageComponent', () => {
                 entrypointsAsServers: false,
                 tryItURL: 'cats-rule',
                 tryIt: false,
+                disableSyntaxHighlight: false,
                 tryItAnonymous: false,
                 showURL: false,
                 displayOperationId: false,
@@ -662,6 +659,7 @@ describe('DocumentationEditPageComponent', () => {
                 entrypointAsBasePath: true,
                 entrypointsAsServers: true,
                 tryIt: true,
+                disableSyntaxHighlight: false,
                 tryItAnonymous: true,
                 showURL: true,
                 displayOperationId: true,
@@ -702,6 +700,7 @@ describe('DocumentationEditPageComponent', () => {
                 entrypointAsBasePath: true,
                 entrypointsAsServers: true,
                 tryIt: true,
+                disableSyntaxHighlight: false,
                 tryItAnonymous: true,
                 showURL: true,
                 displayOperationId: true,
@@ -742,8 +741,8 @@ describe('DocumentationEditPageComponent', () => {
             await harness.openOpenApiConfigurationTab();
             await harness
               .getEnableFilteringToggle()
-              .then((_) => fail('Enable filtering toggle should not be displayed'))
-              .catch((_) => {});
+              .then(_ => fail('Enable filtering toggle should not be displayed'))
+              .catch(_ => {});
           });
 
           it('should show page content by default', async () => {

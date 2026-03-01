@@ -16,7 +16,6 @@
 package io.gravitee.rest.api.service.impl;
 
 import static io.gravitee.repository.management.model.ApiKeyMode.SHARED;
-import static io.gravitee.repository.management.model.Application.METADATA_CLIENT_CERTIFICATE;
 import static io.gravitee.repository.management.model.Application.METADATA_CLIENT_ID;
 import static io.gravitee.repository.management.model.Application.METADATA_REGISTRATION_PAYLOAD;
 import static io.gravitee.rest.api.model.ApiKeyMode.UNSPECIFIED;
@@ -139,6 +138,9 @@ public class ApplicationService_UpdateTest {
     @Mock
     private GroupService groupService;
 
+    @Mock
+    private io.gravitee.apim.core.application_certificate.crud_service.ClientCertificateCrudService clientCertificateCrudService;
+
     @Test
     public void shouldUpdate() throws TechnicalException {
         ApplicationSettings settings = new ApplicationSettings();
@@ -154,8 +156,7 @@ public class ApplicationService_UpdateTest {
                 Key.PLAN_SECURITY_APIKEY_SHARED_ALLOWED,
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         ConsoleConfigEntity config = getConsoleConfigEntity(true);
 
@@ -165,9 +166,6 @@ public class ApplicationService_UpdateTest {
         when(existingApplication.getStatus()).thenReturn(ApplicationStatus.ACTIVE);
         when(existingApplication.getType()).thenReturn(ApplicationType.SIMPLE);
         when(existingApplication.getApiKeyMode()).thenReturn(ApiKeyMode.UNSPECIFIED);
-        lenient()
-            .when(existingApplication.getMetadata())
-            .thenReturn(Map.of(METADATA_CLIENT_CERTIFICATE, Base64.getEncoder().encodeToString(VALID_PEM_1.getBytes())));
 
         when(updateApplication.getSettings()).thenReturn(settings);
         when(updateApplication.getName()).thenReturn(APPLICATION_NAME);
@@ -182,9 +180,6 @@ public class ApplicationService_UpdateTest {
         when(updatedApplication.getGroups()).thenReturn(Set.of("group1", "group2"));
         when(updatedApplication.getApiKeyMode()).thenReturn(ApiKeyMode.UNSPECIFIED);
 
-        when(updatedApplication.getMetadata())
-            .thenReturn(Map.of(METADATA_CLIENT_CERTIFICATE, Base64.getEncoder().encodeToString(VALID_PEM_2.getBytes())));
-
         when(applicationRepository.update(any())).thenReturn(updatedApplication);
 
         when(roleService.findPrimaryOwnerRoleByOrganization(any(), any())).thenReturn(mock(RoleEntity.class));
@@ -198,22 +193,36 @@ public class ApplicationService_UpdateTest {
         when(membershipService.getMembershipsByReferencesAndRole(any(), any(), any())).thenReturn(Collections.singleton(po));
         when(applicationConverter.toApplication(any(UpdateApplicationEntity.class))).thenCallRealMethod();
 
+        // Mock the certificate service to return the certificate
+        io.gravitee.apim.core.application_certificate.model.ClientCertificate mockCert =
+            io.gravitee.apim.core.application_certificate.model.ClientCertificate.builder()
+                .id("cert-id")
+                .applicationId(APPLICATION_ID)
+                .name("cert-name")
+                .createdAt(new java.util.Date())
+                .updatedAt(new java.util.Date())
+                .certificate(VALID_PEM_1)
+                .status(io.gravitee.apim.core.application_certificate.model.ClientCertificateStatus.ACTIVE)
+                .build();
+        when(clientCertificateCrudService.findMostRecentActiveByApplicationId(any())).thenReturn(java.util.Optional.of(mockCert));
+
         final ApplicationEntity applicationEntity = applicationService.update(
             GraviteeContext.getExecutionContext(),
             APPLICATION_ID,
             updateApplication
         );
 
-        verify(applicationRepository)
-            .update(argThat(application -> APPLICATION_NAME.equals(application.getName()) && application.getUpdatedAt() != null));
+        verify(applicationRepository).update(
+            argThat(application -> APPLICATION_NAME.equals(application.getName()) && application.getUpdatedAt() != null)
+        );
 
         assertNotNull(applicationEntity);
         assertEquals(APPLICATION_NAME, applicationEntity.getName());
-        Assertions.assertThat(applicationEntity.getSettings().getTls().getClientCertificate()).isEqualTo(VALID_PEM_2);
+        Assertions.assertThat(applicationEntity.getSettings().getTls().getClientCertificate()).isEqualTo(VALID_PEM_1);
     }
 
     @Test
-    public void shouldThrowExceptionWhenUserGroupsRequiredButNotPresent() throws TechnicalException {
+    public void shouldThrowExceptionWhenUserGroupsRequiredButNotPresent() {
         ApplicationSettings settings = new ApplicationSettings();
         ConsoleConfigEntity config = getConsoleConfigEntity(true);
         SimpleApplicationSettings clientSettings = new SimpleApplicationSettings();
@@ -221,11 +230,11 @@ public class ApplicationService_UpdateTest {
         settings.setApp(clientSettings);
         mockSubscriptions();
         mockPlans();
-        when(configService.getConsoleConfig(GraviteeContext.getExecutionContext())).thenReturn(config);
+        ExecutionContext executionContext = GraviteeContext.getExecutionContext();
+        when(configService.getConsoleConfig(executionContext)).thenReturn(config);
 
-        Exception exception = assertThrows(
-            BadRequestException.class,
-            () -> applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication)
+        Exception exception = assertThrows(BadRequestException.class, () ->
+            applicationService.update(executionContext, APPLICATION_ID, updateApplication)
         );
 
         assertEquals(
@@ -248,8 +257,7 @@ public class ApplicationService_UpdateTest {
                 Key.PLAN_SECURITY_APIKEY_SHARED_ALLOWED,
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         mockSubscriptions();
         mockPlans();
@@ -286,8 +294,9 @@ public class ApplicationService_UpdateTest {
             updateApplication
         );
 
-        verify(applicationRepository)
-            .update(argThat(application -> APPLICATION_NAME.equals(application.getName()) && application.getUpdatedAt() != null));
+        verify(applicationRepository).update(
+            argThat(application -> APPLICATION_NAME.equals(application.getName()) && application.getUpdatedAt() != null)
+        );
 
         assertNotNull(applicationEntity);
         assertEquals(APPLICATION_NAME, applicationEntity.getName());
@@ -303,8 +312,9 @@ public class ApplicationService_UpdateTest {
         SubscriptionEntity pushSubscription = new SubscriptionEntity();
         pushSubscription.setPlan("pushPLan");
         pushSubscription.setStatus(SubscriptionStatus.ACCEPTED);
-        when(subscriptionService.findByApplicationAndPlan(GraviteeContext.getExecutionContext(), APPLICATION_ID, null))
-            .thenReturn(Arrays.asList(apiKeySubscription, pushSubscription));
+        when(subscriptionService.findByApplicationAndPlan(GraviteeContext.getExecutionContext(), APPLICATION_ID, null)).thenReturn(
+            Arrays.asList(apiKeySubscription, pushSubscription)
+        );
     }
 
     private void mockPlans() {
@@ -316,8 +326,9 @@ public class ApplicationService_UpdateTest {
         pushPlanEntity.setId("pushPLan");
         pushPlanEntity.setSecurity(null);
         pushPlanEntity.setMode(PlanMode.PUSH);
-        when(planSearchService.findByIdIn(GraviteeContext.getExecutionContext(), Set.of("apiKeyPlan", "pushPLan")))
-            .thenReturn(Set.of(apiKeyPlanEntity, pushPlanEntity));
+        when(planSearchService.findByIdIn(GraviteeContext.getExecutionContext(), Set.of("apiKeyPlan", "pushPLan"))).thenReturn(
+            Set.of(apiKeyPlanEntity, pushPlanEntity)
+        );
     }
 
     @Test(expected = ApplicationNotFoundException.class)
@@ -395,8 +406,9 @@ public class ApplicationService_UpdateTest {
             updateApplication
         );
 
-        verify(applicationRepository)
-            .update(argThat(application -> APPLICATION_NAME.equals(application.getName()) && application.getUpdatedAt() != null));
+        verify(applicationRepository).update(
+            argThat(application -> APPLICATION_NAME.equals(application.getName()) && application.getUpdatedAt() != null)
+        );
 
         assertNotNull(applicationEntity);
         assertEquals(APPLICATION_NAME, applicationEntity.getName());
@@ -450,8 +462,7 @@ public class ApplicationService_UpdateTest {
                 any(),
                 eq(ParameterReferenceType.ENVIRONMENT)
             )
-        )
-            .thenReturn(false);
+        ).thenReturn(false);
 
         applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
     }
@@ -483,8 +494,7 @@ public class ApplicationService_UpdateTest {
                 Key.PLAN_SECURITY_APIKEY_SHARED_ALLOWED,
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(false);
+        ).thenReturn(false);
 
         // existing application has a UNSPECIFIED API Key mode
         when(existingApplication.getApiKeyMode()).thenReturn(ApiKeyMode.UNSPECIFIED);
@@ -524,8 +534,7 @@ public class ApplicationService_UpdateTest {
                 any(),
                 eq(ParameterReferenceType.ENVIRONMENT)
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
     }
@@ -559,8 +568,7 @@ public class ApplicationService_UpdateTest {
                 any(),
                 eq(ParameterReferenceType.ENVIRONMENT)
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         // oauth app settings contains everything required
         ApplicationSettings settings = new ApplicationSettings();
@@ -589,8 +597,9 @@ public class ApplicationService_UpdateTest {
         applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
 
         // ensure application has been updated with the new client_id from DCR
-        verify(applicationRepository)
-            .update(argThat(application -> application.getMetadata().get(METADATA_CLIENT_ID).equals("client-id-from-clientRegistration")));
+        verify(applicationRepository).update(
+            argThat(application -> application.getMetadata().get(METADATA_CLIENT_ID).equals("client-id-from-clientRegistration"))
+        );
     }
 
     @Test
@@ -601,8 +610,9 @@ public class ApplicationService_UpdateTest {
         when(updateApplication.getName()).thenReturn(APPLICATION_NAME);
         when(updateApplication.getDescription()).thenReturn("My description");
         when(existingApplication.getType()).thenReturn(ApplicationType.BROWSER);
-        when(existingApplication.getMetadata())
-            .thenReturn(Map.of(METADATA_REGISTRATION_PAYLOAD, "{}", METADATA_CLIENT_ID, "my-previous-client-id"));
+        when(existingApplication.getMetadata()).thenReturn(
+            Map.of(METADATA_REGISTRATION_PAYLOAD, "{}", METADATA_CLIENT_ID, "my-previous-client-id")
+        );
         when(applicationRepository.update(any())).thenReturn(existingApplication);
         when(roleService.findPrimaryOwnerRoleByOrganization(any(), any())).thenReturn(mock(RoleEntity.class));
 
@@ -622,8 +632,7 @@ public class ApplicationService_UpdateTest {
                 any(),
                 eq(ParameterReferenceType.ENVIRONMENT)
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         // oauth app settings contains everything required
         ApplicationSettings settings = new ApplicationSettings();
@@ -651,8 +660,9 @@ public class ApplicationService_UpdateTest {
         applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
 
         // ensure application has been updated, but kept the previous client_id
-        verify(applicationRepository)
-            .update(argThat(application -> application.getMetadata().get(METADATA_CLIENT_ID).equals("my-previous-client-id")));
+        verify(applicationRepository).update(
+            argThat(application -> application.getMetadata().get(METADATA_CLIENT_ID).equals("my-previous-client-id"))
+        );
     }
 
     @Test
@@ -695,15 +705,15 @@ public class ApplicationService_UpdateTest {
         when(
             subscriptionService.search(
                 any(),
-                argThat(criteria ->
-                    criteria.getApplications().contains(APPLICATION_ID) &&
-                    criteria
-                        .getStatuses()
-                        .containsAll(Set.of(SubscriptionStatus.ACCEPTED, SubscriptionStatus.PAUSED, SubscriptionStatus.PENDING))
+                argThat(
+                    criteria ->
+                        criteria.getApplications().contains(APPLICATION_ID) &&
+                        criteria
+                            .getStatuses()
+                            .containsAll(Set.of(SubscriptionStatus.ACCEPTED, SubscriptionStatus.PAUSED, SubscriptionStatus.PENDING))
                 )
             )
-        )
-            .thenReturn(subscriptions);
+        ).thenReturn(subscriptions);
         when(configService.getConsoleConfig(GraviteeContext.getExecutionContext())).thenReturn(consoleConfig);
 
         applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
@@ -719,7 +729,7 @@ public class ApplicationService_UpdateTest {
     }
 
     @Test
-    public void should_throw_exception_on_update_client_certificate_of_subscriptions() throws TechnicalException {
+    public void should_update_client_certificate_via_crud_service() throws TechnicalException {
         ApplicationSettings settings = new ApplicationSettings();
         settings.setApp(new SimpleApplicationSettings());
         settings.setTls(TlsSettings.builder().clientCertificate(VALID_PEM_1).build());
@@ -728,7 +738,14 @@ public class ApplicationService_UpdateTest {
         when(configService.getConsoleConfig(GraviteeContext.getExecutionContext())).thenReturn(consoleConfig);
         when(applicationRepository.findById(APPLICATION_ID)).thenReturn(Optional.of(existingApplication));
         when(existingApplication.getStatus()).thenReturn(ApplicationStatus.ACTIVE);
+        when(existingApplication.getType()).thenReturn(ApplicationType.SIMPLE);
+        when(existingApplication.getApiKeyMode()).thenReturn(ApiKeyMode.UNSPECIFIED);
         when(updateApplication.getSettings()).thenReturn(settings);
+        when(updateApplication.getName()).thenReturn(APPLICATION_NAME);
+        when(updateApplication.getDescription()).thenReturn("My description");
+        when(applicationConverter.toApplication(any(UpdateApplicationEntity.class))).thenCallRealMethod();
+        when(applicationRepository.update(any())).thenReturn(existingApplication);
+        when(roleService.findPrimaryOwnerRoleByOrganization(any(), any())).thenReturn(mock(RoleEntity.class));
 
         MembershipEntity po = new MembershipEntity();
         po.setMemberId(USER_NAME);
@@ -736,25 +753,19 @@ public class ApplicationService_UpdateTest {
         po.setReferenceId(APPLICATION_ID);
         po.setReferenceType(MembershipReferenceType.APPLICATION);
         po.setRoleId("APPLICATION_PRIMARY_OWNER");
+        when(membershipService.getMembershipsByReferencesAndRole(any(), any(), any())).thenReturn(Collections.singleton(po));
 
-        SubscriptionEntity subscription1 = new SubscriptionEntity();
-        subscription1.setId("sub-1");
-        subscription1.setClientCertificate("old cert");
+        // No existing certificate - this is a new certificate
+        when(clientCertificateCrudService.findMostRecentActiveByApplicationId(any())).thenReturn(java.util.Optional.empty());
 
-        SubscriptionEntity subscription2 = new SubscriptionEntity();
-        subscription2.setId("sub-2");
-        subscription2.setClientCertificate("old cert");
+        applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
 
-        assertThrows(
-            ClientCertificateChangeNotAllowedException.class,
-            () -> {
-                applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
-            }
-        );
+        // Verify that a new certificate was created
+        verify(clientCertificateCrudService).create(eq(APPLICATION_ID), any());
     }
 
     @Test
-    public void should_update_neither_client_id_or_client_certificate_of_subscriptions() throws TechnicalException {
+    public void should_update_certificate_and_expire_old_one() throws TechnicalException {
         ApplicationSettings settings = new ApplicationSettings();
         SimpleApplicationSettings clientSettings = new SimpleApplicationSettings();
         clientSettings.setClientId(CLIENT_ID);
@@ -765,7 +776,14 @@ public class ApplicationService_UpdateTest {
         when(configService.getConsoleConfig(GraviteeContext.getExecutionContext())).thenReturn(consoleConfig);
         when(applicationRepository.findById(APPLICATION_ID)).thenReturn(Optional.of(existingApplication));
         when(existingApplication.getStatus()).thenReturn(ApplicationStatus.ACTIVE);
+        when(existingApplication.getType()).thenReturn(ApplicationType.SIMPLE);
+        when(existingApplication.getApiKeyMode()).thenReturn(ApiKeyMode.UNSPECIFIED);
         when(updateApplication.getSettings()).thenReturn(settings);
+        when(updateApplication.getName()).thenReturn(APPLICATION_NAME);
+        when(updateApplication.getDescription()).thenReturn("My description");
+        when(applicationConverter.toApplication(any(UpdateApplicationEntity.class))).thenCallRealMethod();
+        when(applicationRepository.update(any())).thenReturn(existingApplication);
+        when(roleService.findPrimaryOwnerRoleByOrganization(any(), any())).thenReturn(mock(RoleEntity.class));
 
         MembershipEntity po = new MembershipEntity();
         po.setMemberId(USER_NAME);
@@ -773,23 +791,26 @@ public class ApplicationService_UpdateTest {
         po.setReferenceId(APPLICATION_ID);
         po.setReferenceType(MembershipReferenceType.APPLICATION);
         po.setRoleId("APPLICATION_PRIMARY_OWNER");
+        when(membershipService.getMembershipsByReferencesAndRole(any(), any(), any())).thenReturn(Collections.singleton(po));
 
-        SubscriptionEntity subscription1 = new SubscriptionEntity();
-        subscription1.setId("sub-1");
-        subscription1.setClientId("old client id");
-        subscription1.setClientCertificate("old cert");
+        // Existing certificate with different content
+        io.gravitee.apim.core.application_certificate.model.ClientCertificate existingCert =
+            io.gravitee.apim.core.application_certificate.model.ClientCertificate.builder()
+                .id("old-cert-id")
+                .applicationId(APPLICATION_ID)
+                .name("old-cert-name")
+                .createdAt(new java.util.Date())
+                .updatedAt(new java.util.Date())
+                .certificate("old certificate content")
+                .status(io.gravitee.apim.core.application_certificate.model.ClientCertificateStatus.ACTIVE)
+                .build();
+        when(clientCertificateCrudService.findMostRecentActiveByApplicationId(any())).thenReturn(java.util.Optional.of(existingCert));
 
-        SubscriptionEntity subscription2 = new SubscriptionEntity();
-        subscription2.setId("sub-2");
-        subscription2.setClientId("old client id");
-        subscription2.setClientCertificate("old cert");
+        applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
 
-        assertThrows(
-            ClientCertificateChangeNotAllowedException.class,
-            () -> {
-                applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
-            }
-        );
+        // Verify that the old certificate was expired and a new one was created
+        verify(clientCertificateCrudService).update(eq("old-cert-id"), any());
+        verify(clientCertificateCrudService).create(eq(APPLICATION_ID), any());
     }
 
     private static @NotNull ConsoleConfigEntity getConsoleConfigEntity(boolean enabled) {
@@ -820,8 +841,10 @@ public class ApplicationService_UpdateTest {
         SubscriptionEntity oauthSubscription = new SubscriptionEntity();
         oauthSubscription.setPlan(oauthPlanId);
         oauthSubscription.setStatus(SubscriptionStatus.ACCEPTED);
-        when(subscriptionService.findByApplicationAndPlan(GraviteeContext.getExecutionContext(), APPLICATION_ID, null))
-            .thenReturn(Arrays.asList(jwtSubscription, apiKeySubscription, oauthSubscription));
+        ExecutionContext executionContext = GraviteeContext.getExecutionContext();
+        when(subscriptionService.findByApplicationAndPlan(executionContext, APPLICATION_ID, null)).thenReturn(
+            Arrays.asList(jwtSubscription, apiKeySubscription, oauthSubscription)
+        );
 
         PlanEntity jwtPlanEntity = new PlanEntity();
         jwtPlanEntity.setId(jwtPlanId);
@@ -832,12 +855,12 @@ public class ApplicationService_UpdateTest {
         PlanEntity oauthPlanEntity = new PlanEntity();
         oauthPlanEntity.setId(oauthPlanId);
         oauthPlanEntity.setSecurity(PlanSecurityType.OAUTH2);
-        when(planSearchService.findByIdIn(GraviteeContext.getExecutionContext(), Set.of(jwtPlanId, apiKeyPlanId, oauthPlanId)))
-            .thenReturn(Set.of(jwtPlanEntity, apiKeyPlanEntity, oauthPlanEntity));
+        when(planSearchService.findByIdIn(executionContext, Set.of(jwtPlanId, apiKeyPlanId, oauthPlanId))).thenReturn(
+            Set.of(jwtPlanEntity, apiKeyPlanEntity, oauthPlanEntity)
+        );
 
-        assertThrows(
-            ApplicationClientIdException.class,
-            () -> applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication)
+        assertThrows(ApplicationClientIdException.class, () ->
+            applicationService.update(executionContext, APPLICATION_ID, updateApplication)
         );
 
         verify(subscriptionService).findByApplicationAndPlan(any(ExecutionContext.class), eq(APPLICATION_ID), isNull());
@@ -866,16 +889,18 @@ public class ApplicationService_UpdateTest {
         SubscriptionEntity apiKeySubscription = new SubscriptionEntity();
         apiKeySubscription.setPlan(apiKeyPlanId);
         apiKeySubscription.setStatus(SubscriptionStatus.ACCEPTED);
-        when(subscriptionService.findByApplicationAndPlan(GraviteeContext.getExecutionContext(), APPLICATION_ID, null))
-            .thenReturn(Arrays.asList(jwtSubscription, apiKeySubscription, jwtSubscription2));
+        when(subscriptionService.findByApplicationAndPlan(GraviteeContext.getExecutionContext(), APPLICATION_ID, null)).thenReturn(
+            Arrays.asList(jwtSubscription, apiKeySubscription, jwtSubscription2)
+        );
 
         PlanEntity jwtPlanEntity = new PlanEntity();
         jwtPlanEntity.setId(jwtPlanId);
         jwtPlanEntity.setSecurity(PlanSecurityType.JWT);
         PlanEntity apiKeyPlanEntity = new PlanEntity();
         apiKeyPlanEntity.setId(apiKeyPlanId);
-        when(planSearchService.findByIdIn(GraviteeContext.getExecutionContext(), Set.of(apiKeyPlanId)))
-            .thenReturn(Set.of(apiKeyPlanEntity));
+        when(planSearchService.findByIdIn(GraviteeContext.getExecutionContext(), Set.of(apiKeyPlanId))).thenReturn(
+            Set.of(apiKeyPlanEntity)
+        );
 
         when(
             parameterService.findAsBoolean(
@@ -883,8 +908,7 @@ public class ApplicationService_UpdateTest {
                 Key.PLAN_SECURITY_APIKEY_SHARED_ALLOWED,
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         when(applicationRepository.findById(APPLICATION_ID)).thenReturn(Optional.of(existingApplication));
         when(existingApplication.getName()).thenReturn(APPLICATION_NAME);
@@ -917,8 +941,9 @@ public class ApplicationService_UpdateTest {
         assertNotNull(applicationEntity);
         assertEquals(APPLICATION_NAME, applicationEntity.getName());
 
-        verify(applicationRepository)
-            .update(argThat(application -> APPLICATION_NAME.equals(application.getName()) && application.getUpdatedAt() != null));
+        verify(applicationRepository).update(
+            argThat(application -> APPLICATION_NAME.equals(application.getName()) && application.getUpdatedAt() != null)
+        );
         verify(subscriptionService).findByApplicationAndPlan(any(ExecutionContext.class), eq(APPLICATION_ID), isNull());
         verify(planSearchService).findByIdIn(any(ExecutionContext.class), eq(Set.of(apiKeyPlanId)));
     }
@@ -958,15 +983,15 @@ public class ApplicationService_UpdateTest {
         when(
             subscriptionService.search(
                 any(),
-                argThat(criteria ->
-                    criteria.getApplications().contains(APPLICATION_ID) &&
-                    criteria
-                        .getStatuses()
-                        .containsAll(Set.of(SubscriptionStatus.ACCEPTED, SubscriptionStatus.PAUSED, SubscriptionStatus.PENDING))
+                argThat(
+                    criteria ->
+                        criteria.getApplications().contains(APPLICATION_ID) &&
+                        criteria
+                            .getStatuses()
+                            .containsAll(Set.of(SubscriptionStatus.ACCEPTED, SubscriptionStatus.PAUSED, SubscriptionStatus.PENDING))
                 )
             )
-        )
-            .thenReturn(subscriptions);
+        ).thenReturn(subscriptions);
         when(configService.getConsoleConfig(GraviteeContext.getExecutionContext())).thenReturn(config);
 
         applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
@@ -1004,93 +1029,54 @@ public class ApplicationService_UpdateTest {
         when(
             subscriptionService.search(
                 any(),
-                argThat(criteria ->
-                    criteria.getApplications().contains(APPLICATION_ID) &&
-                    criteria
-                        .getStatuses()
-                        .containsAll(Set.of(SubscriptionStatus.ACCEPTED, SubscriptionStatus.PAUSED, SubscriptionStatus.PENDING))
+                argThat(
+                    criteria ->
+                        criteria.getApplications().contains(APPLICATION_ID) &&
+                        criteria
+                            .getStatuses()
+                            .containsAll(Set.of(SubscriptionStatus.ACCEPTED, SubscriptionStatus.PAUSED, SubscriptionStatus.PENDING))
                 )
             )
-        )
-            .thenReturn(subscriptions);
+        ).thenReturn(subscriptions);
 
         applicationService.update(GraviteeContext.getExecutionContext(), APPLICATION_ID, updateApplication);
 
         verify(subscriptionService, never()).update(any(), any(UpdateSubscriptionEntity.class), any());
     }
 
-    private final String VALID_PEM_1 =
-        """
-                    -----BEGIN CERTIFICATE-----
-                    MIIFxjCCA64CCQD9kAnHVVL02TANBgkqhkiG9w0BAQsFADCBozEsMCoGCSqGSIb3
-                    DQEJARYddW5pdC50ZXN0c0BncmF2aXRlZXNvdXJjZS5jb20xEzARBgNVBAMMCnVu
-                    aXQtdGVzdHMxFzAVBgNVBAsMDkdyYXZpdGVlU291cmNlMRcwFQYDVQQKDA5HcmF2
-                    aXRlZVNvdXJjZTEOMAwGA1UEBwwFTGlsbGUxDzANBgNVBAgMBkZyYW5jZTELMAkG
-                    A1UEBhMCRlIwIBcNMjExMDE5MTUyMDQxWhgPMjEyMTA5MjUxNTIwNDFaMIGjMSww
-                    KgYJKoZIhvcNAQkBFh11bml0LnRlc3RzQGdyYXZpdGVlc291cmNlLmNvbTETMBEG
-                    A1UEAwwKdW5pdC10ZXN0czEXMBUGA1UECwwOR3Jhdml0ZWVTb3VyY2UxFzAVBgNV
-                    BAoMDkdyYXZpdGVlU291cmNlMQ4wDAYDVQQHDAVMaWxsZTEPMA0GA1UECAwGRnJh
-                    bmNlMQswCQYDVQQGEwJGUjCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIB
-                    AOKxBeF33XOd5sVaHbavIGFU+DMTX+cqTbRiJQJqAlrrDeuPQ3YEfga7hpHHB3ev
-                    OjunNCBJp4p/6VsBhylqcqd8KU+xqQ/wvNsqzp/50ssMkud+0sbPFjjjxM1rDI9X
-                    JVCqGqa15jlKfylcOOggH6KAOugM4BquBjeTRH0mGv2MBgZvtKHAieW0gzPslXxp
-                    UZZZ+gvvSSLo7NkAv7awWKSoV+yMlXma0yX0ygAj14EK1AxhFLZFgWDm8Ex919ry
-                    rbcPV6tqUHjw7Us8cy8p/pqftOUnwyRQ4LmaSdqwESZmdU+GXNXq22sAB6rX0G7u
-                    tXmoXVwQVlD8kEb79JbbIEOfPvLATyr8VStCK5dSXyc/JuzDo7QCquQUdrGpWrSy
-                    wdKKbCbOWDStakmBTEkgB0Bqg6yWFrHjgj+rzNeWFvIoZA+sLV2UCrlhDQ8BUV9O
-                    PMdgGBMKu4TrdEezt1NqDHjvThC3c6quxixxmaO/K7YPncVzguypijw7U7yl8CkG
-                    DlUJ+rPddEgsQCf+1E6z/xIeh8sCEdLm6TN80Dsw1yTdwzhRO9KvVY/gjE/ZaUYL
-                    g8Z0Htjq6vvnMwvr4C/8ykRk9oMYlv3o52pXQEcsbiZYm7LCTwgCs6k7KEiaHUze
-                    ySEqlkqFC8PG2GzCC6dM50xYktbcmwC+mep7c6bTAsexAgMBAAEwDQYJKoZIhvcN
-                    AQELBQADggIBAIHpb9solYTIPszzgvw0S6BVBAGzARDNDSi/jj+4KXKlKxYvVvq+
-                    bTX7YE6rC/wFGpyCjwfoWzzIrfLiIcmVTfu1o13Y/B8IEP4WyiAYrGszLqbjy1wM
-                    cyfwaxYpP/XfIQgcP5idI6kAA7hbGrFrLijIcdfYhh4tr6dsjD81uNrsVhp+JcAV
-                    CPv2o5YeRSMFUJrImAU5s73yX/x6fb2nCUR6PIMiPm9gveIAuY2+L12NzIJUugwN
-                    EZjqCeOr52f/yDuA+pAvVCGnZSSdkVWUh02ZsPxM4TiRzmxSkM5ODb59XWHeoFT1
-                    yvKA2F7+WFAL2R8BhBoVlBp1hug33Mrsix7L6yG4G9Ljss9Y0pzEd4B+IFGbpMZN
-                    R4dqZGpKS0aiStnvnurXBVWwIcJ3kCaAl2OgXZO5ivi+iNIx8e5qtXqDCnnlpeGz
-                    1KVhzZaqND1I+X1JS6I/V/HiTsnuVdg5aBZPYbQI0QLSgB+0SOjmTlWzjyJEt0PS
-                    kyOEs4bB9CPf3JaWgB9aORczsgn/cz8S7kEc8JlXDflePiSl4QPWYbX05wY9l2lJ
-                    yzuug/vKMCWUq0cU2i8WSA02N0+tEm4hCNol04KLKa3MRAa/yOSmDIJ4z+2D/BSD
-                    FZHaYejhPQFZzv73SxOAu2QCaXH5vIBEDx4Mb+lvc4BukgeIT2Gyi2gg
-                    -----END CERTIFICATE-----
-                    """;
-
-    private static final String VALID_PEM_2 =
-        """
-                    -----BEGIN CERTIFICATE-----
-                    MIIFqDCCA5ACCQD8CdtUilB/LDANBgkqhkiG9w0BAQsFADCBlTEpMCcGCSqGSIb3
-                    DQEJARYaY29udGFjdEBncmF2aXRlZXNvdXJjZS5jb20xEjAQBgNVBAMMCWphZWdl
-                    ci1jYTENMAsGA1UECwwEQVBJTTEXMBUGA1UECgwOR3Jhdml0ZWVTb3VyY2UxDjAM
-                    BgNVBAcMBUxpbGxlMQ8wDQYDVQQIDAZGcmFuY2UxCzAJBgNVBAYTAkZSMB4XDTIz
-                    MDQxNzEyNDMwMFoXDTMzMDQxNDEyNDMwMFowgZUxKTAnBgkqhkiG9w0BCQEWGmNv
-                    bnRhY3RAZ3Jhdml0ZWVzb3VyY2UuY29tMRIwEAYDVQQDDAlqYWVnZXItY2ExDTAL
-                    BgNVBAsMBEFQSU0xFzAVBgNVBAoMDkdyYXZpdGVlU291cmNlMQ4wDAYDVQQHDAVM
-                    aWxsZTEPMA0GA1UECAwGRnJhbmNlMQswCQYDVQQGEwJGUjCCAiIwDQYJKoZIhvcN
-                    AQEBBQADggIPADCCAgoCggIBANMbbR6pXb+AOoAC0ymdypgAZNcRwkMBC1MrUeJp
-                    P+3G6LVP6PFaYiukhGlMuemtgDaPomsdnDDQHYF/WRe2BNI+LB0U/PQ8A7FSqnnN
-                    i2RCGbTvqk68kYrfCOfL14q3iBZNxydFEEoU7UGqdxo0RDbwF+oWcCE6RoFd+5nS
-                    GQycOdHpBm5omftvg7zBTWoBJNAifkLf+TcHB3nJLqq0wvUG7HnmHxIU8GJW7BA7
-                    4gEfgALEhra40tUar3g15IVbmLDHJaYwCpVz09na2A6kF0QqunkLoNC32MaajPZv
-                    ROjXJgTxhDHcPzBJO4y1MVTRKG+dtr/X5uLCad4ZMi2wWYgFXzjPK871OW5+eAKn
-                    rJEJDapaEuf9NX1AuWOLVVjDReBkfpvy7H1p+lQ9y0HNLOcMIdt1zLDsbSIySDAo
-                    A4eXnorTHWP3y3JkguFIDEo/FxSw0blvTqAQyAmb3FWJIrgJ+mU5VDeYMhoezbki
-                    RUFCQS7R33ns9A8Tw4kaOtLtc3Xrj8EBzpjT1ioygWnaQTrg7uj3CxLess+e71vJ
-                    X5n6M2UNV6dQf6izSisQx/XJeawuEZgkRtHs7ta52i0Xujje+XI09S6uavWWfgnj
-                    v/24vOyUq/Y21McrM1nWhrofk4JPLDp8zzOvuJRQyLJyWWxIveIMgowvgzVUHmvn
-                    ese9AgMBAAEwDQYJKoZIhvcNAQELBQADggIBAG8tLNCV5/xM/YGMgZgdIyZnxQJf
-                    4Zxfyg7NGiQKgPZOQ5lTaBlfbdRSdCywsb8yQmY4bv75Z3DB9wvyQG+cJvBGm7iR
-                    SMcS+VPZP8G+MimVuj9qUEcf5J9sqWfkRN32jwgbIAKtGFrJoMbNymoVX+Qvb1Jv
-                    voCrULP7lJrNMwnIIecB6MOazrM+spQdP4UgqixHorJI0bAKxdTNm8ZN3SRZzJ0Q
-                    f1Bvnjw7FU1G4s9JNnjNDu3S3zafq2cKkDWzE7ZstyAlKJrZwyWjyx2hEtPlKJ16
-                    XOPErC92+1r2yYA7Z9jYTt+42t/DUky4oIXDkmrF8k+DIciXgIg3O2f8S+JfsGyW
-                    NFg1N8Mpld9voItmBDlfahEq/RddMIGOrisl8d8oRB9SzONZG/leK06/ZCqeC2Mc
-                    T/AmHp7tnAhRNyKf0mw8yMQygpRHN9bQUXHfYgZGQ2hWW6AP+3URg8pyJmwsz9OA
-                    SIHa2KmTKy/R8ssOAh8jyzeMXhuesnv9zSV1zllbfBZ54+1EQVba3Pg2RRpsonN5
-                    Ya26HYHn2V4Y5PkE+YeKn9xcl/G+KWiymHpZ9cyUUE06ZBQY4Ha0vX67b0K5AYwZ
-                    vVJj7N1kwlzS2KIysLrefl7PUMikuuEopTH6Xmi9obDZfywPoK2LxUdnN3m8KmUe
-                    FPeI4PKEw5AUf97H
-                    -----END CERTIFICATE-----
-                    
-                    """;
+    private static final String VALID_PEM_1 = """
+        -----BEGIN CERTIFICATE-----
+        MIIFxjCCA64CCQD9kAnHVVL02TANBgkqhkiG9w0BAQsFADCBozEsMCoGCSqGSIb3
+        DQEJARYddW5pdC50ZXN0c0BncmF2aXRlZXNvdXJjZS5jb20xEzARBgNVBAMMCnVu
+        aXQtdGVzdHMxFzAVBgNVBAsMDkdyYXZpdGVlU291cmNlMRcwFQYDVQQKDA5HcmF2
+        aXRlZVNvdXJjZTEOMAwGA1UEBwwFTGlsbGUxDzANBgNVBAgMBkZyYW5jZTELMAkG
+        A1UEBhMCRlIwIBcNMjExMDE5MTUyMDQxWhgPMjEyMTA5MjUxNTIwNDFaMIGjMSww
+        KgYJKoZIhvcNAQkBFh11bml0LnRlc3RzQGdyYXZpdGVlc291cmNlLmNvbTETMBEG
+        A1UEAwwKdW5pdC10ZXN0czEXMBUGA1UECwwOR3Jhdml0ZWVTb3VyY2UxFzAVBgNV
+        BAoMDkdyYXZpdGVlU291cmNlMQ4wDAYDVQQHDAVMaWxsZTEPMA0GA1UECAwGRnJh
+        bmNlMQswCQYDVQQGEwJGUjCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIB
+        AOKxBeF33XOd5sVaHbavIGFU+DMTX+cqTbRiJQJqAlrrDeuPQ3YEfga7hpHHB3ev
+        OjunNCBJp4p/6VsBhylqcqd8KU+xqQ/wvNsqzp/50ssMkud+0sbPFjjjxM1rDI9X
+        JVCqGqa15jlKfylcOOggH6KAOugM4BquBjeTRH0mGv2MBgZvtKHAieW0gzPslXxp
+        UZZZ+gvvSSLo7NkAv7awWKSoV+yMlXma0yX0ygAj14EK1AxhFLZFgWDm8Ex919ry
+        rbcPV6tqUHjw7Us8cy8p/pqftOUnwyRQ4LmaSdqwESZmdU+GXNXq22sAB6rX0G7u
+        tXmoXVwQVlD8kEb79JbbIEOfPvLATyr8VStCK5dSXyc/JuzDo7QCquQUdrGpWrSy
+        wdKKbCbOWDStakmBTEkgB0Bqg6yWFrHjgj+rzNeWFvIoZA+sLV2UCrlhDQ8BUV9O
+        PMdgGBMKu4TrdEezt1NqDHjvThC3c6quxixxmaO/K7YPncVzguypijw7U7yl8CkG
+        DlUJ+rPddEgsQCf+1E6z/xIeh8sCEdLm6TN80Dsw1yTdwzhRO9KvVY/gjE/ZaUYL
+        g8Z0Htjq6vvnMwvr4C/8ykRk9oMYlv3o52pXQEcsbiZYm7LCTwgCs6k7KEiaHUze
+        ySEqlkqFC8PG2GzCC6dM50xYktbcmwC+mep7c6bTAsexAgMBAAEwDQYJKoZIhvcN
+        AQELBQADggIBAIHpb9solYTIPszzgvw0S6BVBAGzARDNDSi/jj+4KXKlKxYvVvq+
+        bTX7YE6rC/wFGpyCjwfoWzzIrfLiIcmVTfu1o13Y/B8IEP4WyiAYrGszLqbjy1wM
+        cyfwaxYpP/XfIQgcP5idI6kAA7hbGrFrLijIcdfYhh4tr6dsjD81uNrsVhp+JcAV
+        CPv2o5YeRSMFUJrImAU5s73yX/x6fb2nCUR6PIMiPm9gveIAuY2+L12NzIJUugwN
+        EZjqCeOr52f/yDuA+pAvVCGnZSSdkVWUh02ZsPxM4TiRzmxSkM5ODb59XWHeoFT1
+        yvKA2F7+WFAL2R8BhBoVlBp1hug33Mrsix7L6yG4G9Ljss9Y0pzEd4B+IFGbpMZN
+        R4dqZGpKS0aiStnvnurXBVWwIcJ3kCaAl2OgXZO5ivi+iNIx8e5qtXqDCnnlpeGz
+        1KVhzZaqND1I+X1JS6I/V/HiTsnuVdg5aBZPYbQI0QLSgB+0SOjmTlWzjyJEt0PS
+        kyOEs4bB9CPf3JaWgB9aORczsgn/cz8S7kEc8JlXDflePiSl4QPWYbX05wY9l2lJ
+        yzuug/vKMCWUq0cU2i8WSA02N0+tEm4hCNol04KLKa3MRAa/yOSmDIJ4z+2D/BSD
+        FZHaYejhPQFZzv73SxOAu2QCaXH5vIBEDx4Mb+lvc4BukgeIT2Gyi2gg
+        -----END CERTIFICATE-----
+        """;
 }

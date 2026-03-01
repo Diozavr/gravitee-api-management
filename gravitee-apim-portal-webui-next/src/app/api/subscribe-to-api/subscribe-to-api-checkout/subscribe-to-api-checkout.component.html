@@ -18,12 +18,13 @@
 <div class="subscribe-to-api-checkout__container">
   <app-subscription-info
     class="subscribe-to-api-checkout__container__subscription-info"
-    [applicationName]="application ? application.name : ''"
+    [application]="application"
     [planName]="plan.name"
     [planUsageConfiguration]="plan.usage_configuration"
     [planSecurity]="plan.security"
     [planValidation]="plan.validation"
-    [apiType]="api.type" />
+    [api]="api"
+  />
   @if (plan.security === 'KEY_LESS') {
     <app-api-access [planSecurity]="plan.security" [entrypointUrls]="api.entrypoints" [apiType]="api.type" />
   } @else {
@@ -43,7 +44,8 @@
                 [value]="'EXCLUSIVE'"
                 [disabled]="false"
                 [selected]="apiKeyMode() === 'EXCLUSIVE'"
-                (selectItem)="apiKeyMode.set('EXCLUSIVE')">
+                (selectItem)="apiKeyMode.set('EXCLUSIVE')"
+              >
                 <div i18n="@@subscribeToApiGeneratedApiKeyDescription" class="m3-body-medium">
                   A new API Key will be generated for each new subscription of the chosen application, ensuring secure and unique access for
                   every user.
@@ -54,7 +56,8 @@
                 [value]="'SHARED'"
                 [disabled]="sharedApiKeyModeDisabled"
                 [selected]="apiKeyMode() === 'SHARED'"
-                (selectItem)="apiKeyMode.set('SHARED')">
+                (selectItem)="apiKeyMode.set('SHARED')"
+              >
                 <div i18n="@@subscribeToApiSharedApiKeyDescription" class="m3-body-medium">
                   The same API Key will be used for each new subscription, simplifying management across multiple APIs.
                 </div>

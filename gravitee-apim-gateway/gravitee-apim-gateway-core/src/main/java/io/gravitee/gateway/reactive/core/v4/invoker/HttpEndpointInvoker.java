@@ -73,7 +73,18 @@ public class HttpEndpointInvoker implements HttpInvoker, Invoker {
         final HttpEndpointConnector endpointConnector = resolveConnector(ctx);
 
         if (endpointConnector == null) {
-            return ctx.interruptWith(new ExecutionFailure(HttpStatusCode.SERVICE_UNAVAILABLE_503).key(NO_ENDPOINT_FOUND_KEY));
+            final String endpointTarget = ctx.getAttribute(ATTR_REQUEST_ENDPOINT);
+
+            final StringBuilder errorMessage = new StringBuilder("Endpoint resolution failed - check endpoint configuration");
+            if (endpointTarget != null) {
+                errorMessage.append(" for target: ").append(endpointTarget);
+            }
+
+            return ctx.interruptWith(
+                new ExecutionFailure(HttpStatusCode.SERVICE_UNAVAILABLE_503)
+                    .key(NO_ENDPOINT_FOUND_KEY)
+                    .cause(new IllegalArgumentException(errorMessage.toString()))
+            );
         }
 
         if (endpointConnector instanceof EndpointConnector legacyEndpointConnector) {

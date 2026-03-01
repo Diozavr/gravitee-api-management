@@ -17,7 +17,15 @@ package io.gravitee.apim.integration.tests.tls;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.ok;
-import static io.gravitee.apim.integration.tests.tls.TestHelper.*;
+import static io.gravitee.apim.integration.tests.tls.TestHelper.BRIGHT_SIDE_FQDN;
+import static io.gravitee.apim.integration.tests.tls.TestHelper.DARK_SIDE_FQDN;
+import static io.gravitee.apim.integration.tests.tls.TestHelper.GATEWAY_HTTP_API_URI;
+import static io.gravitee.apim.integration.tests.tls.TestHelper.KeyStoreGenResult;
+import static io.gravitee.apim.integration.tests.tls.TestHelper.PASSWORD;
+import static io.gravitee.apim.integration.tests.tls.TestHelper.RESPONSE_FROM_BACKEND;
+import static io.gravitee.apim.integration.tests.tls.TestHelper.WIREMOCK_ENDPOINT_URI;
+import static io.gravitee.apim.integration.tests.tls.TestHelper.assertApiCall;
+import static io.gravitee.apim.integration.tests.tls.TestHelper.createNewPKCS12KeyStore;
 
 import io.gravitee.apim.gateway.tests.sdk.AbstractGatewayTest;
 import io.gravitee.apim.gateway.tests.sdk.annotations.DeployApi;
@@ -39,7 +47,11 @@ import io.vertx.core.net.PemTrustOptions;
 import io.vertx.rxjava3.core.Vertx;
 import java.util.Map;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayNameGeneration;
+import org.junit.jupiter.api.DisplayNameGenerator;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
 /**
  * @author Benoit BORDIGONI (benoit.bordigoni at graviteesource.com)
@@ -87,25 +99,23 @@ public class TlsCertKeySelectionIntegrationTest {
 
         void shouldFallbackOnBrightCertTest(GatewayDynamicConfig.HttpConfig httpConfig) {
             // We call with another domain name, it should use the fallback on first alias of the keystore => bright cert
-            var httpClient = getBean(Vertx.class)
-                .createHttpClient(
-                    new HttpClientOptions()
-                        .setSsl(true)
-                        .setVerifyHost(false) // given the host is not the good one, we bypass this check
-                        .setPemTrustOptions(new PemTrustOptions().addCertValue(Buffer.buffer(brightCert)))
-                );
+            var httpClient = getBean(Vertx.class).createHttpClient(
+                new HttpClientOptions()
+                    .setSsl(true)
+                    .setVerifyHost(false) // given the host is not the good one, we bypass this check
+                    .setPemTrustOptions(new PemTrustOptions().addCertValue(Buffer.buffer(brightCert)))
+            );
             assertApiCall(httpClient, httpConfig.httpPort(), "www.foo.com", GATEWAY_HTTP_API_URI);
         }
 
         void shouldFallbackOnDefaultAliasTest(GatewayDynamicConfig.HttpConfig httpConfig) {
             // We call with another domain name, it should use the fallback on default alias => dark cert
-            var httpClient = getBean(Vertx.class)
-                .createHttpClient(
-                    new HttpClientOptions()
-                        .setSsl(true)
-                        .setVerifyHost(false) // given the host is not the good one, we bypass this check
-                        .setPemTrustOptions(new PemTrustOptions().addCertValue(Buffer.buffer(darkCert)))
-                );
+            var httpClient = getBean(Vertx.class).createHttpClient(
+                new HttpClientOptions()
+                    .setSsl(true)
+                    .setVerifyHost(false) // given the host is not the good one, we bypass this check
+                    .setPemTrustOptions(new PemTrustOptions().addCertValue(Buffer.buffer(darkCert)))
+            );
             assertApiCall(httpClient, httpConfig.httpPort(), "www.foo.com", GATEWAY_HTTP_API_URI);
         }
     }

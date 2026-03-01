@@ -29,13 +29,13 @@ import io.gravitee.rest.api.service.MembershipService;
 import io.gravitee.rest.api.service.UserService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.reactivex.rxjava3.core.Single;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class DeleteMembershipCommandHandler implements CommandHandler<DeleteMembershipCommand, DeleteMembershipReply> {
 
     private final MembershipService membershipService;
@@ -91,11 +91,11 @@ public class DeleteMembershipCommandHandler implements CommandHandler<DeleteMemb
         } catch (Exception e) {
             String errorDetails =
                 "Error occurred when trying to delete member on %s [%s] for cockpit user [%s] and organization [%s].".formatted(
-                        membershipPayload.referenceType(),
-                        membershipPayload.referenceId(),
-                        membershipPayload.userId(),
-                        membershipPayload.organizationId()
-                    );
+                    membershipPayload.referenceType(),
+                    membershipPayload.referenceId(),
+                    membershipPayload.userId(),
+                    membershipPayload.organizationId()
+                );
             log.error(errorDetails, e);
             return Single.just(new DeleteMembershipReply(command.getId(), errorDetails));
         }

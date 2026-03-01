@@ -34,6 +34,7 @@ public class Page {
      * Pages promoted between environments will share the same crossId.
      */
     private String crossId;
+    private String hrid;
 
     private String referenceId;
     private Page.ReferenceType referenceType;
@@ -46,6 +47,7 @@ public class Page {
     private Date createdAt;
     private Date updatedAt;
     private String parentId;
+    private String parentHrid;
     private boolean excludedAccessControls;
     private Set<AccessControl> accessControls;
 

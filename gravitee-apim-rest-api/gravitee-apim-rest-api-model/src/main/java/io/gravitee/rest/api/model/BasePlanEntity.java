@@ -62,6 +62,7 @@ public class BasePlanEntity implements GenericPlanEntity {
      * Plans promoted between environments will share the same crossId.
      */
     private String crossId;
+    private String hrid;
 
     @NotNull
     private String name;
@@ -150,6 +151,12 @@ public class BasePlanEntity implements GenericPlanEntity {
     @DeploymentRequired
     @JsonProperty("selection_rule")
     private String selectionRule;
+
+    @JsonIgnore
+    private ReferenceType referenceType;
+
+    @JsonIgnore
+    private String referenceId;
 
     @Override
     @JsonIgnore

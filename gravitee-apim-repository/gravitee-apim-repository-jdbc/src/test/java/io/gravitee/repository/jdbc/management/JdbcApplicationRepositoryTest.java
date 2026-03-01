@@ -31,15 +31,14 @@ public class JdbcApplicationRepositoryTest {
     public void searchQuery_queryAndEnvironmentIdsAndStatus() {
         JdbcApplicationRepository repository = new JdbcApplicationRepository("table_prefix_");
         Sortable sortable = new SortableBuilder().field("name").order(Order.ASC).build();
-        ApplicationCriteria criteria = ApplicationCriteria
-            .builder()
+        ApplicationCriteria criteria = ApplicationCriteria.builder()
             .query("id1")
             .environmentIds(Set.of("env1"))
             .status(ApplicationStatus.ACTIVE)
             .build();
         String query = repository.searchQuery(criteria, sortable);
         String expectedQuery =
-            "select a.id, a.environment_id, a.name, a.description, a.type, a.created_at, " +
+            "select a.id, a.hrid, a.environment_id, a.name, a.description, a.type, a.created_at, " +
             "a.updated_at, a.status, a.disable_membership_notifications, a.api_key_mode, a.origin, " +
             "am.k as am_k, am.v as am_v from table_prefix_applications a left join " +
             "table_prefix_application_metadata am on a.id = am.application_id where 1 = 1 and " +
@@ -52,8 +51,7 @@ public class JdbcApplicationRepositoryTest {
     public void searchQuery_queryAndRestrictedIdsAndNameAndEnvironmentIdsAndStatus() {
         JdbcApplicationRepository repository = new JdbcApplicationRepository("table_prefix_");
         Sortable sortable = new SortableBuilder().field("name").order(Order.ASC).build();
-        ApplicationCriteria criteria = ApplicationCriteria
-            .builder()
+        ApplicationCriteria criteria = ApplicationCriteria.builder()
             .query("name1")
             .restrictedToIds(Set.of("id1", "id2"))
             .name("name1")
@@ -62,7 +60,7 @@ public class JdbcApplicationRepositoryTest {
             .build();
         String query = repository.searchQuery(criteria, sortable);
         String expectedQuery =
-            "select a.id, a.environment_id, a.name, a.description, a.type, a.created_at, " +
+            "select a.id, a.hrid, a.environment_id, a.name, a.description, a.type, a.created_at, " +
             "a.updated_at, a.status, a.disable_membership_notifications, a.api_key_mode, a.origin, " +
             "am.k as am_k, am.v as am_v from table_prefix_applications a left join " +
             "table_prefix_application_metadata am on a.id = am.application_id where 1 = 1 and " +

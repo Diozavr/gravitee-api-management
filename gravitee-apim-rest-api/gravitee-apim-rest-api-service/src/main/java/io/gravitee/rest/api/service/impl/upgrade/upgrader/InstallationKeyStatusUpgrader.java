@@ -23,7 +23,7 @@ import io.gravitee.rest.api.service.InstallationService;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class InstallationKeyStatusUpgrader implements Upgrader {
 
     static String PLANS_DATA_UPGRADER_STATUS = "PLANS_DATA_UPGRADER_V2_STATUS";
@@ -48,6 +48,7 @@ public class InstallationKeyStatusUpgrader implements Upgrader {
     static String PLANS_FLOWS_UPGRADER_STATUS = "PLANS_FLOWS_UPGRADER_STATUS";
     static String EVENTS_LATEST_UPGRADER_STATUS = "EVENTS_LATEST_UPGRADER_STATUS";
     static String INTEGRATION_ROLES_UPGRADER_STATUS = "EVENTS_LATEST_UPGRADER_STATUS";
+    static String CLUSTER_ROLES_UPGRADER_STATUS = "CLUSTER_ROLES_UPGRADER_STATUS";
 
     @Autowired
     private InstallationService installationService;
@@ -74,6 +75,7 @@ public class InstallationKeyStatusUpgrader implements Upgrader {
         INSTALLATION_KEY_STATUS.put(API_LOGGING_CONDITION_UPGRADER, ApiLoggingConditionUpgrader.class.getName());
         INSTALLATION_KEY_STATUS.put(EVENTS_LATEST_UPGRADER_STATUS, EventsLatestUpgrader.class.getName());
         INSTALLATION_KEY_STATUS.put(INTEGRATION_ROLES_UPGRADER_STATUS, IntegrationRolesUpgrader.class.getName());
+        INSTALLATION_KEY_STATUS.put(CLUSTER_ROLES_UPGRADER_STATUS, ClusterRolesUpgrader.class.getName());
     }
 
     @Override

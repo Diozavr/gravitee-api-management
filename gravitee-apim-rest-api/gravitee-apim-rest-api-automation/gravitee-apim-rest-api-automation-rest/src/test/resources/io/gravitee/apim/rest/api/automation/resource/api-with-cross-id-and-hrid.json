@@ -1,12 +1,7 @@
 {
     "name": "api-v4-with-apikey",
-    "id": "api-id",
     "crossId": "api-cross-id",
     "hrid": "api-hrid",
-    "definitionContext": {
-        "origin": "KUBERNETES",
-        "syncFrom": "MANAGEMENT"
-    },
     "description": "API v4 CRD spec with unknown categories",
     "version": "1.0",
     "type": "PROXY",
@@ -52,17 +47,18 @@
     "lifecycleState": "PUBLISHED",
     "visibility": "PUBLIC",
     "flows": [],
-    "plans": {
-        "API_KEY": {
+    "plans": [
+        {
             "id": "6bf5ca72-e70b-4f59-b0a6-b5dca782ce24",
-            "name": "API Key plan",
-            "description": "API key plan needs a key to authenticate",
+            "hrid": "KEY_LESS",
+            "name": "Keyless plan",
+            "description": "No authentication",
             "type": "API",
             "status": "PUBLISHED",
             "validation": "AUTO",
             "mode": "STANDARD",
             "security": {
-                "type": "API_KEY"
+                "type": "KEY_LESS"
             },
             "flows": [
                 {
@@ -77,5 +73,5 @@
                 }
             ]
         }
-    }
+    ]
 }

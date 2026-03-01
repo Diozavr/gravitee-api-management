@@ -15,7 +15,7 @@
  */
 import { Component, Input } from '@angular/core';
 import { Meta, moduleMetadata, StoryObj } from '@storybook/angular';
-import { action } from '@storybook/addon-actions';
+import { action } from 'storybook/actions';
 import { tap } from 'rxjs/operators';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
@@ -47,7 +47,7 @@ class GioInformationDialogStoryComponent {
       })
       .afterClosed()
       .pipe(
-        tap((confirmed) => {
+        tap(confirmed => {
           action('confirmed?')(confirmed);
         }),
       )
@@ -72,7 +72,7 @@ export default {
       type: { name: 'object', value: {} },
     },
   },
-  render: (args) => ({
+  render: args => ({
     template: `<gio-connector-dialog-story [name]="name" [pluginMoreInformation]="pluginMoreInformation"></gio-connector-dialog-story>`,
     props: { ...args },
   }),
@@ -82,7 +82,7 @@ export default {
 } as Meta;
 
 export const Default: StoryObj = {
-  play: (context) => {
+  play: context => {
     const button = context.canvasElement.querySelector('#open-dialog') as HTMLButtonElement;
     button.click();
   },

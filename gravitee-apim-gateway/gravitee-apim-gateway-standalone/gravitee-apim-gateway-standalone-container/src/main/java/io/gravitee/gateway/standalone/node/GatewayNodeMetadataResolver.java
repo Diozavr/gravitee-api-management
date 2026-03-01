@@ -34,7 +34,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 
@@ -42,7 +42,7 @@ import org.springframework.context.annotation.Lazy;
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class GatewayNodeMetadataResolver implements NodeMetadataResolver {
 
     @Lazy
@@ -155,7 +155,10 @@ public class GatewayNodeMetadataResolver implements NodeMetadataResolver {
     private void checkOrganizations(Set<String> organizationsHrids, Set<Organization> organizations) {
         if (organizationsHrids.size() != organizations.size()) {
             final Set<String> hrids = new HashSet<>(organizationsHrids);
-            final Set<String> returnedHrids = organizations.stream().flatMap(org -> org.getHrids().stream()).collect(Collectors.toSet());
+            final Set<String> returnedHrids = organizations
+                .stream()
+                .flatMap(org -> org.getHrids().stream())
+                .collect(Collectors.toSet());
             hrids.removeAll(returnedHrids);
             log.warn("No organization found for hrids {}", hrids);
         }

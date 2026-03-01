@@ -24,6 +24,7 @@ import io.gravitee.apim.infra.adapter.ApiAdapter;
 import io.gravitee.apim.infra.adapter.ApiAdapterDecorator;
 import io.gravitee.apim.infra.adapter.PrimaryOwnerAdapter;
 import io.gravitee.common.component.Lifecycle;
+import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.federation.FederatedAgent;
 import io.gravitee.definition.model.v4.ApiType;
 import io.gravitee.definition.model.v4.flow.Flow;
@@ -63,8 +64,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -73,9 +73,10 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component("ApiMapperV4")
-@Slf4j
+@CustomLog
 public class ApiMapper {
 
+    public static final String API_DEFINITION_UNEXPECTED_ERROR_MESSAGE = "Unexpected error while generating API definition";
     private final ObjectMapper objectMapper;
     private final PlanService planService;
     private final FlowService flowService;
@@ -129,8 +130,18 @@ public class ApiMapper {
                 apiEntity.setFlows(apiDefinition.getFlows());
 
                 apiEntity.setResponseTemplates(apiDefinition.getResponseTemplates());
+
+                if (apiDefinition.getType() == ApiType.PROXY) {
+                    var jsonNode = objectMapper.readTree(api.getDefinition());
+                    boolean hasAllowedInApiProducts = jsonNode.has("allowedInApiProducts");
+                    if (hasAllowedInApiProducts) {
+                        apiEntity.setAllowedInApiProducts(apiDefinition.getAllowedInApiProducts());
+                    } else {
+                        apiEntity.setAllowedInApiProducts(false);
+                    }
+                }
             } catch (IOException ioe) {
-                log.error("Unexpected error while generating API definition", ioe);
+                log.error(API_DEFINITION_UNEXPECTED_ERROR_MESSAGE, ioe);
             }
         }
 
@@ -189,8 +200,9 @@ public class ApiMapper {
                 apiEntity.setProperties(apiDefinition.getProperties());
                 apiEntity.setTags(apiDefinition.getTags());
                 apiEntity.setFlows(apiDefinition.getFlows());
+                apiEntity.setAnalytics(apiDefinition.getAnalytics());
             } catch (IOException ioe) {
-                log.error("Unexpected error while generating API definition", ioe);
+                log.error(API_DEFINITION_UNEXPECTED_ERROR_MESSAGE, ioe);
             }
         }
 
@@ -233,20 +245,36 @@ public class ApiMapper {
     public ApiEntity toEntity(
         final ExecutionContext executionContext,
         final Api api,
+        final boolean withApiFlow,
+        final boolean withPlans,
+        final boolean withApiCategories
+    ) {
+        return toEntity(executionContext, api, (PrimaryOwnerEntity) null, withApiFlow, withPlans, withApiCategories);
+    }
+
+    public ApiEntity toEntity(
+        final ExecutionContext executionContext,
+        final Api api,
         final PrimaryOwnerEntity primaryOwner,
-        final boolean readDatabaseFlows
+        final boolean withApiFlows,
+        final boolean withPlans,
+        final boolean withApiCategories
     ) {
         ApiEntity apiEntity = toEntity(api, primaryOwner);
 
-        Set<PlanEntity> plans = planService.findByApi(executionContext, api.getId());
-        apiEntity.setPlans(plans);
+        if (withPlans) {
+            Set<PlanEntity> plans = planService.findByApi(executionContext, api.getId());
+            apiEntity.setPlans(plans);
+        }
 
-        if (readDatabaseFlows) {
+        if (withApiFlows) {
             List<Flow> flows = flowService.findByReference(FlowReferenceType.API, api.getId());
             apiEntity.setFlows(flows);
         }
 
-        apiEntity.setCategories(categoryMapper.toCategoryKey(executionContext.getEnvironmentId(), api.getCategories()));
+        if (withApiCategories) {
+            apiEntity.setCategories(categoryMapper.toCategoryKey(executionContext.getEnvironmentId(), api.getCategories()));
+        }
 
         if (
             parameterService.findAsBoolean(
@@ -269,19 +297,25 @@ public class ApiMapper {
         final ExecutionContext executionContext,
         final Api api,
         final PrimaryOwnerEntity primaryOwner,
-        final boolean readDatabaseFlows
+        final boolean withApiFlows,
+        final boolean withPlans,
+        final boolean withApiCategories
     ) {
         NativeApiEntity apiEntity = toNativeEntity(api, primaryOwner);
 
-        Set<NativePlanEntity> plans = planService.findNativePlansByApi(executionContext, api.getId());
-        apiEntity.setPlans(plans);
+        if (withPlans) {
+            Set<NativePlanEntity> plans = planService.findNativePlansByApi(executionContext, api.getId());
+            apiEntity.setPlans(plans);
+        }
 
-        if (readDatabaseFlows) {
+        if (withApiFlows) {
             List<NativeFlow> flows = flowService.findNativeFlowByReference(FlowReferenceType.API, api.getId());
             apiEntity.setFlows(flows);
         }
 
-        apiEntity.setCategories(categoryMapper.toCategoryKey(executionContext.getEnvironmentId(), api.getCategories()));
+        if (withApiCategories) {
+            apiEntity.setCategories(categoryMapper.toCategoryKey(executionContext.getEnvironmentId(), api.getCategories()));
+        }
 
         if (
             parameterService.findAsBoolean(
@@ -307,6 +341,18 @@ public class ApiMapper {
     ) {
         api.setCategories(categoryMapper.toCategoryKey(executionContext.getEnvironmentId(), api.getCategories()));
         return ApiAdapter.INSTANCE.toFederatedApiEntity(api, PrimaryOwnerAdapter.INSTANCE.fromRestEntity(primaryOwner));
+    }
+
+    public FederatedApiAgentEntity federatedAgentToEntity(final Api api, final PrimaryOwnerEntity primaryOwner) {
+        try {
+            api.setCategories(categoryMapper.toCategoryKey(api.getEnvironmentId(), api.getCategories()));
+            var agent = objectMapper.readValue(api.getDefinition(), FederatedAgent.class);
+            OriginContext.Integration a2a = new OriginContext.Integration(api.getIntegrationId(), api.getIntegrationId(), "A2A");
+            return ApiAdapter.INSTANCE.toFederatedAgentEntity(api, agent, PrimaryOwnerAdapter.INSTANCE.fromRestEntity(primaryOwner), a2a);
+        } catch (JsonProcessingException e) {
+            log.warn("Unable to parse api definition for agent {}", api.getId(), e);
+            return null;
+        }
     }
 
     public FederatedApiAgentEntity federatedAgentToEntity(
@@ -370,7 +416,7 @@ public class ApiMapper {
 
             return objectMapper.writeValueAsString(apiDefinition);
         } catch (JsonProcessingException jse) {
-            log.error("Unexpected error while generating API definition", jse);
+            log.error(API_DEFINITION_UNEXPECTED_ERROR_MESSAGE, jse);
             throw new TechnicalManagementException("An error occurs while trying to parse API definition " + jse);
         }
     }
@@ -393,10 +439,8 @@ public class ApiMapper {
 
         repoApi.setName(updateApiEntity.getName().trim());
         repoApi.setVersion(updateApiEntity.getApiVersion().trim());
-        String description = updateApiEntity.getDescription();
-        if (description != null) {
-            repoApi.setDescription(description.trim());
-        }
+        repoApi.setDescription(updateApiEntity.getDescription());
+
         repoApi.setPicture(updateApiEntity.getPicture());
         repoApi.setBackground(updateApiEntity.getBackground());
 
@@ -442,7 +486,7 @@ public class ApiMapper {
                                 propertyEntity.isDynamic()
                             )
                         )
-                        .collect(Collectors.toList())
+                        .toList()
                 );
             }
             apiDefinition.setResources(updateApiEntity.getResources());
@@ -450,10 +494,15 @@ public class ApiMapper {
             apiDefinition.setFlows(updateApiEntity.getFlows());
             apiDefinition.setResponseTemplates(updateApiEntity.getResponseTemplates());
             apiDefinition.setServices(updateApiEntity.getServices());
+            if (updateApiEntity.getType() == ApiType.PROXY) {
+                if (updateApiEntity.getAllowedInApiProducts() != null) {
+                    apiDefinition.setAllowedInApiProducts(updateApiEntity.getAllowedInApiProducts());
+                }
+            }
 
             return objectMapper.writeValueAsString(apiDefinition);
         } catch (JsonProcessingException jse) {
-            log.error("Unexpected error while generating API definition", jse);
+            log.error(API_DEFINITION_UNEXPECTED_ERROR_MESSAGE, jse);
             throw new TechnicalManagementException("An error occurs while trying to parse API definition " + jse);
         }
     }
@@ -521,7 +570,7 @@ public class ApiMapper {
                         .getProperties()
                         .stream()
                         .map(propertyEntity -> new Property(propertyEntity.getKey(), propertyEntity.getValue()))
-                        .collect(Collectors.toList())
+                        .toList()
                 );
             }
             apiDefinition.setResources(apiEntity.getResources());
@@ -529,10 +578,13 @@ public class ApiMapper {
             apiDefinition.setFlows(apiEntity.getFlows());
             apiDefinition.setResponseTemplates(apiEntity.getResponseTemplates());
             apiDefinition.setServices(apiEntity.getServices());
+            if (apiEntity.getType() == ApiType.PROXY && apiEntity.getAllowedInApiProducts() != null) {
+                apiDefinition.setAllowedInApiProducts(apiEntity.getAllowedInApiProducts());
+            }
 
             return objectMapper.writeValueAsString(apiDefinition);
         } catch (JsonProcessingException jse) {
-            log.error("Unexpected error while generating API definition", jse);
+            log.error(API_DEFINITION_UNEXPECTED_ERROR_MESSAGE, jse);
             throw new TechnicalManagementException("An error occurs while trying to parse API definition " + jse);
         }
     }

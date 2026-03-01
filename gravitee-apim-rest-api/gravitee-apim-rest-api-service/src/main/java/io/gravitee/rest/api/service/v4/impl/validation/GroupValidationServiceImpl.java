@@ -58,9 +58,14 @@ public class GroupValidationServiceImpl extends TransactionalService implements 
         final ExecutionContext executionContext,
         final String apiId,
         final Set<String> groups,
+        final Set<String> existingGroups,
         final PrimaryOwnerEntity primaryOwnerEntity,
         final boolean addDefaultGroups
     ) {
+        if (existingGroups != null && groups == null) {
+            return existingGroups;
+        }
+
         Set<String> sanitizedGroups = new HashSet<>();
         if (groups != null && !groups.isEmpty()) {
             try {
@@ -86,12 +91,6 @@ public class GroupValidationServiceImpl extends TransactionalService implements 
             sanitizedGroups.add(primaryOwnerEntity.getId());
         }
 
-        // In case groups is null we should still return null if no groups have been added because during the update process a null field
-        // means I want to keep the current value
-        if (sanitizedGroups.isEmpty()) {
-            return groups;
-        }
-
         return sanitizedGroups;
     }
 
@@ -109,10 +108,9 @@ public class GroupValidationServiceImpl extends TransactionalService implements 
             );
             if (primaryOwner.getMemberType() == MembershipMemberType.GROUP) {
                 // don't remove the primary owner group of this API.
-                groupEntityStream =
-                    groupEntityStream.filter(group ->
-                        StringUtils.isEmpty(group.getApiPrimaryOwner()) || group.getId().equals(primaryOwner.getMemberId())
-                    );
+                groupEntityStream = groupEntityStream.filter(
+                    group -> StringUtils.isEmpty(group.getApiPrimaryOwner()) || group.getId().equals(primaryOwner.getMemberId())
+                );
             } else {
                 groupEntityStream = groupEntityStream.filter(group -> StringUtils.isEmpty(group.getApiPrimaryOwner()));
             }

@@ -42,8 +42,8 @@ import org.springframework.stereotype.Component;
 public class PolicyPluginServiceImpl extends AbstractPluginService<PolicyPlugin<?>, PolicyPluginEntity> implements PolicyPluginService {
 
     private enum POLICY_FLOW_PHASE {
+        ENTRYPOINT_CONNECT,
         INTERACT,
-        CONNECT,
         PUBLISH,
         SUBSCRIBE,
         REQUEST,
@@ -98,6 +98,9 @@ public class PolicyPluginServiceImpl extends AbstractPluginService<PolicyPlugin<
         var httpProxyFlowPhase = getFlowPhase(plugin, ApiProtocolType.HTTP_PROXY);
         var httpMessageFlowPhase = getFlowPhase(plugin, ApiProtocolType.HTTP_MESSAGE);
         var nativeKafkaFlowPhase = getFlowPhase(plugin, ApiProtocolType.NATIVE_KAFKA);
+        var mcpProxyFlowPhase = getFlowPhase(plugin, ApiProtocolType.MCP_PROXY);
+        var llmProxyFlowPhase = getFlowPhase(plugin, ApiProtocolType.LLM_PROXY);
+        var a2aProxyFlowPhase = getFlowPhase(plugin, ApiProtocolType.A2A_PROXY);
         if (httpProxyFlowPhase.isEmpty()) {
             httpProxyFlowPhase = getDeprecatedFlowPhase(plugin, "proxy");
         }
@@ -108,6 +111,9 @@ public class PolicyPluginServiceImpl extends AbstractPluginService<PolicyPlugin<
         entity.putFlowPhaseCompatibility(ApiProtocolType.HTTP_PROXY, httpProxyFlowPhase);
         entity.putFlowPhaseCompatibility(ApiProtocolType.HTTP_MESSAGE, httpMessageFlowPhase);
         entity.putFlowPhaseCompatibility(ApiProtocolType.NATIVE_KAFKA, nativeKafkaFlowPhase);
+        entity.putFlowPhaseCompatibility(ApiProtocolType.MCP_PROXY, mcpProxyFlowPhase);
+        entity.putFlowPhaseCompatibility(ApiProtocolType.LLM_PROXY, llmProxyFlowPhase);
+        entity.putFlowPhaseCompatibility(ApiProtocolType.A2A_PROXY, a2aProxyFlowPhase);
 
         return entity;
     }
@@ -133,10 +139,10 @@ public class PolicyPluginServiceImpl extends AbstractPluginService<PolicyPlugin<
         if (apiProtocolType != null && schemaDisplayFormat != null) {
             schemaKeys.add(
                 apiProtocolType.name().toLowerCase() +
-                "." +
-                PluginManifestProperties.SCHEMA_PROPERTY +
-                "." +
-                schemaDisplayFormat.name().toLowerCase()
+                    "." +
+                    PluginManifestProperties.SCHEMA_PROPERTY +
+                    "." +
+                    schemaDisplayFormat.name().toLowerCase()
             );
         }
         if (apiProtocolType != null) {
@@ -149,17 +155,17 @@ public class PolicyPluginServiceImpl extends AbstractPluginService<PolicyPlugin<
 
         for (String schemaKey : schemaKeys) {
             try {
-                logger.debug("Find plugin schema for format {} by ID: {}", schemaDisplayFormat, policyPluginId);
+                log.debug("Find plugin schema for format {} by ID: {}", schemaDisplayFormat, policyPluginId);
                 String schema = pluginManager.getSchema(policyPluginId, schemaKey, false, true);
                 if (schema != null) {
                     return schema;
                 }
             } catch (IOException ioex) {
-                logger.debug("Error while getting specific schema for this display format. Fall back on default schema.");
+                log.debug("Error while getting specific schema for this display format. Fall back on default schema.");
             }
         }
 
-        logger.debug("No specific schema exists for this display format. Fall back on default schema.");
+        log.debug("No specific schema exists for this display format. Fall back on default schema.");
         return this.getSchema(policyPluginId);
     }
 
@@ -167,11 +173,11 @@ public class PolicyPluginServiceImpl extends AbstractPluginService<PolicyPlugin<
         try {
             if (apiProtocolType != null) {
                 return this.pluginManager.getPluginDocumentation(
-                        policyPluginId,
-                        apiProtocolType.name().toLowerCase() + "." + PluginManifestProperties.DOCUMENTATION_PROPERTY,
-                        true,
-                        true
-                    );
+                    policyPluginId,
+                    apiProtocolType.name().toLowerCase() + "." + PluginManifestProperties.DOCUMENTATION_PROPERTY,
+                    true,
+                    true
+                );
             }
             return this.pluginManager.getPluginDocumentation(policyPluginId);
         } catch (IOException ioex) {
@@ -188,14 +194,13 @@ public class PolicyPluginServiceImpl extends AbstractPluginService<PolicyPlugin<
             plugin.manifest().properties().get(property) != null &&
             !plugin.manifest().properties().get(property).isEmpty()
         ) {
-            return Arrays
-                .stream(plugin.manifest().properties().get(property).split(","))
+            return Arrays.stream(plugin.manifest().properties().get(property).split(","))
                 .map(String::trim)
                 .map(POLICY_FLOW_PHASE::valueOf)
                 .map(p ->
                     switch (p) {
+                        case ENTRYPOINT_CONNECT -> FlowPhase.ENTRYPOINT_CONNECT;
                         case INTERACT -> FlowPhase.INTERACT;
-                        case CONNECT -> FlowPhase.CONNECT;
                         case PUBLISH, MESSAGE_REQUEST -> FlowPhase.PUBLISH;
                         case SUBSCRIBE, MESSAGE_RESPONSE -> FlowPhase.SUBSCRIBE;
                         case REQUEST -> FlowPhase.REQUEST;

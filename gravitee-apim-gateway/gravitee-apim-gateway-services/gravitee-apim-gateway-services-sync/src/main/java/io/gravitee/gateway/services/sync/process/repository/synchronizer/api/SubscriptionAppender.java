@@ -22,6 +22,7 @@ import static io.gravitee.repository.management.model.Subscription.Status.PENDIN
 import static java.util.stream.Collectors.groupingBy;
 
 import io.gravitee.gateway.api.service.Subscription;
+import io.gravitee.gateway.handlers.api.registry.ApiProductRegistry;
 import io.gravitee.gateway.services.sync.process.common.mapper.SubscriptionMapper;
 import io.gravitee.gateway.services.sync.process.common.model.SyncException;
 import io.gravitee.repository.management.api.SubscriptionRepository;
@@ -29,16 +30,17 @@ import io.gravitee.repository.management.api.search.Order;
 import io.gravitee.repository.management.api.search.SubscriptionCriteria;
 import io.gravitee.repository.management.api.search.builder.SortableBuilder;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class SubscriptionAppender {
 
@@ -46,6 +48,7 @@ public class SubscriptionAppender {
     private static final List<String> INCREMENTAL_STATUS = List.of(ACCEPTED.name(), CLOSED.name(), PAUSED.name(), PENDING.name());
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionMapper subscriptionMapper;
+    private final ApiProductRegistry apiProductRegistry;
 
     /**
      * Fetching subscriptions for given deployables
@@ -61,12 +64,22 @@ public class SubscriptionAppender {
             .stream()
             .collect(Collectors.toMap(ApiReactorDeployable::apiId, d -> d));
 
-        List<String> allPlans = deployableByApi
-            .values()
-            .stream()
-            .map(ApiReactorDeployable::subscribablePlans)
-            .flatMap(Collection::stream)
-            .collect(Collectors.toList());
+        List<String> apiPlans = collectApiPlans(deployableByApi);
+        List<String> allPlans = new ArrayList<>(apiPlans);
+
+        deployableByApi.forEach((apiId, deployable) -> {
+            Set<String> envs = environments != null && !environments.isEmpty()
+                ? environments
+                : Optional.ofNullable(deployable.reactableApi())
+                    .map(a -> a.getEnvironmentId())
+                    .map(Set::of)
+                    .orElse(Set.of());
+            Set<String> apiProductPlans = collectApiProductPlans(apiId, envs);
+            deployable.subscribablePlans().addAll(apiProductPlans);
+            deployable.apiKeyPlans().addAll(apiProductPlans);
+            allPlans.addAll(apiProductPlans);
+        });
+
         if (!allPlans.isEmpty()) {
             Map<String, List<Subscription>> subscriptionsByApi = loadSubscriptions(initialSync, allPlans, environments);
             subscriptionsByApi.forEach((api, subscriptions) -> {
@@ -85,13 +98,24 @@ public class SubscriptionAppender {
         return deployables;
     }
 
+    private List<String> collectApiPlans(Map<String, ApiReactorDeployable> deployableByApi) {
+        return deployableByApi.values().stream().map(ApiReactorDeployable::subscribablePlans).flatMap(Collection::stream).toList();
+    }
+
+    private Set<String> collectApiProductPlans(String apiId, Set<String> envs) {
+        return envs
+            .stream()
+            .flatMap(envId -> apiProductRegistry.getApiProductPlanEntriesForApi(apiId, envId).stream())
+            .map(e -> e.plan().getId())
+            .collect(Collectors.toSet());
+    }
+
     protected Map<String, List<Subscription>> loadSubscriptions(
         final boolean initialSync,
         final List<String> plans,
         final Set<String> environments
     ) {
-        SubscriptionCriteria.SubscriptionCriteriaBuilder criteriaBuilder = SubscriptionCriteria
-            .builder()
+        SubscriptionCriteria.SubscriptionCriteriaBuilder criteriaBuilder = SubscriptionCriteria.builder()
             .plans(plans)
             .environments(environments);
         if (initialSync) {
@@ -104,14 +128,8 @@ public class SubscriptionAppender {
             return subscriptionRepository
                 .search(criteriaBuilder.build(), new SortableBuilder().field("updatedAt").order(Order.ASC).build())
                 .stream()
-                .map(subscription -> {
-                    Subscription subscriptionConverted = subscriptionMapper.to(subscription);
-                    if (subscriptionConverted != null) {
-                        subscriptionConverted.setForceDispatch(true);
-                    }
-                    return subscriptionConverted;
-                })
-                .filter(Objects::nonNull)
+                .flatMap(subscription -> subscriptionMapper.to(subscription).stream())
+                .peek(subscriptionConverted -> subscriptionConverted.setForceDispatch(true))
                 .collect(groupingBy(Subscription::getApi));
         } catch (Exception ex) {
             throw new SyncException("Error occurred when retrieving subscriptions", ex);

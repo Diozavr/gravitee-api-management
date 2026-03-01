@@ -15,6 +15,8 @@
  */
 package io.gravitee.gateway.security.core;
 
+import io.gravitee.common.security.CertificateUtils;
+import io.gravitee.common.security.PKCS7Utils;
 import io.gravitee.common.util.KeyStoreUtils;
 import io.gravitee.gateway.api.service.Subscription;
 import io.gravitee.gateway.security.core.exception.MalformedCertificateException;
@@ -22,37 +24,55 @@ import io.gravitee.node.api.certificate.AbstractStoreLoaderOptions;
 import io.gravitee.node.api.certificate.KeyStoreEvent;
 import io.gravitee.node.certificates.AbstractKeyStoreLoader;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateEncodingException;
+import java.security.MessageDigest;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.CustomLog;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-import lombok.extern.slf4j.Slf4j;
+import org.bouncycastle.util.encoders.Hex;
 import org.springframework.util.DigestUtils;
 
-@Slf4j
+@CustomLog
 public class SubscriptionTrustStoreLoader extends AbstractKeyStoreLoader<SubscriptionTrustStoreLoader.SubscriptionTrustStoreLoaderOption> {
 
     private final String id;
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final KeyStore keystore;
-    private String digest;
+    private final List<String> digests;
 
     public SubscriptionTrustStoreLoader(Subscription subscription) throws MalformedCertificateException {
-        // No particular options required for SubscriptionTrustStoreLoader
         super(SubscriptionTrustStoreLoaderOption.empty());
         this.id = "subscription_cert_%s".formatted(subscription.getId());
-        final String pem = new String(Base64.getDecoder().decode(subscription.getClientCertificate()));
-        keystore = KeyStoreUtils.initFromPemCertificate(pem, getPassword(), subscription.getId());
-
+        digests = new ArrayList<>();
         try {
-            digest = DigestUtils.md5DigestAsHex(keystore.getCertificate(subscription.getId()).getEncoded());
-        } catch (CertificateEncodingException | KeyStoreException e) {
+            final byte[] decodedData = Base64.getDecoder().decode(subscription.getClientCertificate());
+            List<String> aliases = new ArrayList<>();
+            keystore = PKCS7Utils.pkcs7ToTruststore(
+                decodedData,
+                getPassword(),
+                i -> {
+                    String alias = "%s_%d".formatted(subscription.getId(), i);
+                    aliases.add(alias);
+                    return alias;
+                },
+                false
+            ).orElseGet(() -> {
+                aliases.add(subscription.getId());
+                return KeyStoreUtils.initFromPemCertificate(new String(decodedData), getPassword(), subscription.getId());
+            });
+
+            // compute digests from all certificates to be able to find them later
+            for (String alias : aliases) {
+                digests.add(CertificateUtils.generateThumbprint((X509Certificate) keystore.getCertificate(alias), "SHA-256"));
+            }
+        } catch (Exception e) {
             throw new MalformedCertificateException(
-                "An error occurred while computing certificate digest for Subscription %s".formatted(subscription.getId()),
+                "An error occurred while processing certificate for Subscription %s".formatted(subscription.getId()),
                 e
             );
         }
@@ -76,8 +96,8 @@ public class SubscriptionTrustStoreLoader extends AbstractKeyStoreLoader<Subscri
         // nothing to do
     }
 
-    public String certificateDigest() {
-        return digest;
+    public List<String> certificateDigests() {
+        return digests;
     }
 
     @Getter

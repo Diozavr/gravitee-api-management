@@ -27,12 +27,14 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.gravitee.apim.core.api_product.model.ApiProduct;
+import io.gravitee.apim.core.api_product.query_service.ApiProductQueryService;
+import io.gravitee.apim.core.flow.domain_service.FlowValidationDomainService;
 import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.v4.ApiType;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
@@ -56,13 +58,11 @@ import io.gravitee.rest.api.service.v4.validation.EndpointGroupsValidationServic
 import io.gravitee.rest.api.service.v4.validation.FlowValidationService;
 import io.gravitee.rest.api.service.v4.validation.GroupValidationService;
 import io.gravitee.rest.api.service.v4.validation.ListenerValidationService;
-import io.gravitee.rest.api.service.v4.validation.PathParametersValidationService;
 import io.gravitee.rest.api.service.v4.validation.PlanValidationService;
 import io.gravitee.rest.api.service.v4.validation.ResourcesValidationService;
 import io.gravitee.rest.api.service.v4.validation.TagsValidationService;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Stream;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -104,29 +104,32 @@ public class ApiValidationServiceImplTest {
     private PlanValidationService planValidationService;
 
     @Mock
-    private PathParametersValidationService pathParametersValidationService;
-
-    @Mock
     private ApiServicePluginService apiServicePluginService;
 
     private ApiValidationService apiValidationService;
 
+    @Mock
+    private FlowValidationDomainService flowValidationDomainService;
+
+    @Mock
+    private ApiProductQueryService apiProductQueryService;
+
     @Before
     public void setUp() throws Exception {
-        apiValidationService =
-            new ApiValidationServiceImpl(
-                tagsValidationService,
-                groupValidationService,
-                listenerValidationService,
-                endpointGroupsValidationService,
-                flowValidationService,
-                resourcesValidationService,
-                loggingValidationService,
-                planSearchService,
-                planValidationService,
-                pathParametersValidationService,
-                apiServicePluginService
-            );
+        apiValidationService = new ApiValidationServiceImpl(
+            tagsValidationService,
+            groupValidationService,
+            listenerValidationService,
+            endpointGroupsValidationService,
+            flowValidationService,
+            resourcesValidationService,
+            loggingValidationService,
+            planSearchService,
+            planValidationService,
+            apiServicePluginService,
+            flowValidationDomainService,
+            apiProductQueryService
+        );
     }
 
     @Test
@@ -137,15 +140,21 @@ public class ApiValidationServiceImplTest {
         apiValidationService.validateAndSanitizeNewApi(GraviteeContext.getExecutionContext(), newApiEntity, primaryOwnerEntity);
 
         verify(tagsValidationService, times(1)).validateAndSanitize(GraviteeContext.getExecutionContext(), null, null);
-        verify(groupValidationService, times(1))
-            .validateAndSanitize(GraviteeContext.getExecutionContext(), null, null, primaryOwnerEntity, true);
+        verify(groupValidationService, times(1)).validateAndSanitize(
+            GraviteeContext.getExecutionContext(),
+            null,
+            null,
+            null,
+            primaryOwnerEntity,
+            true
+        );
         verify(listenerValidationService, times(1)).validateAndSanitizeHttpV4(GraviteeContext.getExecutionContext(), null, null, null);
         verify(endpointGroupsValidationService, times(1)).validateAndSanitizeHttpV4(newApiEntity.getType(), null);
         verify(loggingValidationService, times(1)).validateAndSanitize(GraviteeContext.getExecutionContext(), newApiEntity.getType(), null);
         verify(flowValidationService, times(1)).validateAndSanitize(newApiEntity.getType(), null);
         verify(resourcesValidationService, never()).validateAndSanitize(any());
         verify(planValidationService, never()).validateAndSanitize(any(), any());
-        verify(pathParametersValidationService, times(1)).validate(any(), any(), any());
+        verify(flowValidationDomainService, times(1)).validatePathParameters(any(), any(), any());
     }
 
     @Test
@@ -160,15 +169,21 @@ public class ApiValidationServiceImplTest {
         assertNull(apiEntity.getLifecycleState());
 
         verify(tagsValidationService, times(1)).validateAndSanitize(GraviteeContext.getExecutionContext(), null, Set.of());
-        verify(groupValidationService, times(1))
-            .validateAndSanitize(GraviteeContext.getExecutionContext(), null, null, primaryOwnerEntity, true);
+        verify(groupValidationService, times(1)).validateAndSanitize(
+            GraviteeContext.getExecutionContext(),
+            null,
+            null,
+            null,
+            primaryOwnerEntity,
+            true
+        );
         verify(listenerValidationService, times(1)).validateAndSanitizeHttpV4(GraviteeContext.getExecutionContext(), null, null, null);
         verify(endpointGroupsValidationService, times(1)).validateAndSanitizeHttpV4(apiEntity.getType(), null);
         verify(loggingValidationService, times(1)).validateAndSanitize(GraviteeContext.getExecutionContext(), apiEntity.getType(), null);
         verify(flowValidationService, times(1)).validateAndSanitize(apiEntity.getType(), null);
         verify(resourcesValidationService, times(1)).validateAndSanitize(List.of());
         verify(planValidationService, times(1)).validateAndSanitize(apiEntity.getType(), Set.of());
-        verify(pathParametersValidationService, times(1)).validate(eq(apiEntity.getType()), any(Stream.class), any(Stream.class));
+        verify(flowValidationDomainService, times(1)).validatePathParameters(any(), any(), any());
     }
 
     @Test(expected = InvalidDataException.class)
@@ -278,12 +293,12 @@ public class ApiValidationServiceImplTest {
     }
 
     @Test
-    public void shouldNotUpdateADeprecatedApi() {
+    public void shouldNotUpdateADeprecatedApiIfNotArchived() {
         assertUpdate(DEPRECATED, CREATED, true);
         assertUpdate(DEPRECATED, PUBLISHED, true);
         assertUpdate(DEPRECATED, UNPUBLISHED, true);
-        assertUpdate(DEPRECATED, ARCHIVED, true);
-        assertUpdate(DEPRECATED, DEPRECATED, true);
+        assertUpdate(DEPRECATED, ARCHIVED, false);
+        assertUpdate(DEPRECATED, DEPRECATED, false);
     }
 
     @Test
@@ -292,6 +307,25 @@ public class ApiValidationServiceImplTest {
         assertUpdate(ARCHIVED, PUBLISHED, true);
         assertUpdate(ARCHIVED, UNPUBLISHED, true);
         assertUpdate(ARCHIVED, DEPRECATED, true);
+        assertUpdate(ARCHIVED, ARCHIVED, false);
+    }
+
+    @Test
+    public void shouldAllowCreatedToOtherStatesWhenNotInReview() {
+        assertUpdate(CREATED, PUBLISHED, false);
+        assertUpdate(CREATED, UNPUBLISHED, false);
+        assertUpdate(CREATED, DEPRECATED, false);
+        assertUpdate(CREATED, ARCHIVED, false);
+        assertUpdate(CREATED, CREATED, false);
+    }
+
+    @Test
+    public void shouldAllowPublishedToOtherStates() {
+        assertUpdate(PUBLISHED, CREATED, false);
+        assertUpdate(PUBLISHED, UNPUBLISHED, false);
+        assertUpdate(PUBLISHED, DEPRECATED, false);
+        assertUpdate(PUBLISHED, ARCHIVED, false);
+        assertUpdate(PUBLISHED, PUBLISHED, false);
     }
 
     @Test(expected = LifecycleStateChangeNotAllowedException.class)
@@ -320,8 +354,9 @@ public class ApiValidationServiceImplTest {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final String apiId = "api-id";
 
-        when(planSearchService.findByApi(executionContext, apiId))
-            .thenReturn(Set.of(PlanEntity.builder().status(PlanStatus.PUBLISHED).build()));
+        when(planSearchService.findByApi(executionContext, apiId, false)).thenReturn(
+            Set.of(PlanEntity.builder().status(PlanStatus.PUBLISHED).build())
+        );
         assertTrue(apiValidationService.canDeploy(executionContext, apiId));
     }
 
@@ -330,8 +365,9 @@ public class ApiValidationServiceImplTest {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final String apiId = "api-id";
 
-        when(planSearchService.findByApi(executionContext, apiId))
-            .thenReturn(Set.of(PlanEntity.builder().status(PlanStatus.DEPRECATED).build()));
+        when(planSearchService.findByApi(executionContext, apiId, false)).thenReturn(
+            Set.of(PlanEntity.builder().status(PlanStatus.DEPRECATED).build())
+        );
         assertTrue(apiValidationService.canDeploy(executionContext, apiId));
     }
 
@@ -340,7 +376,39 @@ public class ApiValidationServiceImplTest {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final String apiId = "api-id";
 
-        when(planSearchService.findByApi(executionContext, apiId)).thenReturn(Set.of());
+        when(planSearchService.findByApi(executionContext, apiId, false)).thenReturn(Set.of());
+        when(apiProductQueryService.findByApiId(apiId)).thenReturn(Set.of());
+        assertFalse(apiValidationService.canDeploy(executionContext, apiId));
+    }
+
+    @Test
+    public void canDeployWithNoPlanWhenPartOfApiProductWithPublishedPlan() {
+        final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
+        final String apiId = "api-id";
+        final String environmentId = executionContext.getEnvironmentId();
+        final String productId = "product-1";
+
+        when(planSearchService.findByApi(executionContext, apiId, false)).thenReturn(Set.of());
+        when(apiProductQueryService.findByApiId(apiId)).thenReturn(
+            Set.of(ApiProduct.builder().id(productId).environmentId(environmentId).build())
+        );
+        when(planSearchService.findByApiProduct(executionContext, productId)).thenReturn(
+            Set.of(PlanEntity.builder().status(PlanStatus.PUBLISHED).build())
+        );
+        assertTrue(apiValidationService.canDeploy(executionContext, apiId));
+    }
+
+    @Test
+    public void cannotDeployWithNoPlanWhenPartOfApiProductWithNoPlans() {
+        final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
+        final String apiId = "api-id";
+        final String environmentId = executionContext.getEnvironmentId();
+
+        when(planSearchService.findByApi(executionContext, apiId, false)).thenReturn(Set.of());
+        when(apiProductQueryService.findByApiId(apiId)).thenReturn(
+            Set.of(ApiProduct.builder().id("product-1").environmentId(environmentId).build())
+        );
+        when(planSearchService.findByApiProduct(executionContext, "product-1")).thenReturn(Set.of());
         assertFalse(apiValidationService.canDeploy(executionContext, apiId));
     }
 
@@ -349,10 +417,10 @@ public class ApiValidationServiceImplTest {
         final ExecutionContext executionContext = GraviteeContext.getExecutionContext();
         final String apiId = "api-id";
 
-        when(planSearchService.findByApi(executionContext, apiId))
-            .thenReturn(
-                Set.of(PlanEntity.builder().status(PlanStatus.STAGING).build(), PlanEntity.builder().status(PlanStatus.CLOSED).build())
-            );
+        when(planSearchService.findByApi(executionContext, apiId, false)).thenReturn(
+            Set.of(PlanEntity.builder().status(PlanStatus.STAGING).build(), PlanEntity.builder().status(PlanStatus.CLOSED).build())
+        );
+        when(apiProductQueryService.findByApiId(apiId)).thenReturn(Set.of());
         assertFalse(apiValidationService.canDeploy(executionContext, apiId));
     }
 
@@ -433,6 +501,9 @@ public class ApiValidationServiceImplTest {
         }
         if (!failed && shouldFail) {
             fail("Should not be possible to change the lifecycle state of a " + fromLifecycleState + " API to " + lifecycleState);
+        }
+        if (failed && !shouldFail) {
+            fail("Should be possible to change the lifecycle state of a " + fromLifecycleState + " API to " + lifecycleState);
         }
     }
 }

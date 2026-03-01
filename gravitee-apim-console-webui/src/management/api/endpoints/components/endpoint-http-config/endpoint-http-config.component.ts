@@ -94,6 +94,14 @@ export class EndpointHttpConfigComponent implements OnDestroy, OnChanges {
         value: endpointGroup.httpClientOptions?.clearTextUpgrade,
         disabled: isReadonly,
       }),
+      maxHeaderSize: new UntypedFormControl({
+        value: endpointGroup.httpClientOptions?.maxHeaderSize ?? 8192,
+        disabled: isReadonly,
+      }),
+      maxChunkSize: new UntypedFormControl({
+        value: endpointGroup.httpClientOptions?.maxChunkSize ?? 8192,
+        disabled: isReadonly,
+      }),
     });
 
     const httpProxy = new UntypedFormGroup({
@@ -212,7 +220,7 @@ export class EndpointHttpConfigComponent implements OnDestroy, OnChanges {
         filter(() => !httpClientOptions.get('version').disabled),
         takeUntil(this.unsubscribe$),
       )
-      .subscribe((value) => {
+      .subscribe(value => {
         const isHttp2 = value === 'HTTP_2';
         if (isHttp2) {
           httpClientOptions.get('clearTextUpgrade').enable({ emitEvent: false });
@@ -232,7 +240,7 @@ export class EndpointHttpConfigComponent implements OnDestroy, OnChanges {
         filter(() => !httpClientOptions.get('useCompression').disabled),
         takeUntil(this.unsubscribe$),
       )
-      .subscribe((value) => {
+      .subscribe(value => {
         const useCompression = !!value;
         if (useCompression) {
           if (httpClientOptions.get('propagateClientAcceptEncoding').value === true) {
@@ -281,7 +289,7 @@ export class EndpointHttpConfigComponent implements OnDestroy, OnChanges {
         }
 
         // Update validators
-        Object.keys(httpProxy.controls).forEach((controlName) => {
+        Object.keys(httpProxy.controls).forEach(controlName => {
           httpProxy.get(controlName)?.updateValueAndValidity({ emitEvent: false });
         });
         httpProxy.updateValueAndValidity();

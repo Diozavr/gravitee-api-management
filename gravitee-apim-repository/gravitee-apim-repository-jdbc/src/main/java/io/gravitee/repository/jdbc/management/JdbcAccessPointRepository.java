@@ -31,7 +31,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
@@ -40,7 +40,7 @@ import org.springframework.stereotype.Repository;
  * @author GraviteeSource Team
  */
 @Repository
-@Slf4j
+@CustomLog
 public class JdbcAccessPointRepository extends JdbcAbstractCrudRepository<AccessPoint, String> implements AccessPointRepository {
 
     static String createdStatusClause = " and status = '" + AccessPointStatus.CREATED.name() + "'";
@@ -51,8 +51,7 @@ public class JdbcAccessPointRepository extends JdbcAbstractCrudRepository<Access
 
     @Override
     protected JdbcObjectMapper<AccessPoint> buildOrm() {
-        return JdbcObjectMapper
-            .builder(AccessPoint.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(AccessPoint.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("reference_type", Types.NVARCHAR, AccessPointReferenceType.class)
             .addColumn("reference_id", Types.NVARCHAR, String.class)
@@ -186,7 +185,13 @@ public class JdbcAccessPointRepository extends JdbcAbstractCrudRepository<Access
         if (criteria.getTargets() != null && !criteria.getTargets().isEmpty()) {
             first = addClause(first, criteriaBuilder);
             criteriaBuilder.append("target IN (");
-            criteriaBuilder.append(criteria.getTargets().stream().map(target -> "?").collect(Collectors.joining(",")));
+            criteriaBuilder.append(
+                criteria
+                    .getTargets()
+                    .stream()
+                    .map(target -> "?")
+                    .collect(Collectors.joining(","))
+            );
             criteriaBuilder.append(")");
             args.addAll(criteria.getTargets().stream().map(AccessPointTarget::name).toList());
         }
@@ -200,7 +205,13 @@ public class JdbcAccessPointRepository extends JdbcAbstractCrudRepository<Access
         if (criteria.getReferenceIds() != null && !criteria.getReferenceIds().isEmpty()) {
             first = addClause(first, criteriaBuilder);
             criteriaBuilder.append("reference_id IN (");
-            criteriaBuilder.append(criteria.getReferenceIds().stream().map(id -> "?").collect(Collectors.joining(",")));
+            criteriaBuilder.append(
+                criteria
+                    .getReferenceIds()
+                    .stream()
+                    .map(id -> "?")
+                    .collect(Collectors.joining(","))
+            );
             criteriaBuilder.append(")");
             args.addAll(criteria.getReferenceIds());
         }

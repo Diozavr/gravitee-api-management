@@ -24,8 +24,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
@@ -33,10 +32,9 @@ import org.springframework.stereotype.Repository;
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Repository
 public class JdbcApiHeaderRepository extends JdbcAbstractCrudRepository<ApiHeader, String> implements ApiHeaderRepository {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcApiHeaderRepository.class);
 
     JdbcApiHeaderRepository(@Value("${management.jdbc.prefix:}") String tablePrefix) {
         super(tablePrefix, "api_headers");
@@ -44,8 +42,7 @@ public class JdbcApiHeaderRepository extends JdbcAbstractCrudRepository<ApiHeade
 
     @Override
     protected JdbcObjectMapper<ApiHeader> buildOrm() {
-        return JdbcObjectMapper
-            .builder(ApiHeader.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(ApiHeader.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
             .addColumn("environment_id", Types.NVARCHAR, String.class)
             .addColumn("name", Types.NVARCHAR, String.class)
@@ -63,7 +60,7 @@ public class JdbcApiHeaderRepository extends JdbcAbstractCrudRepository<ApiHeade
 
     @Override
     public Set<ApiHeader> findAllByEnvironment(String environmentId) throws TechnicalException {
-        LOGGER.debug("JdbcApiHeaderRepository.findAllByEnvironment({})", environmentId);
+        log.debug("JdbcApiHeaderRepository.findAllByEnvironment({})", environmentId);
         try {
             List<ApiHeader> apiHeaders = jdbcTemplate.query(
                 getOrm().getSelectAllSql() + " where environment_id = ?",
@@ -72,14 +69,14 @@ public class JdbcApiHeaderRepository extends JdbcAbstractCrudRepository<ApiHeade
             );
             return new HashSet<>(apiHeaders);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find api headers by environment:", ex);
+            log.error("Failed to find api headers by environment:", ex);
             throw new TechnicalException("Failed to find api headers by environment", ex);
         }
     }
 
     @Override
     public List<String> deleteByEnvironmentId(String environmentId) throws TechnicalException {
-        LOGGER.debug("JdbcApiHeaderRepository.deleteByEnvironmentId({})", environmentId);
+        log.debug("JdbcApiHeaderRepository.deleteByEnvironmentId({})", environmentId);
         try {
             final var rows = jdbcTemplate.queryForList(
                 "select id from " + this.tableName + " where environment_id = ?",
@@ -91,10 +88,10 @@ public class JdbcApiHeaderRepository extends JdbcAbstractCrudRepository<ApiHeade
                 jdbcTemplate.update("delete from " + tableName + " where environment_id = ?", environmentId);
             }
 
-            LOGGER.debug("JdbcApiHeaderRepository.deleteByEnvironmentId({}) - Done", environmentId);
+            log.debug("JdbcApiHeaderRepository.deleteByEnvironmentId({}) - Done", environmentId);
             return rows;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to delete api headers by environmentId: {}", environmentId, ex);
+            log.error("Failed to delete api headers by environmentId: {}", environmentId, ex);
             throw new TechnicalException("Failed to delete api headers by environment", ex);
         }
     }

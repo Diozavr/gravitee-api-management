@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import { ILogService, IScope, ITimeoutService } from 'angular';
-
 import { ActivatedRoute, Router } from '@angular/router';
 import { filter, forEach, isEmpty } from 'lodash';
 
@@ -170,7 +169,7 @@ class LogsFiltersController {
     const q = this.activatedRoute.snapshot.queryParams.q;
     if (q) {
       this.decodeQueryFilters(q);
-      forEach(this.displayModes, (displayMode) => {
+      forEach(this.displayModes, displayMode => {
         if (this.filters[displayMode.field]) {
           this.displayMode = displayMode;
         }
@@ -221,7 +220,7 @@ class LogsFiltersController {
   }
 
   updateDisplayMode() {
-    forEach(this.displayModes, (displayMode) => {
+    forEach(this.displayModes, displayMode => {
       delete this.filters[displayMode.field];
     });
     delete this.filters[this.displayMode.field];
@@ -231,23 +230,24 @@ class LogsFiltersController {
   }
 
   private decodeQueryFilters(query) {
-    const filters = query.includes('status:') ? query.split('OR') : query.split('AND');
+    const filters = query
+      .split(/\s+AND\s+/) // Split by AND first
+      .map(segment => segment.replace(/^\((.+)\)$/, '$1')) // Remove outer parentheses
+      .flatMap(segment => segment.split(/\s+OR\s+/)); // Split OR conditions (returns original if no OR found)
+
     for (let i = 0; i < filters.length; i++) {
       const filter = filters[i].replace(/[()]/g, '');
       const k = filter.split(':')[0].trim();
-      const v = filter
-        .substring(filter.indexOf(':') + 1)
-        .split('OR')
-        .map((x) => x.trim());
+      const v = filter.substring(filter.indexOf(':') + 1).trim();
       switch (k) {
         case 'api':
-          this.filters.api = v;
+          this.filters.api.push(v);
           break;
         case 'application':
-          this.filters.application = v;
+          this.filters.application.push(v);
           break;
         case 'path': {
-          const value = v[0].replace(/\\"/g, '');
+          const value = v.replace(/\\"/g, '');
           if (this.api) {
             this.filters.uri = this.api.proxy.virtual_hosts[0].path + value;
           } else {
@@ -256,46 +256,74 @@ class LogsFiltersController {
           break;
         }
         case 'uri':
-          this.filters.uri = v[0].replace(/\*|\\\\/g, '');
+          this.filters.uri = v.replace(/\*|\\\\/g, '');
           break;
         case 'plan':
-          this.filters.plan = v;
+          // Initialize as array if not already, then push the value
+          if (!Array.isArray(this.filters.plan)) {
+            this.filters.plan = [];
+          }
+          this.filters.plan.push(v);
           break;
         case 'response-time':
-          this.filters.responseTime = v;
+          // Initialize as array if not already, then push the value
+          if (!Array.isArray(this.filters.responseTime)) {
+            this.filters.responseTime = [];
+          }
+          this.filters.responseTime.push(v);
           break;
         case 'method':
-          this.filters.method = v;
+          // Initialize as array if not already, then push the value
+          if (!Array.isArray(this.filters.method)) {
+            this.filters.method = [];
+          }
+          this.filters.method.push(v);
           break;
         case 'status':
           this.filters.status.push(v);
           break;
         case '_id':
-          this.filters.id = v[0];
+          this.filters.id = v;
           break;
         case 'transaction':
-          this.filters.transaction = v[0];
+          this.filters.transaction = v;
           break;
         case 'tenant':
-          this.filters.tenant = v;
+          // Initialize as array if not already, then push the value
+          if (!Array.isArray(this.filters.tenant)) {
+            this.filters.tenant = [];
+          }
+          this.filters.tenant.push(v);
           break;
         case '_exists_':
-          this.filters._exists_ = v;
+          // Initialize as array if not already, then push the value
+          if (!Array.isArray(this.filters._exists_)) {
+            this.filters._exists_ = [];
+          }
+          this.filters._exists_.push(v);
           break;
         case '!_exists_':
-          this.filters['!_exists_'] = v;
+          // Initialize as array if not already, then push the value
+          if (!Array.isArray(this.filters['!_exists_'])) {
+            this.filters['!_exists_'] = [];
+          }
+          this.filters['!_exists_'].push(v);
           break;
         case 'body':
-          this.filters.body = v[0].replace(/^\*(.*)\*$/g, '$1');
+          this.filters.body = v.replace(/^\*(.*)\*$/g, '$1');
           break;
         case 'endpoint':
-          this.filters.endpoint = v[0].replace(/\*|\\\\/g, '');
+          this.filters.endpoint = v.replace(/\*|\\\\/g, '');
           break;
         case 'remote-address':
-          this.filters['remote-address'] = v;
+          // Initialize as array if not already, then push the value
+          if (!Array.isArray(this.filters['remote-address'])) {
+            this.filters['remote-address'] = [];
+          }
+          this.filters['remote-address'].push(v);
           break;
         case 'host':
-          this.filters.host = v[0].replace(/\\"/g, '');
+          this.filters.host = v.replace(/\\"/g, '');
           break;
         default:
           this.$log.error('unknown filter: ', k);
@@ -317,9 +345,9 @@ class LogsFiltersController {
 
   private buildQuery(filters): string {
     let query = '';
-    const keys = filter(Object.keys(filters), (key) => filters[key] !== undefined && filters[key].length > 0);
+    const keys = filter(Object.keys(filters), key => filters[key] !== undefined && filters[key].length > 0);
     let index = 0;
-    forEach(keys, (key) => {
+    forEach(keys, key => {
       let val = filters[key];
 
       // 1. add the first / for uri
@@ -356,7 +384,7 @@ class LogsFiltersController {
     if (strict) {
       val = list[_val];
     } else {
-      val = list[filter(Object.keys(list), (elt) => elt.toLowerCase().includes(_val.toLowerCase())).pop()];
+      val = list[filter(Object.keys(list), elt => elt.toLowerCase().includes(_val.toLowerCase())).pop()];
     }
     return val ? val : _val;
   }
@@ -366,7 +394,7 @@ class LogsFiltersController {
       const searchResult = await this.ApplicationService.getSubscribedAPI(this.activatedRoute.snapshot.params.applicationId);
       let result = searchResult.data;
       if (term) {
-        result = searchResult.data.filter((api) => {
+        result = searchResult.data.filter(api => {
           return api.name.toLowerCase().includes(term.toLowerCase());
         });
       }

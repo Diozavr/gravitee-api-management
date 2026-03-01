@@ -43,8 +43,7 @@ import io.gravitee.rest.api.service.configuration.flow.FlowService;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -52,10 +51,9 @@ import org.springframework.stereotype.Component;
  * @author Yann TAVERNIER (yann.tavernier at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class ApiConverter {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(ApiConverter.class);
 
     private final ObjectMapper objectMapper;
     private final PlanService planService;
@@ -80,7 +78,7 @@ public class ApiConverter {
         this.workflowService = workflowService;
     }
 
-    public ApiEntity toApiEntity(Api api, PrimaryOwnerEntity primaryOwnerEntity) {
+    public ApiEntity toApiEntity(Api api, PrimaryOwnerEntity primaryOwnerEntity, boolean withApiCategories) {
         ApiEntity apiEntity = new ApiEntity();
 
         apiEntity.setId(api.getId());
@@ -93,7 +91,9 @@ public class ApiConverter {
         apiEntity.setDisableMembershipNotifications(api.isDisableMembershipNotifications());
         apiEntity.setReferenceType(ReferenceContext.Type.ENVIRONMENT.name());
         apiEntity.setReferenceId(api.getEnvironmentId());
-        apiEntity.setCategories(categoryMapper.toCategoryKey(api.getEnvironmentId(), api.getCategories()));
+        if (withApiCategories) {
+            apiEntity.setCategories(categoryMapper.toCategoryKey(api.getEnvironmentId(), api.getCategories()));
+        }
         apiEntity.setDefinitionContext(new DefinitionContext(api.getOrigin(), api.getMode(), api.getSyncFrom()));
 
         if (api.getDefinition() != null) {
@@ -132,7 +132,7 @@ public class ApiConverter {
                 }
                 apiEntity.setResponseTemplates(apiDefinition.getResponseTemplates());
             } catch (IOException ioe) {
-                LOGGER.error("Unexpected error while generating API definition", ioe);
+                log.error("Unexpected error while generating API definition", ioe);
             }
         }
 
@@ -163,8 +163,15 @@ public class ApiConverter {
         return apiEntity;
     }
 
-    public ApiEntity toApiEntity(ExecutionContext executionContext, Api api, PrimaryOwnerEntity primaryOwner, boolean readDatabaseFlows) {
-        ApiEntity apiEntity = toApiEntity(api, primaryOwner);
+    public ApiEntity toApiEntity(
+        ExecutionContext executionContext,
+        Api api,
+        PrimaryOwnerEntity primaryOwner,
+        boolean withApiFlows,
+        boolean withPlans,
+        boolean withApiCategories
+    ) {
+        ApiEntity apiEntity = toApiEntity(api, primaryOwner, withApiCategories);
         if (apiEntity.getDefinitionContext() == null) {
             // Set context to management for backward compatibility.
             apiEntity.setDefinitionContext(
@@ -172,15 +179,19 @@ public class ApiConverter {
             );
         }
 
-        var plans = planService.findByApi(executionContext, api.getId());
-        apiEntity.setPlans(plans);
+        if (withPlans) {
+            var plans = planService.findByApi(executionContext, api.getId());
+            apiEntity.setPlans(plans);
+        }
 
-        if (readDatabaseFlows) {
+        if (withApiFlows) {
             List<Flow> flows = flowService.findByReference(FlowReferenceType.API, api.getId());
             apiEntity.setFlows(flows);
         }
 
-        apiEntity.setCategories(categoryMapper.toCategoryKey(executionContext.getEnvironmentId(), api.getCategories()));
+        if (withApiCategories) {
+            apiEntity.setCategories(categoryMapper.toCategoryKey(executionContext.getEnvironmentId(), api.getCategories()));
+        }
 
         if (
             parameterService.findAsBoolean(

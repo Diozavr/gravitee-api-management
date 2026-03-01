@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import { IScope } from 'angular';
-
 import { ActivatedRoute, Router } from '@angular/router';
 import { now } from 'lodash';
 
@@ -50,7 +49,7 @@ class ApplicationLogsController {
     this.query.query = this.activatedRoute.snapshot.queryParams.q;
     this.query.field = '-@timestamp';
 
-    this.$scope.$watch('$ctrl.query.field', (field) => {
+    this.$scope.$watch('$ctrl.query.field', field => {
       if (field && this.init) {
         this.refresh();
       }
@@ -88,8 +87,8 @@ class ApplicationLogsController {
         },
         queryParamsHandling: 'merge',
       })
-      .then((_) => this.ApplicationService.findLogs(this.application.id, this.query))
-      .then((logs) => {
+      .then(_ => this.ApplicationService.findLogs(this.application.id, this.query))
+      .then(logs => {
         this.logs = logs.data;
       });
   }
@@ -101,7 +100,7 @@ class ApplicationLogsController {
   }
 
   exportAsCSV() {
-    this.ApplicationService.exportLogsAsCSV(this.application.id, this.query).then((response) => {
+    this.ApplicationService.exportLogsAsCSV(this.application.id, this.query).then(response => {
       const hiddenElement = document.createElement('a');
       hiddenElement.href = 'data:attachment/csv,' + response.data;
       hiddenElement.target = '_self';

@@ -389,6 +389,9 @@ paths:
                           - HTTP_PROXY
                           - HTTP_MESSAGE
                           - NATIVE_KAFKA
+                          - A2A_PROXY
+                          - MCP_PROXY
+                          - LLM_PROXY
             tags:
                 - Plugins - Policies
             summary: Get a policy schema
@@ -532,6 +535,21 @@ components:
                                   uniqueItems: true
                                   items:
                                       $ref: "#/components/schemas/FlowPhase"
+                              MCP_PROXY:
+                                  type: array
+                                  uniqueItems: true
+                                  items:
+                                      $ref: "#/components/schemas/FlowPhase"
+                              LLM_PROXY:
+                                type: array
+                                uniqueItems: true
+                                items:
+                                  $ref: "#/components/schemas/FlowPhase"
+                              A2A_PROXY:
+                                type: array
+                                uniqueItems: true
+                                items:
+                                  $ref: "#/components/schemas/FlowPhase"
         ResourcePlugin:
             type: object
             allOf:
@@ -575,6 +593,9 @@ components:
             description: API's type.
             example: MESSAGE
             enum:
+                - A2A_PROXY
+                - LLM_PROXY
+                - MCP_PROXY
                 - MESSAGE
                 - PROXY
                 - NATIVE
@@ -601,7 +622,7 @@ components:
             description: A mode used by a connector
             example: SUBSCRIBE
             enum:
-                - CONNECT
+                - ENTRYPOINT_CONNECT
                 - INTERACT
                 - SUBSCRIBE
                 - PUBLISH
@@ -615,8 +636,8 @@ components:
             enum:
                 - REQUEST
                 - RESPONSE
+                - ENTRYPOINT_CONNECT
                 - INTERACT
-                - CONNECT
                 - PUBLISH
                 - SUBSCRIBE
         Qos:

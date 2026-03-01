@@ -27,14 +27,14 @@ import io.vertx.rxjava3.core.net.NetSocket;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Qualifier;
 
 /**
  * @author Benoit BORDIGONI (benoit.bordigoni at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class TcpProtocolVerticle extends AbstractVerticle {
 
     private final ServerManager serverManager;
@@ -49,23 +49,21 @@ public class TcpProtocolVerticle extends AbstractVerticle {
     @Override
     public Completable rxStart() {
         final List<VertxTcpServer> servers = this.serverManager.servers(VertxTcpServer.class);
-        return Flowable
-            .fromIterable(servers)
-            .concatMapCompletable(gioServer -> {
-                log.info("Starting TCP server...");
-                NetServer tcpServer = gioServer.newInstance();
-                tcpServerMap.put(gioServer, tcpServer);
+        return Flowable.fromIterable(servers).concatMapCompletable(gioServer -> {
+            log.info("Starting TCP server...");
+            NetServer tcpServer = gioServer.newInstance();
+            tcpServerMap.put(gioServer, tcpServer);
 
-                // Listen and dispatch TCP requests.
-                return tcpServer
-                    .connectHandler(socket -> this.dispatchSocket(socket, gioServer.id()))
-                    .rxListen()
-                    .ignoreElement()
-                    .doOnComplete(() ->
-                        log.info("TCP server [{}] ready to accept connections on port {}", gioServer.id(), tcpServer.actualPort())
-                    )
-                    .doOnError(throwable -> log.error("Unable to start TCP server [{}]", gioServer.id(), throwable.getCause()));
-            });
+            // Listen and dispatch TCP requests.
+            return tcpServer
+                .connectHandler(socket -> this.dispatchSocket(socket, gioServer.id()))
+                .rxListen()
+                .ignoreElement()
+                .doOnComplete(() ->
+                    log.info("TCP server [{}] ready to accept connections on port {}", gioServer.id(), tcpServer.actualPort())
+                )
+                .doOnError(throwable -> log.error("Unable to start TCP server [{}]", gioServer.id(), throwable.getCause()));
+        });
     }
 
     public void dispatchSocket(NetSocket proxySocket, String id) {
@@ -83,8 +81,7 @@ public class TcpProtocolVerticle extends AbstractVerticle {
 
     @Override
     public Completable rxStop() {
-        return Flowable
-            .fromIterable(tcpServerMap.entrySet())
+        return Flowable.fromIterable(tcpServerMap.entrySet())
             .flatMapCompletable(entry -> {
                 final VertxTcpServer gioServer = entry.getKey();
                 final NetServer rxHttpServer = entry.getValue();

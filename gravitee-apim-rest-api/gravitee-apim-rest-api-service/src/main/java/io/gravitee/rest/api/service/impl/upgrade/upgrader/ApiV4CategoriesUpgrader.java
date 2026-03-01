@@ -31,7 +31,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -45,7 +45,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class ApiV4CategoriesUpgrader implements Upgrader {
 
     private final ApiRepository apiRepository;
@@ -87,21 +87,15 @@ public class ApiV4CategoriesUpgrader implements Upgrader {
         var categoryIdKeyMap = new HashMap<String, String>();
 
         categories.forEach(category -> {
-            envByCategoryKeyId.computeIfPresent(
-                category.getEnvironmentId(),
-                (envId, keyIdMap) -> {
-                    keyIdMap.put(category.getKey(), category.getId());
-                    return keyIdMap;
-                }
-            );
-            envByCategoryKeyId.computeIfAbsent(
-                category.getEnvironmentId(),
-                envId -> {
-                    var keyIdMap = new HashMap<String, String>();
-                    keyIdMap.put(category.getKey(), category.getId());
-                    return keyIdMap;
-                }
-            );
+            envByCategoryKeyId.computeIfPresent(category.getEnvironmentId(), (envId, keyIdMap) -> {
+                keyIdMap.put(category.getKey(), category.getId());
+                return keyIdMap;
+            });
+            envByCategoryKeyId.computeIfAbsent(category.getEnvironmentId(), envId -> {
+                var keyIdMap = new HashMap<String, String>();
+                keyIdMap.put(category.getKey(), category.getId());
+                return keyIdMap;
+            });
 
             categoryIdKeyMap.put(category.getId(), category.getKey());
         });

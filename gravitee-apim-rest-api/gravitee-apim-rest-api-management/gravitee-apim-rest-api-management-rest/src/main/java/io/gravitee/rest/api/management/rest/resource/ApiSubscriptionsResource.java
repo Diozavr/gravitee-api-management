@@ -17,6 +17,7 @@ package io.gravitee.rest.api.management.rest.resource;
 
 import static java.lang.String.format;
 
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.apim.core.subscription.use_case.AcceptSubscriptionUseCase;
 import io.gravitee.common.data.domain.Page;
 import io.gravitee.common.http.MediaType;
@@ -192,20 +193,28 @@ public class ApiSubscriptionsResource extends AbstractResource {
 
         if (created.getStatus() == SubscriptionStatus.PENDING) {
             var output = acceptSubscriptionUseCase.execute(
-                new AcceptSubscriptionUseCase.Input(api, created.getId(), TimeProvider.now(), null, null, customApiKey, getAuditInfo())
+                AcceptSubscriptionUseCase.Input.builder()
+                    .referenceId(api)
+                    .referenceType(SubscriptionReferenceType.API)
+                    .subscriptionId(created.getId())
+                    .startingAt(TimeProvider.now())
+                    .endingAt(null)
+                    .reasonMessage(null)
+                    .customKey(customApiKey)
+                    .auditInfo(getAuditInfo())
+                    .build()
             );
 
             subscription = convert(executionContext, output.subscription());
         }
 
-        return Response
-            .created(
-                this.getRequestUriBuilder()
-                    .path(subscription.getId())
-                    .replaceQueryParam("application", null)
-                    .replaceQueryParam("plan", null)
-                    .build()
-            )
+        return Response.created(
+            this.getRequestUriBuilder()
+                .path(subscription.getId())
+                .replaceQueryParam("application", null)
+                .replaceQueryParam("plan", null)
+                .build()
+        )
             .entity(subscription)
             .build();
     }
@@ -230,8 +239,7 @@ public class ApiSubscriptionsResource extends AbstractResource {
         subscriptionsPageable.setSize(exportPageable.getSize());
 
         final SubscriptionEntityPageResult subscriptions = getApiSubscriptions(subscriptionParam, subscriptionsPageable, null);
-        return Response
-            .ok(subscriptionService.exportAsCsv(subscriptions.getData(), subscriptions.getMetadata()))
+        return Response.ok(subscriptionService.exportAsCsv(subscriptions.getData(), subscriptions.getMetadata()))
             .header(HttpHeaders.CONTENT_DISPOSITION, format("attachment;filename=subscriptions-%s-%s.csv", api, System.currentTimeMillis()))
             .build();
     }
@@ -256,7 +264,13 @@ public class ApiSubscriptionsResource extends AbstractResource {
         @Parameter(name = "key", required = true) @CustomApiKey @NotNull @QueryParam("key") String key,
         @Parameter(name = "application", required = true) @NotNull @QueryParam("application") String application
     ) {
-        boolean canCreate = apiKeyService.canCreate(GraviteeContext.getExecutionContext(), key, api, application);
+        boolean canCreate = apiKeyService.canCreate(
+            GraviteeContext.getExecutionContext(),
+            key,
+            api,
+            io.gravitee.apim.core.subscription.model.SubscriptionReferenceType.API.name(),
+            application
+        );
         return Response.ok(canCreate).build();
     }
 
@@ -285,6 +299,8 @@ public class ApiSubscriptionsResource extends AbstractResource {
         );
         subscription.setMetadata(subscriptionEntity.getMetadata());
         subscription.setConfiguration(subscriptionEntity.getConfiguration());
+        subscription.setReferenceId(subscriptionEntity.getReferenceId());
+        subscription.setReferenceType(subscriptionEntity.getReferenceType());
 
         GenericPlanEntity plan = planSearchService.findById(executionContext, subscriptionEntity.getPlan());
         subscription.setPlan(new Subscription.Plan(plan.getId(), plan.getName()));

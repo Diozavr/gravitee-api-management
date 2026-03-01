@@ -23,17 +23,15 @@ import io.gravitee.rest.api.service.event.DictionaryEvent;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class DictionaryManager {
-
-    private final Logger logger = LoggerFactory.getLogger(DictionaryManager.class);
 
     @Autowired
     private DictionaryService dictionaryService;
@@ -64,7 +62,7 @@ public class DictionaryManager {
 
             dictionaries.put(dictionary.getId(), dictionary);
         } catch (Exception e) {
-            logger.error("Error occurred when trying to start the dictionary [{}].", dictionaryId, e);
+            log.error("Error occurred when trying to start the dictionary [{}].", dictionaryId, e);
         }
     }
 
@@ -79,7 +77,7 @@ public class DictionaryManager {
 
             dictionaries.remove(dictionaryId);
         } catch (Exception e) {
-            logger.error("Error occurred when trying to stop the dictionary [{}].", dictionaryId, e);
+            log.error("Error occurred when trying to stop the dictionary [{}].", dictionaryId, e);
         }
     }
 
@@ -87,10 +85,8 @@ public class DictionaryManager {
         // A dictionary needs to be restarted if its configuration or trigger has changed.
         return (
             (dictionary.getUpdatedAt() != null && dictionary.getUpdatedAt().after(startedDictionary.getUpdatedAt())) &&
-            (
-                !Objects.equals(dictionary.getProvider().getConfiguration(), startedDictionary.getProvider().getConfiguration()) ||
-                !Objects.equals(dictionary.getTrigger(), startedDictionary.getTrigger())
-            )
+            (!Objects.equals(dictionary.getProvider().getConfiguration(), startedDictionary.getProvider().getConfiguration()) ||
+                !Objects.equals(dictionary.getTrigger(), startedDictionary.getTrigger()))
         );
     }
 }

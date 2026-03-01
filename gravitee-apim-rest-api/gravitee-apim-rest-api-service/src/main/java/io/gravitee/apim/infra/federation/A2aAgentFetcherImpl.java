@@ -27,12 +27,12 @@ import io.vertx.rxjava3.ext.web.client.HttpResponse;
 import io.vertx.rxjava3.ext.web.client.WebClient;
 import jakarta.annotation.PostConstruct;
 import java.net.URI;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class A2aAgentFetcherImpl implements A2aAgentFetcher {
 
@@ -59,12 +59,11 @@ public class A2aAgentFetcherImpl implements A2aAgentFetcher {
             var uri = new URI(url).toURL();
             int port = uri.getPort();
             if (port < 0) {
-                port =
-                    switch (uri.getProtocol()) {
-                        case "http" -> 80;
-                        case "https" -> 443;
-                        default -> throw new IllegalArgumentException("Invalid port " + uri.getPort());
-                    };
+                port = switch (uri.getProtocol()) {
+                    case "http" -> 80;
+                    case "https" -> 443;
+                    default -> throw new IllegalArgumentException("Invalid port " + uri.getPort());
+                };
             }
             boolean ssl = "https".equalsIgnoreCase(uri.getProtocol());
             return webClient.get(port, uri.getHost(), uri.getFile()).ssl(ssl).rxSend();

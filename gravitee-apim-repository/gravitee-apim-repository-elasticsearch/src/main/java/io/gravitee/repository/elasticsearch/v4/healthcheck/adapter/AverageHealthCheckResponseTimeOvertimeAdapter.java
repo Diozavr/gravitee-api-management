@@ -54,13 +54,10 @@ public class AverageHealthCheckResponseTimeOvertimeAdapter
             .map(json ->
                 Map.of(json.get("key_as_string").asText(), Math.round(json.get(AGGREGATION_AVG_RESPONSE_TIME).get("value").asDouble()))
             )
-            .reduce(
-                new LinkedHashMap<>(),
-                (acc, b) -> {
-                    acc.putAll(b);
-                    return acc;
-                }
-            );
+            .reduce(new LinkedHashMap<>(), (acc, b) -> {
+                acc.putAll(b);
+                return acc;
+            });
 
         return Maybe.just(new AverageHealthCheckResponseTimeOvertime(buckets));
     }
@@ -71,11 +68,7 @@ public class AverageHealthCheckResponseTimeOvertimeAdapter
         Instant from = query.from().minus(query.interval());
         Instant to = query.to().plus(query.interval());
 
-        ObjectNode timestamp = json()
-            .put("from", from.toEpochMilli())
-            .put("to", to.toEpochMilli())
-            .put("include_lower", true)
-            .put("include_upper", true);
+        ObjectNode timestamp = json().put("gte", from.toEpochMilli()).put("lte", to.toEpochMilli());
         JsonNode rangeFilter = json().set("range", json().set(TIME_FIELD, timestamp));
 
         var bool = json().set("filter", array().add(termFilter).add(rangeFilter));

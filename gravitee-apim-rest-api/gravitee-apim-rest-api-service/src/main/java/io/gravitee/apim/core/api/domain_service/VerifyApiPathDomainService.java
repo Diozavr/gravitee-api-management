@@ -36,13 +36,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import java.util.stream.Stream;
+import lombok.CustomLog;
 
 /**
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @DomainService
 public class VerifyApiPathDomainService implements Validator<VerifyApiPathDomainService.Input> {
 
@@ -97,7 +98,10 @@ public class VerifyApiPathDomainService implements Validator<VerifyApiPathDomain
                 }
             }
             if (sanitizedBuilder.stream().noneMatch(builder -> builder.build().isOverrideAccess())) {
-                sanitizedBuilder.stream().findFirst().ifPresent(builder -> builder.overrideAccess(true));
+                sanitizedBuilder
+                    .stream()
+                    .findFirst()
+                    .ifPresent(builder -> builder.overrideAccess(true));
             }
         }
 
@@ -128,8 +132,7 @@ public class VerifyApiPathDomainService implements Validator<VerifyApiPathDomain
 
         apiSearchService
             .search(
-                ApiSearchCriteria
-                    .builder()
+                ApiSearchCriteria.builder()
                     .environmentId(input.environmentId)
                     .definitionVersion(List.of(DefinitionVersion.V2, DefinitionVersion.V4))
                     .build(),
@@ -201,24 +204,26 @@ public class VerifyApiPathDomainService implements Validator<VerifyApiPathDomain
     }
 
     private static List<String> getPathsWithoutHost(List<Path> paths) {
-        return paths.stream().filter(path -> StringUtils.isEmpty(path.getHost())).map(Path::getPath).toList();
+        return paths
+            .stream()
+            .filter(path -> StringUtils.isEmpty(path.getHost()))
+            .map(Path::getPath)
+            .toList();
     }
 
     private static List<Path> extractPaths(Api api) {
-        return api.getDefinitionVersion() == DefinitionVersion.V4 ? getHttpV4Paths(api) : getV2Paths(api);
+        return switch (api.getApiDefinitionValue()) {
+            case io.gravitee.definition.model.v4.Api v4Api -> getHttpV4Paths(v4Api);
+            case io.gravitee.definition.model.Api v2Api -> getV2Paths(v2Api);
+            case null, default -> new ArrayList<>();
+        };
     }
 
-    private static List<Path> getHttpV4Paths(Api api) {
-        if (api.getApiDefinitionHttpV4() == null) {
-            return new ArrayList<>();
-        }
-
-        return api
-            .getApiDefinitionHttpV4()
+    private static List<Path> getHttpV4Paths(io.gravitee.definition.model.v4.Api v4Api) {
+        return v4Api
             .getListeners()
             .stream()
-            .filter(HttpListener.class::isInstance)
-            .map(HttpListener.class::cast)
+            .flatMap(listener -> listener instanceof HttpListener httpListener ? Stream.of(httpListener) : Stream.of())
             .flatMap(httpListener ->
                 httpListener
                     .getPaths()
@@ -230,15 +235,13 @@ public class VerifyApiPathDomainService implements Validator<VerifyApiPathDomain
             .toList();
     }
 
-    private static List<Path> getV2Paths(Api api) {
-        return api
-            .getApiDefinition()
+    private static List<Path> getV2Paths(io.gravitee.definition.model.Api apiDefinition) {
+        return apiDefinition
             .getProxy()
             .getVirtualHosts()
             .stream()
             .map(virtualHost ->
-                Path
-                    .builder()
+                Path.builder()
                     .host(virtualHost.getHost())
                     .path(virtualHost.getPath())
                     .overrideAccess(virtualHost.isOverrideEntrypoint())

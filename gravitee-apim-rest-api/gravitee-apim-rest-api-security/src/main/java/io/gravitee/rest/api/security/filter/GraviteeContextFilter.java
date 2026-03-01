@@ -35,9 +35,9 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Optional;
+import lombok.CustomLog;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.web.filter.GenericFilterBean;
 
@@ -45,7 +45,7 @@ import org.springframework.web.filter.GenericFilterBean;
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class GraviteeContextFilter extends GenericFilterBean {
 
@@ -158,8 +158,9 @@ public class GraviteeContextFilter extends GenericFilterBean {
     private ExecutionContext getFromAccessPoints(final HttpServletRequest httpServletRequest) {
         ExecutionContext accessPointContext = null;
         if (installationTypeDomainService.isMultiTenant()) {
-            Optional<ReferenceContext> optionalReferenceContext = getReferenceContextFromServer(httpServletRequest)
-                .or(() -> getReferenceContextFromReferer(httpServletRequest));
+            Optional<ReferenceContext> optionalReferenceContext = getReferenceContextFromServer(httpServletRequest).or(() ->
+                getReferenceContextFromReferer(httpServletRequest)
+            );
             if (optionalReferenceContext.isPresent()) {
                 ReferenceContext referenceContext = optionalReferenceContext.get();
                 if (referenceContext.getReferenceType() == ReferenceContext.Type.ENVIRONMENT) {

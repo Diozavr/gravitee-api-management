@@ -17,27 +17,44 @@ package inmemory;
 
 import io.gravitee.apim.core.api_key.model.ApiKeyEntity;
 import io.gravitee.apim.core.api_key.query_service.ApiKeyQueryService;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
+import io.gravitee.rest.api.service.exceptions.SubscriptionNotFoundException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
 public class ApiKeyQueryServiceInMemory implements ApiKeyQueryService, InMemoryAlternative<ApiKeyEntity> {
 
     private final ArrayList<ApiKeyEntity> storage;
+    private final SubscriptionCrudServiceInMemory subscriptionCrudService;
 
     public ApiKeyQueryServiceInMemory() {
         storage = new ArrayList<>();
+        subscriptionCrudService = null;
     }
 
     public ApiKeyQueryServiceInMemory(ApiKeyCrudServiceInMemory apiKeyCrudServiceInMemory) {
         storage = apiKeyCrudServiceInMemory.storage;
+        subscriptionCrudService = null;
+    }
+
+    public ApiKeyQueryServiceInMemory(
+        ApiKeyCrudServiceInMemory apiKeyCrudServiceInMemory,
+        SubscriptionCrudServiceInMemory subscriptionCrudServiceInMemory
+    ) {
+        storage = apiKeyCrudServiceInMemory.storage;
+        subscriptionCrudService = subscriptionCrudServiceInMemory;
     }
 
     @Override
     public Optional<ApiKeyEntity> findById(String apiKeyId) {
-        return storage.stream().filter(apiKey -> apiKey.getId().equals(apiKeyId)).findFirst();
+        return storage
+            .stream()
+            .filter(apiKey -> apiKey.getId().equals(apiKeyId))
+            .findFirst();
     }
 
     @Override
@@ -47,7 +64,41 @@ public class ApiKeyQueryServiceInMemory implements ApiKeyQueryService, InMemoryA
 
     @Override
     public Optional<ApiKeyEntity> findByKeyAndApiId(String key, String apiId) {
-        return storage.stream().filter(apiKey -> apiKey.getKey().equals(key)).findFirst();
+        if (subscriptionCrudService != null) {
+            return findByKeyAndReferenceIdAndReferenceType(key, apiId, SubscriptionReferenceType.API.name());
+        }
+        return storage
+            .stream()
+            .filter(apiKey -> apiKey.getKey().equals(key))
+            .findFirst();
+    }
+
+    @Override
+    public Optional<ApiKeyEntity> findByKeyAndReferenceIdAndReferenceType(String key, String referenceId, String referenceType) {
+        if (subscriptionCrudService == null) {
+            return storage
+                .stream()
+                .filter(apiKey -> apiKey.getKey().equals(key))
+                .findFirst();
+        }
+        return storage
+            .stream()
+            .filter(apiKey -> apiKey.getKey().equals(key))
+            .filter(apiKey ->
+                apiKey
+                    .getSubscriptions()
+                    .stream()
+                    .map(subId -> {
+                        try {
+                            return subscriptionCrudService.get(subId);
+                        } catch (SubscriptionNotFoundException e) {
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .anyMatch(sub -> referenceId.equals(sub.getReferenceId()) && referenceType.equals(sub.getReferenceType().name()))
+            )
+            .findFirst();
     }
 
     @Override

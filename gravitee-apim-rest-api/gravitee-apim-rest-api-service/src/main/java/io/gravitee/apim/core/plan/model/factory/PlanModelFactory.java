@@ -35,8 +35,7 @@ public class PlanModelFactory {
     private PlanModelFactory() {}
 
     public static Plan fromCRDSpec(PlanCRD planCRD, ApiCRDSpec api) {
-        Plan plan = Plan
-            .builder()
+        Plan plan = Plan.builder()
             .id(planCRD.getId())
             .name(planCRD.getName())
             .description(planCRD.getDescription())
@@ -45,17 +44,17 @@ public class PlanModelFactory {
             .crossId(planCRD.getCrossId())
             .excludedGroups(planCRD.getExcludedGroups())
             .generalConditions(planCRD.getGeneralConditions())
+            .generalConditionsHrid(planCRD.getGeneralConditionsHrid())
             .order(planCRD.getOrder())
-            .type(planCRD.getType())
             .validation(planCRD.getValidation())
             .apiType(ApiType.valueOf(api.getType()))
-            .apiId(api.getId())
+            .referenceId(api.getId())
+            .referenceType(io.gravitee.rest.api.model.v4.plan.GenericPlanEntity.ReferenceType.API)
             .build();
 
         if (ApiType.NATIVE.getLabel().equalsIgnoreCase(api.getType())) {
             plan.setPlanDefinitionNativeV4(
-                NativePlan
-                    .builder()
+                NativePlan.builder()
                     .security(planCRD.getSecurity())
                     .selectionRule(planCRD.getSelectionRule())
                     .status(planCRD.getStatus())
@@ -66,8 +65,7 @@ public class PlanModelFactory {
             );
         } else {
             plan.setPlanDefinitionHttpV4(
-                io.gravitee.definition.model.v4.plan.Plan
-                    .builder()
+                io.gravitee.definition.model.v4.plan.Plan.builder()
                     .security(planCRD.getSecurity())
                     .selectionRule(planCRD.getSelectionRule())
                     .status(planCRD.getStatus())
@@ -84,15 +82,14 @@ public class PlanModelFactory {
     public static Plan fromIntegration(IntegrationApi.Plan plan, Api federatedApi) {
         var id = generateFederatedPlanId(plan, federatedApi);
         var now = TimeProvider.now();
-        return Plan
-            .builder()
+        return Plan.builder()
             .id(id)
             .name(plan.name())
             .description(plan.description())
-            .apiId(federatedApi.getId())
+            .referenceId(federatedApi.getId())
+            .referenceType(io.gravitee.rest.api.model.v4.plan.GenericPlanEntity.ReferenceType.API)
             .federatedPlanDefinition(
-                FederatedPlan
-                    .builder()
+                FederatedPlan.builder()
                     .id(id)
                     .providerId(plan.id())
                     .security(PlanSecurity.builder().type(PlanSecurityType.valueOf(plan.type().name()).getLabel()).build())

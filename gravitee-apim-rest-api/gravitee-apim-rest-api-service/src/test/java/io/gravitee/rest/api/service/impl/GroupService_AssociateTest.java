@@ -97,11 +97,10 @@ public class GroupService_AssociateTest extends TestCase {
                 null,
                 ApiFieldFilter.allFields()
             )
-        )
-            .thenReturn(Stream.of(api1, api2));
+        ).thenReturn(Stream.of(api1, api2));
         ApiEntity apiEntity1 = new ApiEntity();
         apiEntity1.setId("api1");
-        when(apiConverter.toApiEntity(api1, null)).thenReturn(apiEntity1);
+        when(apiConverter.toApiEntity(api1, null, false)).thenReturn(apiEntity1);
 
         UserEntity fakeUserEntity = new UserEntity();
         fakeUserEntity.setFirstname("firstName");

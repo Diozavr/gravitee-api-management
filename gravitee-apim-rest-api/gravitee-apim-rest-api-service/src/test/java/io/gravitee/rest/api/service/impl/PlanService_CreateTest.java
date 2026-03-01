@@ -19,11 +19,10 @@ import static io.gravitee.definition.model.DefinitionVersion.V1;
 import static io.gravitee.definition.model.DefinitionVersion.V2;
 import static io.gravitee.repository.management.model.ApiLifecycleState.DEPRECATED;
 import static io.gravitee.repository.management.model.Plan.AuditEvent.PLAN_CREATED;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.isNull;
-import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -105,7 +104,7 @@ public class PlanService_CreateTest {
 
     @Before
     public void setup() throws Exception {
-        when(newPlanEntity.getApi()).thenReturn(API_ID);
+        when(newPlanEntity.getReferenceId()).thenReturn(API_ID);
         when(newPlanEntity.getSecurity()).thenReturn(PlanSecurityType.KEY_LESS);
         when(newPlanEntity.getFlows()).thenReturn(new ArrayList<>());
         when(api.getDefinition()).thenReturn("apidefinition");
@@ -168,8 +167,16 @@ public class PlanService_CreateTest {
 
         planService.create(GraviteeContext.getExecutionContext(), this.newPlanEntity);
 
-        verify(auditService, times(1))
-            .createApiAuditLog(eq(GraviteeContext.getExecutionContext()), eq(API_ID), any(), eq(PLAN_CREATED), any(), isNull(), same(plan));
+        verify(auditService, times(1)).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getEvent().equals(PLAN_CREATED) &&
+                    auditLogData.getOldValue() == null &&
+                    auditLogData.getNewValue().equals(plan)
+            ),
+            eq(API_ID)
+        );
         verifyNoMoreInteractions(auditService);
     }
 

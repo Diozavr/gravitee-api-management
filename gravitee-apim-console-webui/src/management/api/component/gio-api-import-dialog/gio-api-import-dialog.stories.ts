@@ -17,7 +17,7 @@ import { Component, Input } from '@angular/core';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { Meta, moduleMetadata, StoryObj } from '@storybook/angular';
-import { action } from '@storybook/addon-actions';
+import { action } from 'storybook/actions';
 import { tap } from 'rxjs/operators';
 import { MatButtonModule } from '@angular/material/button';
 import { of } from 'rxjs';
@@ -50,7 +50,7 @@ class ApiImportDialogStoryComponent {
       })
       .afterClosed()
       .pipe(
-        tap((confirmed) => {
+        tap(confirmed => {
           action('confirmed?')(confirmed);
         }),
       )
@@ -88,7 +88,7 @@ export default {
       type: { name: 'object', value: {} },
     },
   },
-  render: (args) => ({
+  render: args => ({
     template: `<gio-api-import-dialog-story [policies]="policies" [apiId]="apiId"></gio-api-import-dialog-story>`,
     props: { ...args },
   }),
@@ -98,7 +98,7 @@ export default {
 } as Meta;
 
 export const Default: StoryObj = {
-  play: (context) => {
+  play: context => {
     const button = context.canvasElement.querySelector('#open-dialog') as HTMLButtonElement;
     button.click();
   },
@@ -140,7 +140,7 @@ Default.args = {
 };
 
 export const UpdateMode: StoryObj = {
-  play: (context) => {
+  play: context => {
     const button = context.canvasElement.querySelector('#open-dialog') as HTMLButtonElement;
     button.click();
   },

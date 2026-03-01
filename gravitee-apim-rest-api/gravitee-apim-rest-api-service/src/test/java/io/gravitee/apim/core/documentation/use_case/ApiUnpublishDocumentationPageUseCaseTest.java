@@ -39,6 +39,7 @@ import io.gravitee.apim.core.exception.ValidationDomainException;
 import io.gravitee.apim.core.search.model.IndexablePage;
 import io.gravitee.apim.infra.json.jackson.JacksonJsonDiffProcessor;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.service.exceptions.PageNotFoundException;
 import java.util.Date;
 import java.util.List;
@@ -75,13 +76,12 @@ class ApiUnpublishDocumentationPageUseCaseTest {
             new AuditDomainService(auditCrudService, userCrudService, new JacksonJsonDiffProcessor()),
             indexer
         );
-        useCase =
-            new ApiUnpublishDocumentationPageUseCase(
-                apiDocumentationDomainService,
-                updateDocumentationDomainService,
-                apiCrudService,
-                pageCrudService
-            );
+        useCase = new ApiUnpublishDocumentationPageUseCase(
+            apiDocumentationDomainService,
+            updateDocumentationDomainService,
+            apiCrudService,
+            pageCrudService
+        );
     }
 
     @AfterEach
@@ -98,8 +98,7 @@ class ApiUnpublishDocumentationPageUseCaseTest {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id(PAGE_ID)
                     .referenceType(Page.ReferenceType.API)
                     .referenceId(API_ID)
@@ -115,8 +114,7 @@ class ApiUnpublishDocumentationPageUseCaseTest {
 
     @Test
     void should_delete_from_index_if_markdown() {
-        var page = Page
-            .builder()
+        var page = Page.builder()
             .id(PAGE_ID)
             .referenceType(Page.ReferenceType.API)
             .referenceId(API_ID)
@@ -137,8 +135,7 @@ class ApiUnpublishDocumentationPageUseCaseTest {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id(PAGE_ID)
                     .referenceType(Page.ReferenceType.API)
                     .referenceId(API_ID)
@@ -161,8 +158,7 @@ class ApiUnpublishDocumentationPageUseCaseTest {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id(PAGE_ID)
                     .referenceType(Page.ReferenceType.API)
                     .referenceId(API_ID)
@@ -181,8 +177,7 @@ class ApiUnpublishDocumentationPageUseCaseTest {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id(PAGE_ID)
                     .referenceType(Page.ReferenceType.API)
                     .referenceId(API_ID)
@@ -192,8 +187,9 @@ class ApiUnpublishDocumentationPageUseCaseTest {
                     .build()
             )
         );
-        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO)))
-            .isInstanceOf(ValidationDomainException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO))).isInstanceOf(
+            ValidationDomainException.class
+        );
     }
 
     @Test
@@ -201,8 +197,7 @@ class ApiUnpublishDocumentationPageUseCaseTest {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id(PAGE_ID)
                     .referenceType(Page.ReferenceType.API)
                     .referenceId(API_ID)
@@ -214,26 +209,26 @@ class ApiUnpublishDocumentationPageUseCaseTest {
         );
         planQueryService.initWith(
             List.of(
-                PlanFixtures
-                    .aPlanHttpV4()
+                PlanFixtures.aPlanHttpV4()
                     .toBuilder()
                     .id("plan-id")
-                    .apiId(API_ID)
+                    .referenceId(API_ID)
+                    .referenceType(GenericPlanEntity.ReferenceType.API)
                     .generalConditions(PAGE_ID)
                     .build()
                     .setPlanStatus(PlanStatus.PUBLISHED)
             )
         );
-        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO)))
-            .isInstanceOf(ValidationDomainException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO))).isInstanceOf(
+            ValidationDomainException.class
+        );
     }
 
     @Test
     void should_throw_error_if_api_does_not_exist() {
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id("page#1")
                     .referenceType(Page.ReferenceType.API)
                     .referenceId(API_ID)
@@ -242,8 +237,9 @@ class ApiUnpublishDocumentationPageUseCaseTest {
                     .build()
             )
         );
-        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO)))
-            .isInstanceOf(ApiNotFoundException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO))).isInstanceOf(
+            ApiNotFoundException.class
+        );
     }
 
     @Test
@@ -251,8 +247,7 @@ class ApiUnpublishDocumentationPageUseCaseTest {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id(PAGE_ID)
                     .referenceType(Page.ReferenceType.API)
                     .referenceId(API_ID + "-bad")
@@ -262,8 +257,9 @@ class ApiUnpublishDocumentationPageUseCaseTest {
                     .build()
             )
         );
-        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO)))
-            .isInstanceOf(ValidationDomainException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO))).isInstanceOf(
+            ValidationDomainException.class
+        );
     }
 
     @Test
@@ -271,8 +267,7 @@ class ApiUnpublishDocumentationPageUseCaseTest {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(
             List.of(
-                Page
-                    .builder()
+                Page.builder()
                     .id(PAGE_ID)
                     .referenceType(Page.ReferenceType.ENVIRONMENT)
                     .referenceId(API_ID)
@@ -280,23 +275,26 @@ class ApiUnpublishDocumentationPageUseCaseTest {
                     .build()
             )
         );
-        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO)))
-            .isInstanceOf(ValidationDomainException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO))).isInstanceOf(
+            ValidationDomainException.class
+        );
     }
 
     @Test
     void should_throw_error_if_page_does_not_exist() {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
         initPageServices(List.of());
-        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO)))
-            .isInstanceOf(PageNotFoundException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, PAGE_ID, AUDIT_INFO))).isInstanceOf(
+            PageNotFoundException.class
+        );
     }
 
     @Test
     void should_throw_error_if_page_id_is_root() {
         initApiServices(List.of(Api.builder().id(API_ID).build()));
-        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, "ROOT", AUDIT_INFO)))
-            .isInstanceOf(PageNotFoundException.class);
+        assertThatThrownBy(() -> useCase.execute(new ApiUnpublishDocumentationPageUseCase.Input(API_ID, "ROOT", AUDIT_INFO))).isInstanceOf(
+            PageNotFoundException.class
+        );
     }
 
     private void initPageServices(List<Page> pages) {

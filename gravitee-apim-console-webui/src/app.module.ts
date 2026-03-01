@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import * as angular from 'angular';
-
 import { CommonModule } from '@angular/common';
 import { provideHttpClient, withInterceptorsFromDi, withXsrfConfiguration } from '@angular/common/http';
 import { ApplicationRef, DoBootstrap, importProvidersFrom, NgModule } from '@angular/core';
@@ -24,6 +23,7 @@ import { setAngularJSGlobal, UpgradeModule } from '@angular/upgrade/static';
 import { GioPendoModule, GIO_PENDO_SETTINGS_TOKEN } from '@gravitee/ui-analytics';
 import { GioMatConfigModule } from '@gravitee/ui-particles-angular';
 import { MatMomentDateModule, provideMomentDateAdapter } from '@angular/material-moment-adapter';
+import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 
 import { currentUserProvider, ajsScopeProvider } from './ajs-upgraded-providers';
 import { Constants } from './entities/Constants';
@@ -35,6 +35,7 @@ import { AppRoutingModule } from './app-routing.module';
 import { UserComponent } from './user/my-accout/user.component';
 import { AuthModule } from './auth/auth.module';
 import { GioFormJsonSchemaExtendedModule } from './shared/components/form-json-schema-extended/form-json-schema-extended.module';
+import { ClusterRoutingModule } from './management/clusters/cluster-routing.module';
 
 @NgModule({
   declarations: [AppComponent, UserComponent],
@@ -46,6 +47,7 @@ import { GioFormJsonSchemaExtendedModule } from './shared/components/form-json-s
     UpgradeModule,
     MatMomentDateModule,
     AppRoutingModule,
+    ClusterRoutingModule,
     GioPendoModule.forRoot(),
     GioMatConfigModule,
     AuthModule,
@@ -80,10 +82,11 @@ import { GioFormJsonSchemaExtendedModule } from './shared/components/form-json-s
         headerName: 'none',
       }),
     ),
+    provideCharts(withDefaultRegisterables()),
   ],
 })
 export class AppModule implements DoBootstrap {
-  constructor(private upgrade: UpgradeModule) {}
+  constructor(private readonly upgrade: UpgradeModule) {}
 
   ngDoBootstrap(app: ApplicationRef) {
     setAngularJSGlobal(angular);

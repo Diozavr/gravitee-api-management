@@ -24,21 +24,23 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
-import { BehaviorSubject, catchError, forkJoin, map, Observable, switchMap, tap } from 'rxjs';
+import { BehaviorSubject, catchError, filter, forkJoin, map, Observable, switchMap, tap } from 'rxjs';
 import { of } from 'rxjs/internal/observable/of';
 
 import { SubscriptionConsumerConfigurationComponent } from './subscription-consumer-configuration';
 import { ApiAccessComponent } from '../../../../../components/api-access/api-access.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../../../components/confirm-dialog/confirm-dialog.component';
 import { LoaderComponent } from '../../../../../components/loader/loader.component';
 import { SubscriptionInfoComponent } from '../../../../../components/subscription-info/subscription-info.component';
-import { ApiType } from '../../../../../entities/api/api';
+import { Api } from '../../../../../entities/api/api';
+import { Application } from '../../../../../entities/application/application';
 import { UserApiPermissions } from '../../../../../entities/permission/permission';
 import { PlanMode, PlanSecurityEnum, PlanUsageConfiguration } from '../../../../../entities/plan/plan';
 import {
   SubscriptionConsumerStatusEnum,
   SubscriptionConsumerConfiguration,
   SubscriptionsResponse,
-  SubscriptionStatusEnum,
+  Subscription,
 } from '../../../../../entities/subscription';
 import { CapitalizeFirstPipe } from '../../../../../pipe/capitalize-first.pipe';
 import { ApiService } from '../../../../../services/api.service';
@@ -53,11 +55,11 @@ interface SubscriptionDetailsVM {
 }
 
 interface SubscriptionDetailsData {
-  applicationName: string;
+  application: Application;
   planName: string;
   planSecurity: PlanSecurityEnum;
   planUsageConfiguration: PlanUsageConfiguration;
-  subscriptionStatus: SubscriptionStatusEnum;
+  subscription: Subscription;
   consumerStatus: SubscriptionConsumerStatusEnum;
   failureCause?: string;
   createdAt?: string;
@@ -67,7 +69,7 @@ interface SubscriptionDetailsData {
   entrypointUrls?: string[];
   clientId?: string;
   clientSecret?: string;
-  apiType?: ApiType;
+  api?: Api;
   consumerConfiguration?: SubscriptionConsumerConfiguration;
 }
 
@@ -119,6 +121,31 @@ export class SubscriptionsDetailsComponent implements OnInit {
     this.subscriptionDetails$ = this.loadDetails();
   }
 
+  closeSubscription() {
+    const dialogData: ConfirmDialogData = {
+      title: $localize`:@@titleCancelSubscriptionDialog:Close this subscription?`,
+      content: $localize`:@@contentCancelSubscriptionDialog:You will lose access to the API.`,
+      confirmLabel: $localize`:@@confirmCancelSubscriptionDialog:Yes, close`,
+      cancelLabel: $localize`:@@cancelCancelSubscriptionDialog:Cancel`,
+    };
+    this.dialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
+        role: 'alertdialog',
+        id: 'confirmDialog',
+        data: dialogData,
+      })
+      .afterClosed()
+      .pipe(
+        filter(confirmed => !!confirmed),
+        switchMap(() => this.subscriptionService.close(this.subscriptionId)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: _ => this._subscriptionDetails.next(true),
+        error: err => console.error(err),
+      });
+  }
+
   resumeConsumerStatus() {
     this.isLoadingStatus = true;
     this.subscriptionService
@@ -153,13 +180,13 @@ export class SubscriptionsDetailsComponent implements OnInit {
       ),
       map(({ subscription, plan, api, application }) => {
         const subscriptionDetails: SubscriptionDetailsData = {
-          applicationName: application.name ?? '',
+          application,
+          subscription,
+          api,
           planName: plan.name,
           planSecurity: plan.securityType,
           planUsageConfiguration: plan.usageConfiguration,
-          subscriptionStatus: subscription.status,
           consumerStatus: subscription.consumerStatus,
-          apiType: api.type,
           failureCause: subscription.failureCause,
           createdAt: subscription.created_at,
           updatedAt: subscription.updated_at,
@@ -263,7 +290,7 @@ export class SubscriptionsDetailsComponent implements OnInit {
     usageConfiguration?: PlanUsageConfiguration;
     planMode?: PlanMode;
   }> {
-    return this.subscriptionService.list({ apiId: this.apiId, statuses: [] }).pipe(
+    return this.subscriptionService.list({ apiIds: [this.apiId], statuses: [] }).pipe(
       catchError(_ => of({ data: [], metadata: {}, links: {} } as SubscriptionsResponse)),
       map(({ metadata }) => {
         const planMetadata = metadata[planId];

@@ -25,7 +25,7 @@ import io.gravitee.definition.model.DefinitionVersion;
 import io.gravitee.definition.model.v4.service.ApiServices;
 import io.gravitee.definition.model.v4.service.Service;
 import io.gravitee.rest.api.service.event.ApiEvent;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class ApiEventListener implements EventListener<ApiEvent, io.gravitee.repository.management.model.Api> {
 
     private static final ApiAdapter apiAdapter = ApiAdapter.INSTANCE;
@@ -50,13 +50,24 @@ public class ApiEventListener implements EventListener<ApiEvent, io.gravitee.rep
         if (!isV4Api(eventPayload)) {
             return;
         }
-
         final Api api = apiAdapter.toCoreModel(eventPayload);
         switch (event.type()) {
             case DEPLOY -> onApiDeploy(api);
             case UNDEPLOY -> onApiUndeploy(api);
             case UPDATE -> onApiUpdate(api);
+            case START_DYNAMIC_PROPERTY_V4 -> onDynamicPropertiesStarted(api);
+            case STOP_DYNAMIC_PROPERTY_V4 -> onDynamicPropertiesStopped(api);
         }
+    }
+
+    private void onDynamicPropertiesStopped(Api api) {
+        log.info("stopping Dynamic properties event for api: {}", api.getId());
+        managementApiServicesManager.stopDynamicProperties(api);
+    }
+
+    private void onDynamicPropertiesStarted(Api api) {
+        log.info("starting Dynamic properties event for api: {}", api.getId());
+        managementApiServicesManager.startDynamicProperties(api);
     }
 
     private void onApiDeploy(Api api) {

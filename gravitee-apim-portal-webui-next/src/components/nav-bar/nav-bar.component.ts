@@ -13,28 +13,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Component, Input, input, InputSignal } from '@angular/core';
+import { Component, computed, inject, input, InputSignal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { isEmpty } from 'lodash';
 
-import { NavBarButtonComponent } from './nav-bar-button/nav-bar-button.component';
+import { DesktopNavBarComponent } from './desktop-nav-bar/desktop-nav-bar.component';
+import { MobileNavBarComponent } from './mobile-nav-bar/mobile-nav-bar.component';
+import { PortalNavigationItem } from '../../entities/portal-navigation/portal-navigation-item';
 import { User } from '../../entities/user/user';
-import { PortalMenuLink } from '../../services/portal-menu-links.service';
+import { ObservabilityBreakpointService } from '../../services/observability-breakpoint.service';
 import { CompanyTitleComponent } from '../company-title/company-title.component';
-import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 
 @Component({
   selector: 'app-nav-bar',
-  imports: [MatButtonModule, CompanyTitleComponent, NavBarButtonComponent, UserAvatarComponent],
+  imports: [MatButtonModule, CompanyTitleComponent, DesktopNavBarComponent, MobileNavBarComponent],
   templateUrl: './nav-bar.component.html',
-  styleUrl: './nav-bar.component.scss',
+  styleUrls: ['./nav-bar.component.scss'],
 })
 export class NavBarComponent {
-  @Input()
-  siteTitle!: string;
-
-  customLinks: InputSignal<PortalMenuLink[]> = input<PortalMenuLink[]>([]);
+  topBarNavigationItems: InputSignal<PortalNavigationItem[]> = input<PortalNavigationItem[]>([]);
   currentUser: InputSignal<User> = input({});
+  forceLogin: InputSignal<boolean> = input(false);
   logo: InputSignal<string> = input('');
-  protected readonly isEmpty = isEmpty;
+  protected readonly isMobile = inject(ObservabilityBreakpointService).isMobile;
+
+  protected isLoggedIn = computed(() => {
+    return !isEmpty(this.currentUser());
+  });
 }

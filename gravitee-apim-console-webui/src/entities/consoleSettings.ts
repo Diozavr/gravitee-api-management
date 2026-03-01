@@ -16,27 +16,29 @@
 export interface ConsoleSettings {
   email?: ConsoleSettingsEmail;
   metadata?: ConsoleSettingsMetadata;
-  alert?: ConsoleSettingsAlert;
+  alert?: DisableableFeature;
   authentication?: ConsoleSettingsAuthentication;
   cors?: ConsoleSettingsCors;
   reCaptcha?: ConsoleSettingsReCaptcha;
   scheduler?: ConsoleSettingsScheduler;
   analyticsPendo?: ConsoleSettingsAnalyticsPendo;
   logging?: ConsoleSettingsLogging;
-  maintenance?: ConsoleSettingsMaintenance;
+  maintenance?: DisableableFeature;
   management?: ConsoleSettingsManagement;
-  newsletter?: ConsoleSettingsNewsletter;
+  newsletter?: DisableableFeature;
   theme?: ConsoleSettingsTheme;
   emulateV4Engine?: ConsoleSettingsV4EmulationEngine;
-  alertEngine?: ConsoleSettingsAlertEngine;
-  licenseExpirationNotification?: ConsoleSettingsLicenseExpirationNotification;
-  trialInstance?: ConsoleSettingsTrialInstance;
-  federation?: ConsoleSettingsFederation;
-  cloudHosted?: ConsoleSettingsCloudHosted;
+  alertEngine?: DisableableFeature;
+  licenseExpirationNotification?: DisableableFeature;
+  trialInstance?: DisableableFeature;
+  federation?: DisableableFeature;
+  cloudHosted?: DisableableFeature;
   userGroup?: ConsoleSettingsUserGroup;
+  elGen?: DisableableFeature;
+  kafkaConsole?: DisableableFeature;
 }
 
-export interface ConsoleSettingsEmail {
+export interface ConsoleSettingsEmail extends DisableableFeature {
   enabled?: boolean;
   host?: string;
   port?: number;
@@ -54,10 +56,6 @@ export interface ConsoleSettingsEmail {
 
 export type ConsoleSettingsMetadata = Record<string, string[]>;
 
-export interface ConsoleSettingsAlert {
-  enabled?: boolean;
-}
-
 export interface ConsoleSettingsAuthentication {
   google?: {
     clientId?: string;
@@ -68,15 +66,9 @@ export interface ConsoleSettingsAuthentication {
   oauth2?: {
     clientId?: string;
   };
-  localLogin?: {
-    enabled?: boolean;
-  };
-  externalAuth?: {
-    enabled?: boolean;
-  };
-  externalAuthAccountDeletion?: {
-    enabled?: boolean;
-  };
+  localLogin?: DisableableFeature;
+  externalAuth?: DisableableFeature;
+  externalAuthAccountDeletion?: DisableableFeature;
 }
 
 export interface ConsoleSettingsCors {
@@ -87,8 +79,7 @@ export interface ConsoleSettingsCors {
   maxAge?: number;
 }
 
-export interface ConsoleSettingsReCaptcha {
-  enabled?: boolean;
+export interface ConsoleSettingsReCaptcha extends DisableableFeature {
   siteKey?: string;
 }
 
@@ -97,8 +88,7 @@ export interface ConsoleSettingsScheduler {
   notifications?: number;
 }
 
-export interface ConsoleSettingsAnalyticsPendo {
-  enabled?: boolean;
+export interface ConsoleSettingsAnalyticsPendo extends DisableableFeature {
   apiKey?: string;
   accountType?: string;
   accountHrid?: string;
@@ -107,11 +97,8 @@ export interface ConsoleSettingsAnalyticsPendo {
 
 export interface ConsoleSettingsLogging {
   maxDurationMillis?: number;
-  audit?: {
-    enabled?: boolean;
-    trail?: {
-      enabled: boolean;
-    };
+  audit?: DisableableFeature & {
+    trail?: DisableableFeature;
   };
   user?: {
     displayed?: boolean;
@@ -129,33 +116,25 @@ export interface ConsoleSettingsLogging {
       default: string;
       limit: string;
     };
+    windowedCount?: {
+      default: string;
+      limit: string;
+    };
   };
 }
 
-export interface ConsoleSettingsMaintenance {
+interface DisableableFeature {
   enabled?: boolean;
 }
 
 export interface ConsoleSettingsManagement {
-  support?: {
-    enabled?: boolean;
-  };
+  support?: DisableableFeature;
   title?: string;
   url?: string;
   installationType?: 'standalone' | 'multi-tenant';
-  userCreation?: {
-    enabled?: boolean;
-  };
-  automaticValidation?: {
-    enabled?: boolean;
-  };
-  systemRoleEdition?: {
-    enabled?: boolean;
-  };
-}
-
-export interface ConsoleSettingsNewsletter {
-  enabled?: boolean;
+  userCreation?: DisableableFeature;
+  automaticValidation?: DisableableFeature;
+  systemRoleEdition?: DisableableFeature;
 }
 
 export interface ConsoleSettingsTheme {
@@ -169,26 +148,6 @@ export interface ConsoleSettingsV4EmulationEngine {
   defaultValue?: string;
 }
 
-export interface ConsoleSettingsAlertEngine {
-  enabled?: boolean;
-}
-
-export interface ConsoleSettingsLicenseExpirationNotification {
-  enabled?: boolean;
-}
-
-export interface ConsoleSettingsTrialInstance {
-  enabled?: boolean;
-}
-
-export interface ConsoleSettingsFederation {
-  enabled?: boolean;
-}
-
-export interface ConsoleSettingsCloudHosted {
-  enabled?: boolean;
-}
-
 interface ConsoleSettingsUserGroup {
-  required: { enabled: boolean };
+  required: DisableableFeature;
 }

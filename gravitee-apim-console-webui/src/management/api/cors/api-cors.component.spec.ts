@@ -50,13 +50,14 @@ describe('ApiCorsComponent', () => {
     { id: 'sse', supportedApiType: 'MESSAGE', name: 'SSE', availableFeatures: ['CORS'] },
     { id: 'websocket', supportedApiType: 'MESSAGE', name: 'Websocket', availableFeatures: [] },
   ];
+  let permissions: string[];
 
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [NoopAnimationsModule, GioTestingModule, ApiCorsModule, MatIconTestingModule],
       providers: [
         { provide: ActivatedRoute, useValue: { snapshot: { params: { apiId: API_ID } } } },
-        { provide: GioTestingPermissionProvider, useValue: ['api-definition-u'] },
+        { provide: GioTestingPermissionProvider, useFactory: () => permissions },
       ],
     }).overrideProvider(InteractivityChecker, {
       useValue: {
@@ -79,6 +80,9 @@ describe('ApiCorsComponent', () => {
   });
 
   describe('API V2', () => {
+    beforeAll(() => {
+      permissions = ['api-definition-u'];
+    });
     it('should enable and set CORS config', async () => {
       const api = fakeApiV2({
         id: API_ID,
@@ -262,6 +266,9 @@ describe('ApiCorsComponent', () => {
   });
 
   describe('API V4', () => {
+    beforeAll(() => {
+      permissions = ['api-definition-u', 'api-gateway_definition-u'];
+    });
     it('should enable and set CORS config', async () => {
       const api = fakeApiV4({
         id: API_ID,
@@ -492,13 +499,40 @@ describe('ApiCorsComponent', () => {
     });
   });
 
+  describe('API V4 limited access', () => {
+    beforeAll(() => {
+      permissions = ['api-definition-u'];
+    });
+
+    it('should disable CORS configuration fields due to limited permissions', async () => {
+      const api = fakeApiV4({
+        id: API_ID,
+        type: 'PROXY',
+        listeners: [{ type: 'HTTP', entrypoints: [{ type: 'http-get' }], paths: [{ path: '/path' }] }],
+      });
+
+      expectApiGetRequest(api);
+      expectEntrypointsGetRequest(ENTRYPOINTS_LIST);
+
+      const enabledSlideToggle = await loader.getHarness(MatSlideToggleHarness.with({ selector: '[formControlName="enabled"]' }));
+      // Expect toggle disabled because user lacks gateway definition update permission
+      expect(await enabledSlideToggle.isDisabled()).toBe(true);
+
+      const allowOriginInput = await loader.getHarness(GioFormTagsInputHarness.with({ selector: '[formControlName="allowOrigin"]' }));
+      expect(await allowOriginInput.isDisabled()).toBe(true);
+
+      const allowMethodsInput = await loader.getHarness(GioFormTagsInputHarness.with({ selector: '[formControlName="allowMethods"]' }));
+      expect(await allowMethodsInput.isDisabled()).toBe(true);
+    });
+  });
+
   function expectApiGetRequest(api: ApiV2 | ApiV4) {
     httpTestingController.expectOne({ url: `${CONSTANTS_TESTING.env.v2BaseURL}/apis/${api.id}`, method: 'GET' }).flush(api);
     fixture.detectChanges();
   }
 
   function expectEntrypointsGetRequest(connectors: Partial<ConnectorPlugin>[]) {
-    const fullConnectors = connectors.map((partial) => fakeConnectorPlugin(partial));
+    const fullConnectors = connectors.map(partial => fakeConnectorPlugin(partial));
     httpTestingController.expectOne({ url: `${CONSTANTS_TESTING.org.v2BaseURL}/plugins/entrypoints` }).flush(fullConnectors);
   }
 });

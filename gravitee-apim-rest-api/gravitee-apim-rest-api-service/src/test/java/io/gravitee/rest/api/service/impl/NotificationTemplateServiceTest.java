@@ -15,12 +15,15 @@
  */
 package io.gravitee.rest.api.service.impl;
 
+import static io.gravitee.repository.management.model.NotificationTemplate.AuditEvent.NOTIFICATION_TEMPLATE_CREATED;
+import static io.gravitee.repository.management.model.NotificationTemplate.AuditEvent.NOTIFICATION_TEMPLATE_UPDATED;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -48,10 +51,14 @@ import io.gravitee.rest.api.service.exceptions.TemplateProcessingException;
 import io.gravitee.rest.api.service.notification.HookScope;
 import io.gravitee.rest.api.service.notification.NotificationTemplateService;
 import io.gravitee.rest.api.service.v4.mapper.NotificationTemplateMapper;
+import java.io.StringReader;
 import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.ToString;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -184,8 +191,7 @@ public class NotificationTemplateServiceTest {
                 NOTIFICATION_TEMPLATE_REFERENCE_ID,
                 NOTIFICATION_TEMPLATE_REFERENCE_TYPE
             )
-        )
-            .thenReturn(Sets.newSet(temp1, temp2));
+        ).thenReturn(Sets.newSet(temp1, temp2));
 
         final Set<NotificationTemplateEntity> all = notificationTemplateService.findAll(GraviteeContext.getCurrentOrganization());
         assertNotNull(all);
@@ -203,8 +209,7 @@ public class NotificationTemplateServiceTest {
                 NOTIFICATION_TEMPLATE_REFERENCE_ID,
                 NOTIFICATION_TEMPLATE_REFERENCE_TYPE
             )
-        )
-            .thenReturn(Sets.newSet(temp1));
+        ).thenReturn(Sets.newSet(temp1));
 
         final Set<NotificationTemplateEntity> byType = notificationTemplateService.findByType(
             GraviteeContext.getCurrentOrganization(),
@@ -227,16 +232,10 @@ public class NotificationTemplateServiceTest {
 
         notificationTemplateService.create(GraviteeContext.getExecutionContext(), newNotificationTemplateEntity);
         verify(notificationTemplateRepository, times(1)).create(any());
-        verify(auditService, times(1))
-            .createOrganizationAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(GraviteeContext.getCurrentOrganization()),
-                any(),
-                eq(NotificationTemplate.AuditEvent.NOTIFICATION_TEMPLATE_CREATED),
-                any(),
-                isNull(),
-                any()
-            );
+        verify(auditService, times(1)).createOrganizationAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getEvent().equals(NOTIFICATION_TEMPLATE_CREATED) && auditLogData.getOldValue() == null)
+        );
     }
 
     @Test
@@ -260,16 +259,15 @@ public class NotificationTemplateServiceTest {
         notificationTemplateService.update(GraviteeContext.getExecutionContext(), updatingNotificationTemplateEntity);
 
         verify(notificationTemplateRepository, times(1)).update(any());
-        verify(auditService, times(1))
-            .createOrganizationAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(GraviteeContext.getCurrentOrganization()),
-                any(),
-                eq(NotificationTemplate.AuditEvent.NOTIFICATION_TEMPLATE_UPDATED),
-                any(),
-                eq(toUpdate),
-                eq(notificationTemplate)
-            );
+        verify(auditService, times(1)).createOrganizationAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getEvent().equals(NOTIFICATION_TEMPLATE_UPDATED) &&
+                    auditLogData.getOldValue().equals(toUpdate) &&
+                    auditLogData.getNewValue().equals(notificationTemplate)
+            )
+        );
 
         ArgumentCaptor<Command> captor = ArgumentCaptor.forClass(Command.class);
         verify(commandRepository, times(1)).create(captor.capture());
@@ -298,16 +296,15 @@ public class NotificationTemplateServiceTest {
 
         notificationTemplateService.update(GraviteeContext.getExecutionContext(), updatingNotificationTemplateEntity);
         verify(notificationTemplateRepository, never()).update(any());
-        verify(auditService, never())
-            .createOrganizationAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(GraviteeContext.getCurrentOrganization()),
-                any(),
-                eq(NotificationTemplate.AuditEvent.NOTIFICATION_TEMPLATE_UPDATED),
-                any(),
-                eq(toUpdate),
-                eq(notificationTemplate)
-            );
+        verify(auditService, never()).createOrganizationAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                auditLogData ->
+                    auditLogData.getEvent().equals(NOTIFICATION_TEMPLATE_UPDATED) &&
+                    auditLogData.getOldValue().equals(toUpdate) &&
+                    auditLogData.getNewValue().equals(notificationTemplate)
+            )
+        );
     }
 
     @Test
@@ -366,5 +363,57 @@ public class NotificationTemplateServiceTest {
             true
         );
         assertThat(result).isEqualTo("");
+    }
+
+    @Getter
+    @Builder
+    @ToString
+    public static class TestData {
+
+        private String id;
+    }
+
+    @Test
+    public void should_not_access_get_class() {
+        var api = TestData.builder().id("test").build();
+        assertThatExceptionOfType(TemplateProcessingException.class).isThrownBy(() ->
+            notificationTemplateService.resolveInlineTemplateWithParam(
+                ORGANIZATION_ID,
+                NOTIFICATION_TEMPLATE_NAME,
+                new StringReader("${api.class}"),
+                Map.of("api", api),
+                false
+            )
+        );
+    }
+
+    @Test
+    public void should_not_access_protection_domain() {
+        var api = TestData.builder().id("test").build();
+        assertThatExceptionOfType(TemplateProcessingException.class).isThrownBy(() ->
+            notificationTemplateService.resolveInlineTemplateWithParam(
+                ORGANIZATION_ID,
+                NOTIFICATION_TEMPLATE_NAME,
+                new StringReader("${api.class.protectionDomain}"),
+                Map.of("api", api),
+                false
+            )
+        );
+    }
+
+    @Test
+    public void should_not_access_restricted_methods_combination() {
+        var api = TestData.builder().id("test").build();
+        assertThatExceptionOfType(TemplateProcessingException.class).isThrownBy(() ->
+            notificationTemplateService.resolveInlineTemplateWithParam(
+                ORGANIZATION_ID,
+                NOTIFICATION_TEMPLATE_NAME,
+                new StringReader(
+                    "${api.getClass().getProtectionDomain().getCodeSource().getLocation().toURI().resolve('/etc/passwd').toURL().openStream()}"
+                ),
+                Map.of("api", api),
+                false
+            )
+        );
     }
 }

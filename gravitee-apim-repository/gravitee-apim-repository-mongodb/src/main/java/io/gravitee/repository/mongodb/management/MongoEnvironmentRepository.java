@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -36,7 +36,7 @@ import org.springframework.util.CollectionUtils;
  * @author GraviteeSource Team
  */
 @Component
-@Slf4j
+@CustomLog
 public class MongoEnvironmentRepository implements EnvironmentRepository {
 
     @Autowired
@@ -109,13 +109,19 @@ public class MongoEnvironmentRepository implements EnvironmentRepository {
     @Override
     public Set<Environment> findAll() throws TechnicalException {
         final List<EnvironmentMongo> environments = internalEnvironmentRepo.findAll();
-        return environments.stream().map(environmentMongo -> mapper.map(environmentMongo)).collect(Collectors.toSet());
+        return environments
+            .stream()
+            .map(environmentMongo -> mapper.map(environmentMongo))
+            .collect(Collectors.toSet());
     }
 
     @Override
     public Set<Environment> findByOrganization(String organizationId) throws TechnicalException {
         final Set<EnvironmentMongo> environments = internalEnvironmentRepo.findByOrganizationId(organizationId);
-        return environments.stream().map(environmentMongo -> mapper.map(environmentMongo)).collect(Collectors.toSet());
+        return environments
+            .stream()
+            .map(environmentMongo -> mapper.map(environmentMongo))
+            .collect(Collectors.toSet());
     }
 
     @Override
@@ -130,7 +136,10 @@ public class MongoEnvironmentRepository implements EnvironmentRepository {
             environments = internalEnvironmentRepo.findByHrids(hrids);
         }
 
-        return environments.stream().map(environmentMongo -> mapper.map(environmentMongo)).collect(Collectors.toSet());
+        return environments
+            .stream()
+            .map(environmentMongo -> mapper.map(environmentMongo))
+            .collect(Collectors.toSet());
     }
 
     @Override

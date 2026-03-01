@@ -16,7 +16,11 @@
 package io.gravitee.repository.elasticsearch.v4.log.adapter.message;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.gravitee.elasticsearch.model.SearchHits;
 import io.gravitee.elasticsearch.model.SearchResponse;
 import io.gravitee.repository.elasticsearch.AbstractAdapterTest;
@@ -54,9 +58,25 @@ public class SearchMessageLogResponseAdapterTest extends AbstractAdapterTest {
         assertThat(result).isEqualTo(expected);
     }
 
+    @Test
+    public void adaptMessage_when_messageJson_is_null() throws JsonProcessingException {
+        ObjectMapper mapper = new ObjectMapper();
+        String jsonString = """
+            {
+                "connector-id": "c-id",
+                "@timestamp": "1759469723"
+            }
+            """;
+        JsonNode json = mapper.readTree(jsonString);
+        AggregatedMessageLog.Message message = SearchMessageLogResponseAdapter.adaptMessage(json);
+        assertAll(
+            () -> assertThat(message.getConnectorId()).isEqualTo("c-id"),
+            () -> assertThat(message.getTimestamp()).isEqualTo("1759469723")
+        );
+    }
+
     private static Stream<Arguments> generate() {
-        AggregatedMessageLog.AggregatedMessageLogBuilder messageLog = AggregatedMessageLog
-            .builder()
+        AggregatedMessageLog.AggregatedMessageLogBuilder messageLog = AggregatedMessageLog.builder()
             .apiId("api-id")
             .clientIdentifier("client-identifier")
             .requestId("request-id")
@@ -64,8 +84,7 @@ public class SearchMessageLogResponseAdapterTest extends AbstractAdapterTest {
             .operation("subscribe")
             .timestamp("2023-11-07T15:18:56.868+01:00");
 
-        AggregatedMessageLog.Message.MessageBuilder message = AggregatedMessageLog.Message
-            .builder()
+        AggregatedMessageLog.Message.MessageBuilder message = AggregatedMessageLog.Message.builder()
             .id("message-id")
             .timestamp("2023-11-07T15:18:56.868+01:00")
             .connectorId("connector-id")

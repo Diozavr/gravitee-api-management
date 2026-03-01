@@ -91,6 +91,26 @@
                   />
                 </gio-form-slide-toggle>
               }
+
+              @if (canDisplayAllowInApiProduct) {
+                <gio-form-slide-toggle class="details-card__header__info-inputs__second-row__allow-in-api-products-field">
+                  <span
+                    matTooltip="API is currently used in API Products"
+                    [matTooltipDisabled]="
+                      !isApiUsedInProducts() ||
+                      !apiDetailsForm.get('allowedInApiProducts')?.disabled ||
+                      !apiDetailsForm.get('allowedInApiProducts')?.value
+                    "
+                    >Allow in API Products</span
+                  >
+                  <mat-slide-toggle
+                    gioFormSlideToggle
+                    formControlName="allowedInApiProducts"
+                    aria-label="Allow in API Products"
+                    name="allowedInApiProducts"
+                  />
+                </gio-form-slide-toggle>
+              }
             </div>
           </div>
           <div class="details-card__header__right-coll">
@@ -141,6 +161,31 @@
                   </dd>
                 }
 
+                @if (apiProducts().length > 0) {
+                  <dt>Included in</dt>
+                  <dd>
+                    @let displayedProducts = apiProducts().slice(0, displayedApiProductsCount);
+                    @let remainingCount = apiProducts().length - displayedApiProductsCount;
+                    @for (product of displayedProducts; track product.id) {
+                      {{ product.name }}
+                      @if (!$last) {
+                        ,
+                      }
+                    }
+                    @if (remainingCount > 0) {
+                      ,
+                      <button
+                        type="button"
+                        (click)="openIncludedInDialog()"
+                        class="included-in-more-link"
+                        data-testid="api_info_included_in_more"
+                      >
+                        +{{ remainingCount }} more
+                      </button>
+                    }
+                  </dd>
+                }
+
                 <dt>Last connection</dt>
                 <dd>{{ apiLastDeploymentAt | date: 'medium' }}</dd>
               </dl>
@@ -186,13 +231,25 @@
           *gioPermission="{ anyOf: ['api-definition-u'] }"
           mat-button
           class="details-card__actions_btn"
-          [disabled]="cannotPromote || apiType === 'NATIVE'"
+          [disabled]="cannotPromote"
           data-testid="api_info_promote"
           (click)="promoteApi()"
         >
           <mat-icon svgIcon="gio:language" />
           Promote
         </button>
+        @if (api.definitionVersion === 'V2') {
+          <button
+            *gioPermission="{ anyOf: ['api-definition-u'] }"
+            mat-raised-button
+            color="primary"
+            class="details-card__actions__btn_align_right"
+            data-testid="api_info_migrate_menu"
+            (click)="migrateToV4()"
+          >
+            Migrate to v4
+          </button>
+        }
       </mat-card-actions>
     }
   </mat-card>

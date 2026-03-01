@@ -13,9 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@use '../../scss/layout' as layout;
+@use '../../scss/theme' as app-theme;
+
 :host {
   display: flex;
-  flex-flow: row;
+  overflow: hidden;
+  box-sizing: border-box;
   align-items: center;
   justify-content: space-between;
+  padding: 0 layout.$container-padding-horizontal;
+  border-top: 1px solid app-theme.$footer-border-color;
+}
+
+.footer {
+  &__copyright {
+    text-align: end;
+  }
 }

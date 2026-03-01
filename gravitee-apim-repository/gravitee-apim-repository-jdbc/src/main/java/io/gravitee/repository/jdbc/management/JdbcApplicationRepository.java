@@ -18,8 +18,9 @@ package io.gravitee.repository.jdbc.management;
 import static java.lang.String.format;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
-import static java.util.function.Function.*;
-import static java.util.stream.Collectors.*;
+import static java.util.function.Function.identity;
+import static java.util.stream.Collectors.toCollection;
+import static java.util.stream.Collectors.toMap;
 import static org.springframework.util.CollectionUtils.isEmpty;
 import static org.springframework.util.StringUtils.hasText;
 
@@ -40,9 +41,17 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
-import java.util.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.RowMapper;
@@ -53,10 +62,9 @@ import org.springframework.util.StringUtils;
  *
  * @author njt
  */
+@CustomLog
 @Repository
 public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Application, String> implements ApplicationRepository {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcApplicationRepository.class);
 
     private static final String TYPE_FIELD = "type";
     private static final String STATUS_FIELD = "status";
@@ -81,9 +89,9 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
     @Override
     protected JdbcObjectMapper<Application> buildOrm() {
-        return JdbcObjectMapper
-            .builder(Application.class, this.tableName, "id")
+        return JdbcObjectMapper.builder(Application.class, this.tableName, "id")
             .addColumn("id", Types.NVARCHAR, String.class)
+            .addColumn("hrid", Types.NVARCHAR, String.class)
             .addColumn("environment_id", Types.NVARCHAR, String.class)
             .addColumn("name", Types.NVARCHAR, String.class)
             .addColumn("description", Types.NVARCHAR, String.class)
@@ -101,7 +109,7 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
     }
 
     private static final String PROJECTION_WITHOUT_PICTURES =
-        "a.id, a.environment_id, a.name, a.description, a.type, a.created_at, a.updated_at, a.status, a.disable_membership_notifications, a.api_key_mode, a.origin";
+        "a.id, a.hrid, a.environment_id, a.name, a.description, a.type, a.created_at, a.updated_at, a.status, a.disable_membership_notifications, a.api_key_mode, a.origin";
 
     private static final JdbcHelper.ChildAdder<Application> CHILD_ADDER = (Application parent, ResultSet rs) -> {
         Map<String, String> metadata = parent.getMetadata();
@@ -134,10 +142,10 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
         List<List<String>> rows = jdbcTemplate.query(
             "select application_id, group_id from " +
-            APPLICATION_GROUPS +
-            " where application_id in (" +
-            getOrm().buildInClause(applicationIds) +
-            ")",
+                APPLICATION_GROUPS +
+                " where application_id in (" +
+                getOrm().buildInClause(applicationIds) +
+                ")",
             (PreparedStatement ps) -> {
                 getOrm().setArguments(ps, applicationIds, 1);
             },
@@ -204,21 +212,21 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
     @Override
     public Application create(Application item) throws TechnicalException {
-        LOGGER.debug("JdbcApplicationRepository.create({})", item);
+        log.debug("JdbcApplicationRepository.create({})", item);
         try {
             jdbcTemplate.update(getOrm().buildInsertPreparedStatementCreator(item));
             storeGroups(item, false);
             storeMetadata(item, false);
             return findById(item.getId()).orElse(null);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to create application", ex);
+            log.error("Failed to create application", ex);
             throw new TechnicalException("Failed to create application", ex);
         }
     }
 
     @Override
     public Application update(final Application application) throws TechnicalException {
-        LOGGER.debug("JdbcApplicationRepository.update({})", application);
+        log.debug("JdbcApplicationRepository.update({})", application);
         if (application == null) {
             throw new IllegalStateException("Failed to update null");
         }
@@ -226,12 +234,13 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
             jdbcTemplate.update(getOrm().buildUpdatePreparedStatementCreator(application, application.getId()));
             storeGroups(application, true);
             storeMetadata(application, true);
-            return findById(application.getId())
-                .orElseThrow(() -> new IllegalStateException(format("No application found with id [%s]", application.getId())));
+            return findById(application.getId()).orElseThrow(() ->
+                new IllegalStateException(format("No application found with id [%s]", application.getId()))
+            );
         } catch (final IllegalStateException ex) {
             throw ex;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to update application", ex);
+            log.error("Failed to update application", ex);
             throw new TechnicalException("Failed to update application", ex);
         }
     }
@@ -251,24 +260,24 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
     @Override
     public Optional<Application> findById(String id) throws TechnicalException {
-        LOGGER.debug("JdbcApplicationRepository.findById({})", id);
+        log.debug("JdbcApplicationRepository.findById({})", id);
         try {
             JdbcHelper.CollatingRowMapper<Application> rowMapper = new JdbcHelper.CollatingRowMapper<>(mapper, CHILD_ADDER, "id");
             jdbcTemplate.query(
                 "select a.*, am.k as am_k, am.v as am_v from " +
-                this.tableName +
-                " a left join " +
-                APPLICATION_METADATA +
-                " am on a.id = am.application_id where a.id = ?",
+                    this.tableName +
+                    " a left join " +
+                    APPLICATION_METADATA +
+                    " am on a.id = am.application_id where a.id = ?",
                 rowMapper,
                 id
             );
             Optional<Application> result = rowMapper.getRows().stream().findFirst();
             result.ifPresent(this::addGroups);
-            LOGGER.debug("JdbcApplicationRepository.findById({}) = {}", id, result);
+            log.debug("JdbcApplicationRepository.findById({}) = {}", id, result);
             return result;
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find application by id:", ex);
+            log.error("Failed to find application by id:", ex);
             throw new TechnicalException("Failed to find application by id", ex);
         }
     }
@@ -280,7 +289,7 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
     @Override
     public Set<Application> findByIds(Collection<String> ids, Sortable sortable) throws TechnicalException {
-        LOGGER.debug("JdbcApplicationRepository.findByIds({}, {})", ids, sortable);
+        log.debug("JdbcApplicationRepository.findByIds({}, {})", ids, sortable);
         try {
             if (isEmpty(ids)) {
                 return emptySet();
@@ -310,7 +319,7 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
             return new LinkedHashSet<>(applications);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find applications by ids:", ex);
+            log.error("Failed to find applications by ids:", ex);
             throw new TechnicalException("Failed to find  applications by ids", ex);
         }
     }
@@ -322,19 +331,19 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
     @Override
     public Set<Application> findAll(ApplicationStatus... ass) throws TechnicalException {
-        LOGGER.debug("JdbcApplicationRepository.findAll({})", (Object[]) ass);
+        log.debug("JdbcApplicationRepository.findAll({})", (Object[]) ass);
 
         try {
             List<ApplicationStatus> statuses = Arrays.asList(ass);
 
             StringBuilder query = new StringBuilder(
                 "select " +
-                PROJECTION_WITHOUT_PICTURES +
-                ", am.k as am_k, am.v as am_v from " +
-                this.tableName +
-                " a left join " +
-                APPLICATION_METADATA +
-                " am on a.id = am.application_id"
+                    PROJECTION_WITHOUT_PICTURES +
+                    ", am.k as am_k, am.v as am_v from " +
+                    this.tableName +
+                    " a left join " +
+                    APPLICATION_METADATA +
+                    " am on a.id = am.application_id"
             );
             boolean first = true;
             getOrm().buildInCondition(first, query, STATUS_FIELD, statuses);
@@ -346,17 +355,17 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
             addGroups(applications);
 
-            LOGGER.debug("Found {} applications: {}", applications.size(), applications);
+            log.debug("Found {} applications: {}", applications.size(), applications);
             return new HashSet<>(applications);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find applications:", ex);
+            log.error("Failed to find applications:", ex);
             throw new TechnicalException("Failed to find applications", ex);
         }
     }
 
     @Override
     public Set<Application> findByGroups(List<String> groupIds, ApplicationStatus... ass) throws TechnicalException {
-        LOGGER.debug("JdbcApplicationRepository.findByGroups({}, {})", groupIds, ass);
+        log.debug("JdbcApplicationRepository.findByGroups({}, {})", groupIds, ass);
         if (isEmpty(groupIds)) {
             return emptySet();
         }
@@ -364,14 +373,14 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
             final List<ApplicationStatus> statuses = Arrays.asList(ass);
             final StringBuilder query = new StringBuilder(
                 "select " +
-                PROJECTION_WITHOUT_PICTURES +
-                ", am.k as am_k, am.v as am_v from " +
-                this.tableName +
-                " a left join " +
-                APPLICATION_METADATA +
-                " am on a.id = am.application_id join " +
-                APPLICATION_GROUPS +
-                " ag on ag.application_id = a.id "
+                    PROJECTION_WITHOUT_PICTURES +
+                    ", am.k as am_k, am.v as am_v from " +
+                    this.tableName +
+                    " a left join " +
+                    APPLICATION_METADATA +
+                    " am on a.id = am.application_id join " +
+                    APPLICATION_GROUPS +
+                    " ag on ag.application_id = a.id "
             );
             boolean first = true;
             first = getOrm().buildInCondition(first, query, "group_id", groupIds);
@@ -393,24 +402,24 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
             return new HashSet<>(applications);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find applications by groups", ex);
+            log.error("Failed to find applications by groups", ex);
             throw new TechnicalException("Failed to find applications by groups", ex);
         }
     }
 
     @Override
     public Set<Application> findByNameAndStatuses(String partialName, ApplicationStatus... ass) throws TechnicalException {
-        LOGGER.debug("JdbcApplicationRepository.findByName({}, {})", partialName, ass);
+        log.debug("JdbcApplicationRepository.findByName({}, {})", partialName, ass);
         try {
             final List<ApplicationStatus> statuses = Arrays.asList(ass);
             StringBuilder query = new StringBuilder(
                 "select " +
-                PROJECTION_WITHOUT_PICTURES +
-                ", am.k as am_k, am.v as am_v from " +
-                this.tableName +
-                " a left join " +
-                APPLICATION_METADATA +
-                " am on a.id = am.application_id where lower(name) like ?"
+                    PROJECTION_WITHOUT_PICTURES +
+                    ", am.k as am_k, am.v as am_v from " +
+                    this.tableName +
+                    " a left join " +
+                    APPLICATION_METADATA +
+                    " am on a.id = am.application_id where lower(name) like ?"
             );
             getOrm().buildInCondition(false, query, "status", statuses);
 
@@ -430,7 +439,7 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
             return new HashSet<>(applications);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find applications by name", ex);
+            log.error("Failed to find applications by name", ex);
             throw new TechnicalException("Failed to find applications by name", ex);
         }
     }
@@ -447,12 +456,12 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
     String searchQuery(ApplicationCriteria applicationCriteria, Sortable sortable) {
         final StringBuilder sbQuery = new StringBuilder(
             "select " +
-            PROJECTION_WITHOUT_PICTURES +
-            ", am.k as am_k, am.v as am_v from " +
-            this.tableName +
-            " a left join " +
-            APPLICATION_METADATA +
-            " am on a.id = am.application_id "
+                PROJECTION_WITHOUT_PICTURES +
+                ", am.k as am_k, am.v as am_v from " +
+                this.tableName +
+                " a left join " +
+                APPLICATION_METADATA +
+                " am on a.id = am.application_id "
         );
 
         if (applicationCriteria != null) {
@@ -501,7 +510,7 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
     }
 
     private List<Application> search(ApplicationCriteria applicationCriteria, Sortable sortable) {
-        LOGGER.debug("JdbcApplicationRepository.search({})", applicationCriteria);
+        log.debug("JdbcApplicationRepository.search({})", applicationCriteria);
         final JdbcHelper.CollatingRowMapper<Application> rowMapper = new JdbcHelper.CollatingRowMapper<>(
             getOrm().getRowMapper(),
             CHILD_ADDER,
@@ -549,19 +558,19 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
     @Override
     public Set<Application> findAllByEnvironment(String environmentId, ApplicationStatus... ass) throws TechnicalException {
-        LOGGER.debug("JdbcApplicationRepository.findAllByEnvironment({}, {})", environmentId, (Object[]) ass);
+        log.debug("JdbcApplicationRepository.findAllByEnvironment({}, {})", environmentId, (Object[]) ass);
 
         try {
             List<ApplicationStatus> statuses = Arrays.asList(ass);
 
             StringBuilder query = new StringBuilder(
                 "select " +
-                PROJECTION_WITHOUT_PICTURES +
-                ", am.k as am_k, am.v as am_v from " +
-                this.tableName +
-                " a left join " +
-                APPLICATION_METADATA +
-                " am on a.id = am.application_id where a.environment_id = ?"
+                    PROJECTION_WITHOUT_PICTURES +
+                    ", am.k as am_k, am.v as am_v from " +
+                    this.tableName +
+                    " a left join " +
+                    APPLICATION_METADATA +
+                    " am on a.id = am.application_id where a.environment_id = ?"
             );
             boolean first = false;
             getOrm().buildInCondition(first, query, STATUS_FIELD, statuses);
@@ -579,17 +588,17 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
 
             addGroups(applications);
 
-            LOGGER.debug("Found {} applications: {}", applications.size(), applications);
+            log.debug("Found {} applications: {}", applications.size(), applications);
             return new HashSet<>(applications);
         } catch (final Exception ex) {
-            LOGGER.error("Failed to find applications by environment:", ex);
+            log.error("Failed to find applications by environment:", ex);
             throw new TechnicalException("Failed to find applications by environment", ex);
         }
     }
 
     @Override
     public List<String> deleteByEnvironmentId(String environmentId) throws TechnicalException {
-        LOGGER.debug("JdbcApplicationRepository.deleteByEnvironmentId({})", environmentId);
+        log.debug("JdbcApplicationRepository.deleteByEnvironmentId({})", environmentId);
         try {
             final var applicationIds = jdbcTemplate.queryForList(
                 "select id from " + tableName + " where environment_id = ?",
@@ -605,12 +614,26 @@ public class JdbcApplicationRepository extends JdbcAbstractCrudRepository<Applic
                 jdbcTemplate.update("delete from " + tableName + " where environment_id = ?", environmentId);
             }
 
-            LOGGER.debug("JdbcApplicationRepository.deleteByEnvironmentId({}) - Done", environmentId);
+            log.debug("JdbcApplicationRepository.deleteByEnvironmentId({}) - Done", environmentId);
             return applicationIds;
         } catch (Exception ex) {
-            LOGGER.error("Failed to delete application by environmentId: {}", environmentId, ex);
+            log.error("Failed to delete application by environmentId: {}", environmentId, ex);
             throw new TechnicalException("Failed to delete application by environment", ex);
         }
+    }
+
+    @Override
+    public boolean existsMetadataEntryForEnv(String key, String value, String environmentId) {
+        String sql =
+            "SELECT CASE WHEN EXISTS (SELECT 1 FROM " +
+            APPLICATION_METADATA +
+            " am JOIN " +
+            tableName +
+            " a ON a.id = am.application_id " +
+            "WHERE am.k=? AND am.v=? AND a.environment_id=? AND a.status=?) " +
+            "THEN 1 ELSE 0 " +
+            "END AS metadata_entry_exists";
+        return jdbcTemplate.queryForObject(sql, Boolean.class, key, value, environmentId, ApplicationStatus.ACTIVE.name());
     }
 
     private String toSortDirection(Sortable sortable) {

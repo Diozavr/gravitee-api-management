@@ -23,4 +23,5 @@ public enum FlowSelectorType {
     HTTP,
     CHANNEL,
     CONDITION,
+    MCP,
 }

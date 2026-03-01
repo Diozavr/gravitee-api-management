@@ -15,6 +15,9 @@
  */
 package io.gravitee.gateway.handlers.api.manager.impl;
 
+import static io.gravitee.gateway.reactive.reactor.v4.secrets.ApiV4DefinitionSecretRefsFinder.API_V4_DEFINITION_KIND;
+import static io.gravitee.gateway.reactive.reactor.v4.secrets.NativeApiV4DefinitionSecretRefsFinder.NATIVE_API_V4_DEFINITION_KIND;
+
 import io.gravitee.common.event.EventManager;
 import io.gravitee.common.util.DataEncryptor;
 import io.gravitee.definition.model.DefinitionVersion;
@@ -25,17 +28,20 @@ import io.gravitee.gateway.handlers.api.manager.ActionOnApi;
 import io.gravitee.gateway.handlers.api.manager.ApiManager;
 import io.gravitee.gateway.handlers.api.manager.Deployer;
 import io.gravitee.gateway.handlers.api.manager.deployer.ApiDeployer;
+import io.gravitee.gateway.handlers.api.registry.ApiProductRegistry;
 import io.gravitee.gateway.reactor.ReactableApi;
 import io.gravitee.gateway.reactor.ReactorEvent;
 import io.gravitee.node.api.license.ForbiddenFeatureException;
 import io.gravitee.node.api.license.InvalidLicenseException;
 import io.gravitee.node.api.license.LicenseManager;
+import io.gravitee.secrets.api.discovery.Definition;
 import io.gravitee.secrets.api.discovery.DefinitionMetadata;
 import io.gravitee.secrets.api.event.SecretDiscoveryEvent;
 import io.gravitee.secrets.api.event.SecretDiscoveryEventType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -43,16 +49,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.slf4j.MDC;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
-@RequiredArgsConstructor
+@CustomLog
 public class ApiManagerImpl implements ApiManager {
 
     private static final int PARALLELISM = Runtime.getRuntime().availableProcessors() * 2;
@@ -62,6 +66,7 @@ public class ApiManagerImpl implements ApiManager {
     private final LicenseManager licenseManager;
     private final Map<String, ReactableApi<?>> apis = new ConcurrentHashMap<>();
     private final Map<Class<? extends ReactableApi<?>>, ? extends Deployer<?>> deployers;
+    private final ApiProductRegistry apiProductRegistry;
 
     public ApiManagerImpl(
         final EventManager eventManager,
@@ -69,18 +74,64 @@ public class ApiManagerImpl implements ApiManager {
         LicenseManager licenseManager,
         final DataEncryptor dataEncryptor
     ) {
+        this(eventManager, gatewayConfiguration, licenseManager, dataEncryptor, null);
+    }
+
+    public ApiManagerImpl(
+        final EventManager eventManager,
+        final GatewayConfiguration gatewayConfiguration,
+        LicenseManager licenseManager,
+        final DataEncryptor dataEncryptor,
+        final ApiProductRegistry apiProductRegistry
+    ) {
         this.eventManager = eventManager;
         this.gatewayConfiguration = gatewayConfiguration;
         this.licenseManager = licenseManager;
-        deployers =
-            Map.of(
-                Api.class,
-                new ApiDeployer(gatewayConfiguration, dataEncryptor),
-                io.gravitee.gateway.reactive.handlers.api.v4.Api.class,
-                new io.gravitee.gateway.reactive.handlers.api.v4.deployer.ApiDeployer(gatewayConfiguration, dataEncryptor),
-                io.gravitee.gateway.reactive.handlers.api.v4.NativeApi.class,
-                new io.gravitee.gateway.reactive.handlers.api.v4.deployer.NativeApiDeployer(gatewayConfiguration, dataEncryptor)
-            );
+        this.apiProductRegistry = apiProductRegistry;
+        deployers = Map.of(
+            Api.class,
+            new ApiDeployer(gatewayConfiguration, dataEncryptor),
+            io.gravitee.gateway.reactive.handlers.api.v4.Api.class,
+            new io.gravitee.gateway.reactive.handlers.api.v4.deployer.ApiDeployer(gatewayConfiguration, dataEncryptor),
+            io.gravitee.gateway.reactive.handlers.api.v4.NativeApi.class,
+            new io.gravitee.gateway.reactive.handlers.api.v4.deployer.NativeApiDeployer(gatewayConfiguration, dataEncryptor)
+        );
+
+        // Listen to secret discovery events to update APIs when secrets change
+        eventManager.subscribeForEvents(
+            event -> {
+                if (event.content() instanceof SecretDiscoveryEvent secretDiscoveryEvent) {
+                    if (secretDiscoveryEvent.definition() instanceof Definition definition) {
+                        if (!List.of(API_V4_DEFINITION_KIND, NATIVE_API_V4_DEFINITION_KIND).contains(definition.kind())) {
+                            // We only handle API V4 and Native API definitions
+                            log.debug(
+                                "Received SecretDiscoveryEvent for definition {} with kind {}, but we only handle API V4 and Native API definitions",
+                                definition.id(),
+                                definition.kind()
+                            );
+                            return;
+                        }
+
+                        ReactableApi<?> api = apis.get(definition.id());
+                        if (api != null) {
+                            MDC.put("api", api.getId());
+
+                            log.info("Secret value changed for API {}, updating it", definition.id());
+                            eventManager.publishEvent(ReactorEvent.UPDATE, api);
+
+                            log.info("{} has been updated", api);
+                            MDC.remove("api");
+                        } else {
+                            log.trace(
+                                "Received SecretDiscoveryEvent for API {}, but it is not found in the API manager. Unable to update it",
+                                definition.id()
+                            );
+                        }
+                    }
+                }
+            },
+            SecretDiscoveryEventType.VALUE_CHANGED
+        );
     }
 
     private boolean register(ReactableApi<?> api, boolean force) {
@@ -97,7 +148,10 @@ public class ApiManagerImpl implements ApiManager {
         try {
             licenseManager.validatePluginFeatures(
                 api.getOrganizationId(),
-                plugins.stream().map(p -> new LicenseManager.Plugin(p.type(), p.id())).collect(Collectors.toSet())
+                plugins
+                    .stream()
+                    .map(p -> new LicenseManager.Plugin(p.type(), p.id()))
+                    .collect(Collectors.toSet())
             );
         } catch (InvalidLicenseException | ForbiddenFeatureException e) {
             log.warn("The API {} could not be deployed because it is not allowed by the current license", api.getName(), e);
@@ -107,7 +161,9 @@ public class ApiManagerImpl implements ApiManager {
         // Keep the check of Sharding Tags for io.gravitee.gateway.services.localregistry.LocalApiDefinitionRegistry
         if (gatewayConfiguration.hasMatchingTags(api.getTags())) {
             boolean apiToDeploy = deployedApi == null || force;
-            boolean apiToUpdate = !apiToDeploy && deployedApi.getDeployedAt().before(api.getDeployedAt());
+            boolean apiToUpdate =
+                !apiToDeploy &&
+                (deployedApi.getDeployedAt().before(api.getDeployedAt()) && !Objects.equals(deployedApi.getRevision(), api.getRevision()));
 
             // if API will be deployed or updated
             if (apiToDeploy || apiToUpdate) {
@@ -147,7 +203,10 @@ public class ApiManagerImpl implements ApiManager {
 
         if (gatewayConfiguration.hasMatchingTags(reactableApi.getTags())) {
             boolean apiToDeploy = deployedApi == null;
-            boolean apiToUpdate = !apiToDeploy && deployedApi.getDeployedAt().before(reactableApi.getDeployedAt());
+            boolean apiToUpdate =
+                !apiToDeploy &&
+                (deployedApi.getDeployedAt().before(reactableApi.getDeployedAt()) &&
+                    !Objects.equals(deployedApi.getRevision(), reactableApi.getRevision()));
 
             // API will be deployed or updated
             if (apiToDeploy || apiToUpdate) {
@@ -209,13 +268,11 @@ public class ApiManagerImpl implements ApiManager {
         if (api.enabled()) {
             Deployer deployer = deployers.get(api.getClass());
             List<String> plans = deployer.getPlans(api);
+            boolean includedInApiProduct = isIncludedInApiProductWithPlans(api);
 
-            // Deploy the API only if there is at least one plan
-            if (!plans.isEmpty()) {
-                log.debug("Deploying {} plan(s) for {}:", plans.size(), api);
-                for (String plan : plans) {
-                    log.debug("\t- {}", plan);
-                }
+            // Deploy the API if it has at least one plan or is exposed via an API Product (no plans required)
+            if (!plans.isEmpty() || includedInApiProduct) {
+                log.debug("Deploying {} (has plans or included in API Product)", api);
                 eventManager.publishEvent(
                     SecretDiscoveryEventType.DISCOVER,
                     new SecretDiscoveryEvent(api.getEnvironmentId(), api.getDefinition(), new DefinitionMetadata(api.getRevision()))
@@ -253,20 +310,33 @@ public class ApiManagerImpl implements ApiManager {
 
         Deployer deployer = deployers.get(api.getClass());
         List<String> plans = deployer.getPlans(api);
+        boolean includedInApiProduct = isIncludedInApiProductWithPlans(api);
 
-        if (api.enabled() && !plans.isEmpty()) {
-            log.debug("Deploying {} plan(s) for {}:", plans.size(), api);
-            for (String plan : plans) {
-                log.debug("\t- {}", plan);
-            }
+        if (api.enabled() && (!plans.isEmpty() || includedInApiProduct)) {
+            log.debug("Updating {} (has plans or included in API Product)", api);
             eventManager.publishEvent(
                 SecretDiscoveryEventType.DISCOVER,
                 new SecretDiscoveryEvent(api.getEnvironmentId(), api.getDefinition(), new DefinitionMetadata(api.getRevision()))
             );
+
+            ReactableApi<?> previousApi = apis.get(api.getId());
+
             apis.put(api.getId(), api);
             eventManager.publishEvent(ReactorEvent.UPDATE, api);
+
+            if (previousApi != null) {
+                // Revoke the previous API revision
+                eventManager.publishEvent(
+                    SecretDiscoveryEventType.REVOKE,
+                    new SecretDiscoveryEvent(
+                        previousApi.getEnvironmentId(),
+                        previousApi.getDefinition(),
+                        new DefinitionMetadata(previousApi.getRevision())
+                    )
+                );
+            }
             log.info("{} has been updated", api);
-        } else if (plans.isEmpty()) {
+        } else if (plans.isEmpty() && !includedInApiProduct) {
             log.warn("There is no published plan associated to this API, undeploy it...");
             undeploy(api.getId());
         } else {
@@ -275,6 +345,17 @@ public class ApiManagerImpl implements ApiManager {
         }
 
         MDC.remove("api");
+    }
+
+    private boolean isIncludedInApiProductWithPlans(ReactableApi<?> api) {
+        if (apiProductRegistry == null || api.getEnvironmentId() == null) {
+            return false;
+        }
+        List<ApiProductRegistry.ApiProductPlanEntry> apiProductPlanEntries = apiProductRegistry.getApiProductPlanEntriesForApi(
+            api.getId(),
+            api.getEnvironmentId()
+        );
+        return apiProductPlanEntries != null && !apiProductPlanEntries.isEmpty();
     }
 
     private void undeploy(String apiId) {

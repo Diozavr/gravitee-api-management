@@ -38,11 +38,11 @@ class UserController {
   ) {}
 
   $onInit() {
-    this.UserService.customUserFieldsToRegister().then((resp) => (this.fields = resp.data));
+    this.UserService.customUserFieldsToRegister().then(resp => (this.fields = resp.data));
 
     this.originalPicture = this.getUserPicture();
     this.user.picture_url = this.getUserPicture();
-    this.TokenService.list().then((response) => {
+    this.TokenService.list().then(response => {
       this.tokens = response.data;
     });
     if (this.user.groupsByEnvironment) {
@@ -51,8 +51,8 @@ class UserController {
         this.groups = Object.values(this.user.groupsByEnvironment)[0].join(' - ');
       } else {
         this.groups = this.Constants.org.environments
-          .filter((env) => this.user.groupsByEnvironment[env.id]?.length > 0)
-          .map((env) => {
+          .filter(env => this.user.groupsByEnvironment[env.id]?.length > 0)
+          .map(env => {
             const groups = this.user.groupsByEnvironment[env.id];
             return `[${env.name}] ${groups.join('/')}`;
           })
@@ -64,10 +64,14 @@ class UserController {
   }
 
   save() {
-    this.UserService.save(this.user).then(() => {
-      this.NotificationService.show('User has been updated successfully');
-      this.onSaved();
-    });
+    this.UserService.save(this.user)
+      .then(() => {
+        this.NotificationService.show('User has been updated successfully');
+        this.onSaved();
+      })
+      .catch(error => {
+        this.NotificationService.showError(error?.data ? error : { data: 'Failed to update user' });
+      });
   }
 
   displayDangerZone(): boolean {
@@ -97,12 +101,16 @@ class UserController {
           confirmButton: 'Yes, delete my account',
         },
       })
-      .then((response) => {
+      .then(response => {
         if (response) {
-          return this.UserService.removeCurrentUser().then(() => {
-            this.NotificationService.show('You have been successfully deleted');
-            this.onDeleteMyAccount();
-          });
+          return this.UserService.removeCurrentUser()
+            .then(() => {
+              this.NotificationService.show('You have been successfully deleted');
+              this.onDeleteMyAccount();
+            })
+            .catch(error => {
+              this.NotificationService.showError(error?.data ? error : { data: 'Failed to delete account' });
+            });
         }
       });
   }
@@ -134,7 +142,7 @@ class UserController {
           title: 'Generate Personal Access Token',
         },
       })
-      .then((tokenGenerated) => {
+      .then(tokenGenerated => {
         if (tokenGenerated) {
           this.$onInit();
         }
@@ -154,12 +162,16 @@ class UserController {
           confirmButton: 'Revoke',
         },
       })
-      .then((response) => {
+      .then(response => {
         if (response) {
-          this.TokenService.revoke(token).then(() => {
-            this.NotificationService.show('Token "' + token.name + '" has been revoked.');
-            this.$onInit();
-          });
+          this.TokenService.revoke(token)
+            .then(() => {
+              this.NotificationService.show('Token "' + token.name + '" has been revoked.');
+              this.$onInit();
+            })
+            .catch(error => {
+              this.NotificationService.showError(error?.data ? error : { data: 'Failed to revoke token' });
+            });
         }
       });
   }

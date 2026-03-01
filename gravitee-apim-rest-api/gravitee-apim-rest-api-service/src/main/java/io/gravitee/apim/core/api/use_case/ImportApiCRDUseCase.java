@@ -19,7 +19,6 @@ import static io.gravitee.apim.core.api.domain_service.ApiIndexerDomainService.o
 import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 
-import com.google.common.base.Strings;
 import io.gravitee.apim.core.UseCase;
 import io.gravitee.apim.core.api.crud_service.ApiCrudService;
 import io.gravitee.apim.core.api.domain_service.ApiMetadataDomainService;
@@ -59,22 +58,25 @@ import io.gravitee.apim.core.subscription.query_service.SubscriptionQueryService
 import io.gravitee.apim.core.validation.Validator;
 import io.gravitee.common.utils.TimeProvider;
 import io.gravitee.definition.model.v4.ApiType;
+import io.gravitee.definition.model.v4.flow.AbstractFlow;
 import io.gravitee.definition.model.v4.nativeapi.NativePlan;
 import io.gravitee.definition.model.v4.plan.PlanStatus;
 import io.gravitee.rest.api.model.context.OriginContext;
+import io.gravitee.rest.api.model.v4.plan.GenericPlanEntity;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Antoine CORDIER (antoine.cordier at graviteesource.com)
  * @author GraviteeSource Team
  */
 @UseCase
-@Slf4j
+@CustomLog
 public class ImportApiCRDUseCase {
 
     private final ApiQueryService apiQueryService;
@@ -205,7 +207,12 @@ public class ImportApiCRDUseCase {
                     Map.entry(
                         entry.getKey(),
                         createPlanDomainService
-                            .create(initPlanFromCRD(entry.getValue(), createdApi), entry.getValue().getFlows(), createdApi, input.auditInfo)
+                            .create(
+                                initPlanFromCRD(entry.getKey(), entry.getValue(), createdApi),
+                                entry.getValue().getFlows(),
+                                createdApi,
+                                input.auditInfo
+                            )
                             .getId()
                     )
                 )
@@ -228,8 +235,7 @@ public class ImportApiCRDUseCase {
                 apiStateDomainService.start(createdApi, input.auditInfo);
             }
 
-            return ApiCRDStatus
-                .builder()
+            return ApiCRDStatus.builder()
                 .id(createdApi.getId())
                 .crossId(createdApi.getCrossId())
                 .environmentId(environmentId)
@@ -248,10 +254,9 @@ public class ImportApiCRDUseCase {
         try {
             Api updatedApi;
             if (existingApi.isNative()) {
-                updatedApi =
-                    updateNativeApiUseCase
-                        .execute(new UpdateNativeApiUseCase.Input(ApiModelFactory.toUpdateNativeApi(input.spec), input.auditInfo))
-                        .updatedApi();
+                updatedApi = updateNativeApiUseCase
+                    .execute(new UpdateNativeApiUseCase.Input(ApiModelFactory.toUpdateNativeApi(input.spec), input.auditInfo))
+                    .updatedApi();
             } else {
                 updatedApi = updateApiDomainService.update(existingApi.getId(), input.spec, input.auditInfo);
             }
@@ -270,63 +275,30 @@ public class ImportApiCRDUseCase {
                     .build()
             );
 
-            List<Plan> existingPlans = planQueryService.findAllByApiId(api.getId());
-            Map<String, PlanStatus> existingPlanStatuses = existingPlans.stream().collect(toMap(Plan::getId, Plan::getPlanStatus));
-
-            var planKeyIdMapping = input
-                .spec()
-                .getPlans()
-                .entrySet()
-                .stream()
-                .map(entry -> {
-                    var key = entry.getKey();
-                    var plan = entry.getValue();
-
-                    if (existingPlanStatuses.containsKey(plan.getId())) {
-                        return Map.entry(
-                            key,
-                            updatePlanDomainService
-                                .update(initPlanFromCRD(plan, api), plan.getFlows(), existingPlanStatuses, api, input.auditInfo)
-                                .getId()
-                        );
-                    }
-
-                    return Map.entry(
-                        key,
-                        createPlanDomainService.create(initPlanFromCRD(plan, api), plan.getFlows(), api, input.auditInfo).getId()
-                    );
-                })
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-            deletePlans(api, existingPlans, planKeyIdMapping, input);
-
-            if (shouldDeploy(input.spec())) {
-                apiStateDomainService.deploy(api, "Updated by GKO", input.auditInfo);
-            }
-
-            if (api.getLifecycleState() != existingApi.getLifecycleState()) {
-                if (api.getLifecycleState() == Api.LifecycleState.STOPPED) {
-                    apiStateDomainService.stop(api, input.auditInfo);
-                } else {
-                    apiStateDomainService.start(api, input.auditInfo);
-                }
-            }
-
-            membersDomainService.updateApiMembers(input.auditInfo, updatedApi.getId(), input.spec().getMembers());
-
+            // Pages
             createOrUpdatePages(input.spec.getPages(), updatedApi.getId(), input.auditInfo);
             deleteRemovedPages(input.spec.getPages(), updatedApi.getId());
 
+            // Plans
+            Map<String, String> planKeyIdMapping = handlePlanUpdate(input, api);
+
+            // Deploy ?
+            handleLifeCycle(input, existingApi, api);
+
+            // Members
+            membersDomainService.updateApiMembers(input.auditInfo, updatedApi.getId(), input.spec().getMembers());
+
+            // Metadata
             apiMetadataDomainService.importApiMetadata(api.getId(), input.spec.getMetadata(), input.auditInfo);
 
+            // Notifications
             notificationCRDService.syncApiPortalNotifications(
                 api.getId(),
                 input.auditInfo.actor().userId(),
                 input.spec.getConsoleNotificationConfiguration()
             );
 
-            return ApiCRDStatus
-                .builder()
+            return ApiCRDStatus.builder()
                 .id(api.getId())
                 .crossId(api.getCrossId())
                 .environmentId(api.getEnvironmentId())
@@ -339,33 +311,84 @@ public class ImportApiCRDUseCase {
         }
     }
 
-    private void deletePlans(Api api, List<Plan> existingPlans, Map<String, String> planKeyIdMapping, Input input) {
+    private void handleLifeCycle(Input input, Api existingApi, Api api) {
+        if (shouldDeploy(input.spec())) {
+            apiStateDomainService.deploy(api, "Updated by GKO", input.auditInfo);
+        }
+
+        if (api.getLifecycleState() != existingApi.getLifecycleState()) {
+            if (api.getLifecycleState() == Api.LifecycleState.STOPPED) {
+                apiStateDomainService.stop(api, input.auditInfo);
+            } else {
+                apiStateDomainService.start(api, input.auditInfo);
+            }
+        }
+    }
+
+    private Map<String, String> handlePlanUpdate(Input input, Api api) {
+        List<Plan> existingPlans = planQueryService.findAllByApiId(api.getId());
+        Map<String, PlanStatus> existingPlanStatuses = existingPlans.stream().collect(toMap(Plan::getId, Plan::getPlanStatus));
+        Map<String, String> keyToIdMapping = new HashMap<>();
+
+        Map<String, List<? extends AbstractFlow>> updateFlows = new HashMap<>();
+        var plansToUpdate = input
+            .spec()
+            .getPlans()
+            .entrySet()
+            .stream()
+            .filter(e -> existingPlanStatuses.containsKey(e.getValue().getId()))
+            .map(e -> {
+                updateFlows.put(e.getValue().getId(), e.getValue().getFlows());
+                keyToIdMapping.put(e.getKey(), e.getValue().getId());
+                return initPlanFromCRD(e.getKey(), e.getValue(), api);
+            })
+            .toList();
+        updatePlanDomainService.bulkUpdate(plansToUpdate, existingPlanStatuses, updateFlows, api, input.auditInfo);
+
+        input
+            .spec()
+            .getPlans()
+            .entrySet()
+            .stream()
+            .filter(e -> !existingPlanStatuses.containsKey(e.getValue().getId()))
+            .forEach(e -> {
+                var plan = initPlanFromCRD(e.getKey(), e.getValue(), api);
+                var created = createPlanDomainService.create(plan, e.getValue().getFlows(), api, input.auditInfo);
+                keyToIdMapping.put(e.getKey(), created.getId());
+            });
+
         var plansToDelete = existingPlans
             .stream()
+            // retain plans that cannot be found in the CRD spec
             .filter(plan ->
-                // Ignore already processed plans
-                !planKeyIdMapping.containsValue(plan.getId())
-            )
-            .filter(plan ->
-                // Keep existing plans that are not in the CRD
-                !input.spec.getPlans().containsKey(plan.getId())
+                input.spec
+                    .getPlans()
+                    .values()
+                    .stream()
+                    .noneMatch(p -> p.getId().equals(plan.getId()))
             )
             .toList();
+        deletePlans(plansToDelete, api, input.auditInfo);
+
+        return keyToIdMapping;
+    }
+
+    private void deletePlans(List<Plan> plansToDelete, Api api, AuditInfo auditInfo) {
         plansToDelete.forEach(plan -> {
             subscriptionQueryService
                 .findActiveSubscriptionsByPlan(plan.getId())
-                .forEach(subscription -> closeSubscriptionDomainService.closeSubscription(subscription.getId(), input.auditInfo));
+                .forEach(subscription -> closeSubscriptionDomainService.closeSubscription(subscription.getId(), api, auditInfo));
 
-            deletePlanDomainService.delete(plan, input.auditInfo);
+            deletePlanDomainService.delete(plan, auditInfo);
         });
 
         reorderPlanDomainService.refreshOrderAfterDelete(api.getId());
     }
 
-    private Plan initPlanFromCRD(PlanCRD planCRD, Api api) {
-        Plan plan = Plan
-            .builder()
+    private Plan initPlanFromCRD(String hrid, PlanCRD planCRD, Api api) {
+        Plan plan = Plan.builder()
             .id(planCRD.getId())
+            .hrid(hrid)
             .name(planCRD.getName())
             .description(planCRD.getDescription())
             .characteristics(planCRD.getCharacteristics())
@@ -373,17 +396,19 @@ public class ImportApiCRDUseCase {
             .crossId(planCRD.getCrossId())
             .excludedGroups(planCRD.getExcludedGroups())
             .generalConditions(planCRD.getGeneralConditions())
+            .generalConditionsHrid(planCRD.getGeneralConditionsHrid())
             .order(planCRD.getOrder())
             .type(planCRD.getType())
             .validation(planCRD.getValidation())
             .apiType(api.getType())
             .apiId(api.getId())
+            .referenceId(api.getId())
+            .referenceType(GenericPlanEntity.ReferenceType.API)
             .build();
 
         if (ApiType.NATIVE.equals(api.getType())) {
             plan.setPlanDefinitionNativeV4(
-                NativePlan
-                    .builder()
+                NativePlan.builder()
                     .security(planCRD.getSecurity())
                     .selectionRule(planCRD.getSelectionRule())
                     .status(planCRD.getStatus())
@@ -394,8 +419,7 @@ public class ImportApiCRDUseCase {
             );
         } else {
             plan.setPlanDefinitionHttpV4(
-                io.gravitee.definition.model.v4.plan.Plan
-                    .builder()
+                io.gravitee.definition.model.v4.plan.Plan.builder()
                     .security(planCRD.getSecurity())
                     .selectionRule(planCRD.getSelectionRule())
                     .status(planCRD.getStatus())
@@ -431,7 +455,11 @@ public class ImportApiCRDUseCase {
         }
 
         var now = Date.from(TimeProvider.now().toInstant());
-        var pages = pageCRDs.values().stream().map(PageModelFactory::fromCRDSpec).toList();
+        var pages = pageCRDs
+            .entrySet()
+            .stream()
+            .map(entry -> PageModelFactory.fromCRDSpec(entry.getKey(), entry.getValue()))
+            .toList();
 
         pages.forEach(page -> {
             page.setReferenceId(apiId);

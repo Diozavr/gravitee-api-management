@@ -21,16 +21,31 @@ import io.gravitee.apim.core.UseCase;
 import io.gravitee.apim.core.api.domain_service.CreateApiDomainService;
 import io.gravitee.apim.core.api.domain_service.ValidateApiDomainService;
 import io.gravitee.apim.core.api.exception.ApiInvalidTypeException;
+import io.gravitee.apim.core.api.model.Api;
 import io.gravitee.apim.core.api.model.ApiWithFlows;
 import io.gravitee.apim.core.api.model.NewHttpApi;
 import io.gravitee.apim.core.api.model.factory.ApiModelFactory;
 import io.gravitee.apim.core.audit.model.AuditInfo;
 import io.gravitee.apim.core.membership.domain_service.ApiPrimaryOwnerFactory;
+import io.gravitee.common.http.HttpMethod;
+import io.gravitee.definition.model.flow.Operator;
 import io.gravitee.definition.model.v4.ApiType;
+import io.gravitee.definition.model.v4.flow.Flow;
+import io.gravitee.definition.model.v4.flow.selector.HttpSelector;
 import java.util.List;
+import java.util.Set;
+import org.jspecify.annotations.NonNull;
 
 @UseCase
 public class CreateHttpApiUseCase {
+
+    private static final List<ApiType> SUPPORTED_API_TYPES = List.of(
+        ApiType.PROXY,
+        ApiType.MESSAGE,
+        ApiType.MCP_PROXY,
+        ApiType.LLM_PROXY,
+        ApiType.A2A_PROXY
+    );
 
     private final ValidateApiDomainService validateApiDomainService;
     private final ApiPrimaryOwnerFactory apiPrimaryOwnerFactory;
@@ -46,14 +61,17 @@ public class CreateHttpApiUseCase {
         this.createApiDomainService = createApiDomainService;
     }
 
-    public record Input(NewHttpApi newHttpApi, AuditInfo auditInfo) {}
+    public record Input(NewHttpApi newHttpApi, AuditInfo auditInfo) {
+        public Input {
+            if (newHttpApi == null || !SUPPORTED_API_TYPES.contains(newHttpApi.getType())) {
+                throw new ApiInvalidTypeException(SUPPORTED_API_TYPES);
+            }
+        }
+    }
 
     public record Output(ApiWithFlows api) {}
 
     public Output execute(Input input) {
-        if (input.newHttpApi == null || (input.newHttpApi.getType() != ApiType.PROXY && input.newHttpApi.getType() != ApiType.MESSAGE)) {
-            throw new ApiInvalidTypeException(List.of(ApiType.PROXY, ApiType.MESSAGE));
-        }
         var auditInfo = input.auditInfo;
 
         var primaryOwner = apiPrimaryOwnerFactory.createForNewApi(
@@ -62,8 +80,13 @@ public class CreateHttpApiUseCase {
             auditInfo.actor().userId()
         );
 
+        Api newApi = ApiModelFactory.fromNewHttpApi(input.newHttpApi, auditInfo.environmentId());
+        if (newApi.getType() == ApiType.LLM_PROXY && newApi.getApiDefinitionValue() instanceof io.gravitee.definition.model.v4.Api v4Api) {
+            v4Api.setFlows(defaultFlowsLlmProxy());
+        }
+
         var created = createApiDomainService.create(
-            ApiModelFactory.fromNewHttpApi(input.newHttpApi, auditInfo.environmentId()),
+            newApi,
             primaryOwner,
             auditInfo,
             api ->
@@ -77,5 +100,21 @@ public class CreateHttpApiUseCase {
         );
 
         return new Output(created);
+    }
+
+    private static @NonNull List<Flow> defaultFlowsLlmProxy() {
+        return List.of(
+            new Flow().withSelectors(
+                List.of(
+                    HttpSelector.builder().pathOperator(Operator.EQUALS).path("/chat/completions").methods(Set.of(HttpMethod.POST)).build()
+                )
+            ),
+            new Flow().withSelectors(
+                List.of(HttpSelector.builder().pathOperator(Operator.EQUALS).path("/models").methods(Set.of(HttpMethod.GET)).build())
+            ),
+            new Flow().withSelectors(
+                List.of(HttpSelector.builder().pathOperator(Operator.EQUALS).path("/embeddings").methods(Set.of(HttpMethod.POST)).build())
+            )
+        );
     }
 }

@@ -26,10 +26,10 @@ import io.gravitee.apim.core.utils.DurationUtils;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.core.Single;
 import java.time.Instant;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 @UseCase
 public class SearchAverageHealthCheckResponseTimeOvertimeUseCase {
@@ -57,14 +57,13 @@ public class SearchAverageHealthCheckResponseTimeOvertimeUseCase {
     }
 
     private Single<Api> validateApiRequirements(Input input) {
-        return Single
-            .fromCallable(() -> apiCrudService.get(input.apiId()))
+        return Single.fromCallable(() -> apiCrudService.get(input.apiId()))
             .flatMap(api -> validateApiMultiTenancyAccess(api, input.environmentId()))
             .flatMap(this::validateApiIsNotTcp);
     }
 
     private Single<Api> validateApiIsNotTcp(Api api) {
-        return api.getApiDefinitionHttpV4().isTcpProxy() ? Single.error(new TcpProxyNotSupportedException(api.getId())) : Single.just(api);
+        return api.isTcpProxy() ? Single.error(new TcpProxyNotSupportedException(api.getId())) : Single.just(api);
     }
 
     private static Single<Api> validateApiMultiTenancyAccess(Api api, String environmentId) {

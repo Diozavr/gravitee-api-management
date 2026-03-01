@@ -15,27 +15,46 @@
  */
 import * as jsYAML from 'js-yaml';
 
-import { Buffer } from 'buffer';
+function base64ToUtf8(base64: string): string {
+  const binaryString = atob(base64);
+  const bytes = Uint8Array.from(binaryString, char => char.charCodeAt(0));
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+function utf8ToBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  const binaryString = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
+  return btoa(binaryString);
+}
+
+function isValidBase64(data: string): boolean {
+  try {
+    atob(data);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const binaryType = new jsYAML.Type('tag:yaml.org,2002:binary', {
   kind: 'scalar',
-  resolve: (data: any) => {
-    // Validate that the data is valid Base64
-    return typeof data === 'string' && /^[A-Za-z0-9+/=]*$/.test(data);
+  resolve(data: any) {
+    // Ensure data is a valid Base64 string
+    if (typeof data !== 'string') return false;
+    return isValidBase64(data);
   },
-  construct: (data: string) => {
-    // Convert Base64 to a Buffer
-    return Buffer.from(data, 'base64').toString('utf-8'); // Convert to UTF-8 string
+  construct(data: string) {
+    return base64ToUtf8(data);
   },
   instanceOf: String,
-  represent: (value: any) => {
-    // Encode the value as Base64 for YAML representation
-    return Buffer.from(String(value), 'utf-8').toString('base64');
+  represent(value: any) {
+    return utf8ToBase64(String(value));
   },
 });
 
-const schema = jsYAML.JSON_SCHEMA.extend([binaryType]);
+// Create schema with binary support
+const CUSTOM_SCHEMA = jsYAML.JSON_SCHEMA.extend([binaryType]);
 
 export function readYaml(content: string): any {
-  return jsYAML.load(content, { schema });
+  return jsYAML.load(content, { schema: CUSTOM_SCHEMA });
 }

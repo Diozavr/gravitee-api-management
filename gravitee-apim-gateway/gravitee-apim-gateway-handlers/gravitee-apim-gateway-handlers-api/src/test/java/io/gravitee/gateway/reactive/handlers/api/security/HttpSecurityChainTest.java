@@ -31,15 +31,21 @@ import io.gravitee.gateway.reactive.api.context.http.HttpExecutionContext;
 import io.gravitee.gateway.reactive.api.policy.SecurityPolicy;
 import io.gravitee.gateway.reactive.api.policy.SecurityToken;
 import io.gravitee.gateway.reactive.policy.PolicyManager;
+import io.gravitee.node.api.configuration.Configuration;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
+import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.helpers.NOPLogger;
 
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
@@ -60,6 +66,16 @@ class HttpSecurityChainTest {
 
     @Mock
     private HttpExecutionContext ctx;
+
+    @Mock
+    private Configuration configuration;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(ctx.withLogger(any())).thenReturn(NOPLogger.NOP_LOGGER);
+        lenient().when(configuration.getProperty("api.security.verbose401", Boolean.class, false)).thenReturn(false);
+        lenient().when(ctx.getComponent(Configuration.class)).thenReturn(configuration);
+    }
 
     @Test
     void shouldExecuteSecurityPolicyWhenHasRelevantSecurityToken() {
@@ -152,7 +168,7 @@ class HttpSecurityChainTest {
     }
 
     @Test
-    void shouldInterrupt401WhenNoPolicyHasRelevantSecurityToken() {
+    void shouldInterrupt401WhenNoPolicyHasRelevantSecurityTokenAndWwwAuthenticateReturnsFalse() {
         final Plan plan1 = mockPlan("plan1");
         final Plan plan2 = mockPlan("plan2");
         final SecurityPolicy policy1 = mockSecurityPolicy("plan1", false, false);
@@ -164,7 +180,9 @@ class HttpSecurityChainTest {
 
         when(api.getPlans()).thenReturn(plans);
         when(policy1.order()).thenReturn(0);
+        when(policy1.wwwAuthenticate(any())).thenReturn(Single.just(false));
         when(policy2.order()).thenReturn(1);
+        when(policy2.wwwAuthenticate(any())).thenReturn(Single.just(false));
 
         when(ctx.interruptWith(any())).thenReturn(Completable.error(new RuntimeException(MOCK_EXCEPTION)));
 
@@ -176,19 +194,112 @@ class HttpSecurityChainTest {
         verify(ctx, times(1)).removeInternalAttribute(ATTR_INTERNAL_SECURITY_TOKEN);
     }
 
-    private void verifyUnauthorized() {
-        verify(ctx)
-            .interruptWith(
-                argThat(failure -> {
-                    assertEquals(HttpStatusCode.UNAUTHORIZED_401, failure.statusCode());
-                    Assertions.assertEquals(HttpSecurityChain.UNAUTHORIZED_MESSAGE, failure.message());
-                    Assertions.assertEquals(HttpSecurityChain.PLAN_UNRESOLVABLE, failure.key());
-                    assertNull(failure.parameters());
-                    assertNull(failure.contentType());
+    @Test
+    void shouldInterrupt401WhenNoPolicyHasRelevantSecurityTokenAndWwwAuthenticateReturnsTrue() {
+        final Plan plan1 = mockPlan("plan1");
+        final SecurityPolicy policy1 = mockSecurityPolicy("plan1", false, false);
 
-                    return true;
-                })
-            );
+        final ArrayList<Plan> plans = new ArrayList<>();
+        plans.add(plan1);
+
+        when(api.getPlans()).thenReturn(plans);
+        when(policy1.wwwAuthenticate(any())).thenReturn(Single.just(true));
+
+        when(ctx.interruptWith(any())).thenReturn(Completable.error(new RuntimeException(MOCK_EXCEPTION)));
+
+        final HttpSecurityChain cut = new HttpSecurityChain(api, policyManager, ExecutionPhase.REQUEST);
+        final TestObserver<Void> obs = cut.execute(ctx).test();
+
+        obs.assertError(Throwable.class);
+        verifyUnauthorized();
+        verify(ctx, times(1)).removeInternalAttribute(ATTR_INTERNAL_SECURITY_TOKEN);
+    }
+
+    @Test
+    void shouldReturnGenericMessageWhenVerbose401Disabled() {
+        setupInternalAttributesMock();
+
+        final Plan plan1 = mockPlan("plan1");
+        final SecurityPolicy policy1 = mockSecurityPolicy("plan1", false, false);
+
+        final ArrayList<Plan> plans = new ArrayList<>();
+        plans.add(plan1);
+
+        when(api.getPlans()).thenReturn(plans);
+        lenient().when(policy1.order()).thenReturn(0);
+        when(policy1.wwwAuthenticate(any())).thenReturn(Single.just(false));
+        when(ctx.interruptWith(any())).thenReturn(Completable.error(new RuntimeException(MOCK_EXCEPTION)));
+
+        final HttpSecurityChain cut = new HttpSecurityChain(api, policyManager, ExecutionPhase.REQUEST);
+        cut.execute(ctx).test();
+
+        verify(ctx).interruptWith(
+            argThat(failure -> {
+                assertEquals(HttpStatusCode.UNAUTHORIZED_401, failure.statusCode());
+                assertEquals(HttpSecurityChain.UNAUTHORIZED_MESSAGE, failure.message());
+                return true;
+            })
+        );
+    }
+
+    @Test
+    void shouldReturnDetailedMessageWhenVerbose401Enabled() {
+        setupInternalAttributesMock();
+
+        when(configuration.getProperty("api.security.verbose401", Boolean.class, false)).thenReturn(true);
+
+        final Plan plan1 = mockPlan("plan1");
+        final SecurityPolicy policy1 = mockSecurityPolicy("plan1", false, false);
+
+        final ArrayList<Plan> plans = new ArrayList<>();
+        plans.add(plan1);
+
+        when(api.getPlans()).thenReturn(plans);
+        lenient().when(policy1.order()).thenReturn(0);
+        when(policy1.wwwAuthenticate(any())).thenReturn(Single.just(false));
+        when(ctx.interruptWith(any())).thenReturn(Completable.error(new RuntimeException(MOCK_EXCEPTION)));
+
+        final HttpSecurityChain cut = new HttpSecurityChain(api, policyManager, ExecutionPhase.REQUEST);
+        cut.execute(ctx).test();
+
+        verify(ctx).interruptWith(
+            argThat(failure -> {
+                assertEquals(HttpStatusCode.UNAUTHORIZED_401, failure.statusCode());
+                assertEquals("The request did not include an authentication token", failure.message());
+                return true;
+            })
+        );
+    }
+
+    private void setupInternalAttributesMock() {
+        Map<String, Object> internalAttributes = new HashMap<>();
+        doAnswer(inv -> {
+            internalAttributes.put(inv.getArgument(0), inv.getArgument(1));
+            return null;
+        })
+            .when(ctx)
+            .setInternalAttribute(anyString(), any());
+        when(ctx.getInternalAttribute(anyString())).thenAnswer(inv -> internalAttributes.get(inv.<String>getArgument(0)));
+        doAnswer(inv -> {
+            internalAttributes.remove(inv.<String>getArgument(0));
+            return null;
+        })
+            .when(ctx)
+            .removeInternalAttribute(anyString());
+    }
+
+    private void verifyUnauthorized() {
+        verify(ctx).interruptWith(
+            argThat(failure -> {
+                assertEquals(HttpStatusCode.UNAUTHORIZED_401, failure.statusCode());
+                Assertions.assertEquals(HttpSecurityChain.UNAUTHORIZED_MESSAGE, failure.message());
+                Assertions.assertEquals(HttpSecurityChain.PLAN_UNRESOLVABLE, failure.key());
+                assertNull(failure.parameters());
+                assertNull(failure.contentType());
+
+                return true;
+            })
+        );
     }
 
     private Plan mockPlan(String name) {
@@ -206,12 +317,12 @@ class HttpSecurityChainTest {
         when(
             policyManager.create(
                 eq(ExecutionPhase.REQUEST),
-                argThat(meta ->
-                    meta.getName().equals(MOCK_POLICY + "-" + name) && meta.getConfiguration().equals(MOCK_POLICY_CONFIG + '-' + name)
+                argThat(
+                    meta ->
+                        meta.getName().equals(MOCK_POLICY + "-" + name) && meta.getConfiguration().equals(MOCK_POLICY_CONFIG + '-' + name)
                 )
             )
-        )
-            .thenReturn(policy);
+        ).thenReturn(policy);
 
         Maybe<SecurityToken> securityTokenMaybe = hasSecurityToken ? Maybe.just(SecurityToken.forApiKey("testApiKey")) : Maybe.empty();
         lenient().when(policy.extractSecurityToken(ctx)).thenReturn(securityTokenMaybe);

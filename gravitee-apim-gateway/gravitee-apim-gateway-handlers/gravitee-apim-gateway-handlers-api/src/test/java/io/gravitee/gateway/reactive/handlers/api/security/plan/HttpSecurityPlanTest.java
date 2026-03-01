@@ -15,12 +15,14 @@
  */
 package io.gravitee.gateway.reactive.handlers.api.security.plan;
 
+import static io.gravitee.gateway.reactive.api.context.InternalContextAttributes.ATTR_INTERNAL_SECURITY_DIAGNOSTIC;
 import static io.gravitee.gateway.reactive.api.context.InternalContextAttributes.ATTR_INTERNAL_SECURITY_TOKEN;
 import static io.gravitee.gateway.reactive.api.context.InternalContextAttributes.ATTR_INTERNAL_VALIDATE_SUBSCRIPTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -37,14 +39,18 @@ import io.gravitee.gateway.reactive.api.context.http.HttpPlainExecutionContext;
 import io.gravitee.gateway.reactive.api.context.http.HttpPlainRequest;
 import io.gravitee.gateway.reactive.api.policy.SecurityPolicy;
 import io.gravitee.gateway.reactive.api.policy.SecurityToken;
+import io.gravitee.gateway.reactive.handlers.api.security.SecurityChainDiagnostic;
+import io.gravitee.gateway.reactive.handlers.api.security.plan.SecurityPlanContext;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.helpers.NOPLogger;
 
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
@@ -83,11 +89,19 @@ class HttpSecurityPlanTest {
     @Mock
     private SecurityToken securityToken;
 
+    @Mock
+    private SecurityChainDiagnostic securityChainDiagnostic;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(ctx.withLogger(any())).thenReturn(NOPLogger.NOP_LOGGER);
+    }
+
     @Test
     void canExecute_shouldReturnTrue_whenPolicyHasSecurityTokenAndSelectionRuleIsNull() {
         when(policy.extractSecurityToken(ctx)).thenReturn(Maybe.just(securityToken));
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         obs.assertResult(true);
@@ -101,7 +115,7 @@ class HttpSecurityPlanTest {
         when(ctx.getTemplateEngine()).thenReturn(templateEngine);
         when(templateEngine.eval(SELECTION_RULE, Boolean.class)).thenReturn(Maybe.just(true));
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         obs.assertResult(true);
@@ -115,7 +129,7 @@ class HttpSecurityPlanTest {
         when(ctx.getTemplateEngine()).thenReturn(templateEngine);
         when(templateEngine.eval(SELECTION_RULE, Boolean.class)).thenReturn(Maybe.just(true));
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         obs.assertResult(true);
@@ -128,8 +142,9 @@ class HttpSecurityPlanTest {
         when(policy.extractSecurityToken(ctx)).thenReturn(Maybe.just(securityToken));
         when(ctx.getTemplateEngine()).thenReturn(templateEngine);
         when(templateEngine.eval(SELECTION_RULE, Boolean.class)).thenReturn(Maybe.just(false));
+        when(ctx.getInternalAttribute(ATTR_INTERNAL_SECURITY_DIAGNOSTIC)).thenReturn(securityChainDiagnostic);
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         obs.assertResult(false);
@@ -139,8 +154,9 @@ class HttpSecurityPlanTest {
     @Test
     void canExecute_shouldReturnFalse_whenPolicyDontHaveSecurityToken() {
         when(policy.extractSecurityToken(ctx)).thenReturn(Maybe.empty());
+        when(ctx.getInternalAttribute(ATTR_INTERNAL_SECURITY_DIAGNOSTIC)).thenReturn(securityChainDiagnostic);
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         obs.assertResult(false);
@@ -150,7 +166,7 @@ class HttpSecurityPlanTest {
     @Test
     void canExecute_shouldReturnFalse_whenPolicyHasSecurityToken_butSubscriptionNotFound() {
         when(ctx.getComponent(SubscriptionService.class)).thenReturn(subscriptionService);
-        when(policy.requireSubscription()).thenReturn(true);
+        when(policy.requireSubscription(ctx)).thenReturn(true);
         when(policy.extractSecurityToken(ctx)).thenReturn(Maybe.just(securityToken));
         when(plan.getId()).thenReturn(PLAN_ID);
         when(ctx.getAttribute(ContextAttributes.ATTR_API)).thenReturn(API_ID);
@@ -158,7 +174,7 @@ class HttpSecurityPlanTest {
         // no subscription found with this security token
         when(subscriptionService.getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID)).thenReturn(Optional.empty());
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         verify(subscriptionService).getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID);
@@ -169,7 +185,7 @@ class HttpSecurityPlanTest {
     @Test
     void canExecute_shouldReturnFalse_whenPolicyHasSecurityToken_butFoundSubscriptionIsNotOnSamePlan() {
         when(ctx.getComponent(SubscriptionService.class)).thenReturn(subscriptionService);
-        when(policy.requireSubscription()).thenReturn(true);
+        when(policy.requireSubscription(ctx)).thenReturn(true);
         when(policy.extractSecurityToken(ctx)).thenReturn(Maybe.just(securityToken));
         when(plan.getId()).thenReturn(PLAN_ID);
         when(ctx.getAttribute(ContextAttributes.ATTR_API)).thenReturn(API_ID);
@@ -179,7 +195,7 @@ class HttpSecurityPlanTest {
         when(subscription.getPlan()).thenReturn("another-plan-id");
         when(subscriptionService.getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID)).thenReturn(Optional.of(subscription));
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         verify(subscriptionService).getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID);
@@ -190,7 +206,7 @@ class HttpSecurityPlanTest {
     @Test
     void canExecute_shouldReturnFalse_whenPolicyHasSecurityToken_butFoundSubscriptionIsExpired() {
         when(ctx.getComponent(SubscriptionService.class)).thenReturn(subscriptionService);
-        when(policy.requireSubscription()).thenReturn(true);
+        when(policy.requireSubscription(ctx)).thenReturn(true);
         when(policy.extractSecurityToken(ctx)).thenReturn(Maybe.just(securityToken));
         when(plan.getId()).thenReturn(PLAN_ID);
         when(ctx.getAttribute(ContextAttributes.ATTR_API)).thenReturn(API_ID);
@@ -202,7 +218,7 @@ class HttpSecurityPlanTest {
         when(subscription.isTimeValid(anyLong())).thenReturn(false); // subscription time is not valid
         when(subscriptionService.getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID)).thenReturn(Optional.of(subscription));
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         verify(subscriptionService).getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID);
@@ -213,7 +229,7 @@ class HttpSecurityPlanTest {
     @Test
     void canExecute_shouldReturnTrue_whenPolicyHasSecurityToken_butFoundSubscriptionIsNotExpired() {
         when(ctx.getComponent(SubscriptionService.class)).thenReturn(subscriptionService);
-        when(policy.requireSubscription()).thenReturn(true);
+        when(policy.requireSubscription(ctx)).thenReturn(true);
         when(policy.extractSecurityToken(ctx)).thenReturn(Maybe.just(securityToken));
         when(plan.getId()).thenReturn(PLAN_ID);
         when(ctx.getAttribute(ContextAttributes.ATTR_API)).thenReturn(API_ID);
@@ -225,7 +241,7 @@ class HttpSecurityPlanTest {
         when(subscription.isTimeValid(anyLong())).thenReturn(true); // subscription time is OK
         when(subscriptionService.getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID)).thenReturn(Optional.of(subscription));
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         verify(subscriptionService).getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID);
@@ -236,15 +252,16 @@ class HttpSecurityPlanTest {
     @Test
     void execute_shouldReturnFalse_whenExceptionOccurredWhileSearchingSubscriptions() {
         when(ctx.getComponent(SubscriptionService.class)).thenReturn(subscriptionService);
-        when(policy.requireSubscription()).thenReturn(true);
+        when(policy.requireSubscription(ctx)).thenReturn(true);
         when(policy.extractSecurityToken(ctx)).thenReturn(Maybe.just(securityToken));
         when(plan.getId()).thenReturn(PLAN_ID);
         when(ctx.getAttribute(ContextAttributes.ATTR_API)).thenReturn(API_ID);
 
-        when(subscriptionService.getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID))
-            .thenThrow(new RuntimeException("Mock TechnicalException"));
+        when(subscriptionService.getByApiAndSecurityToken(API_ID, securityToken, PLAN_ID)).thenThrow(
+            new RuntimeException("Mock TechnicalException")
+        );
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         obs.assertResult(false);
@@ -256,7 +273,7 @@ class HttpSecurityPlanTest {
         final int order = 123;
         when(policy.order()).thenReturn(order);
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         assertEquals(order, cut.order());
     }
 
@@ -264,7 +281,7 @@ class HttpSecurityPlanTest {
     void execute_shouldExecutePolicyOnRequest() {
         when(policy.onRequest(ctx)).thenReturn(Completable.complete());
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Void> obs = cut.execute(ctx, ExecutionPhase.REQUEST).test();
 
         obs.assertResult();
@@ -274,9 +291,10 @@ class HttpSecurityPlanTest {
     void canExecute_shouldReturnTrue_whenValidateSubscriptionIsEscaped() {
         when(policy.extractSecurityToken(ctx)).thenReturn(Maybe.just(securityToken));
         when(ctx.getInternalAttribute(ATTR_INTERNAL_VALIDATE_SUBSCRIPTION)).thenReturn(false);
+        when(ctx.getInternalAttribute(ATTR_INTERNAL_SECURITY_DIAGNOSTIC)).thenReturn(securityChainDiagnostic);
         when(plan.getId()).thenReturn(PLAN_ID);
 
-        final HttpSecurityPlan cut = new HttpSecurityPlan(plan.getId(), policy, plan.getSelectionRule());
+        final HttpSecurityPlan cut = new HttpSecurityPlan(SecurityPlanContext.builder().fromV2(plan).build(), policy);
         final TestObserver<Boolean> obs = cut.canExecute(ctx).test();
 
         obs.assertResult(true);

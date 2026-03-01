@@ -37,6 +37,8 @@ public class PlanCRD {
 
     private String crossId;
 
+    private String hrid;
+
     private String name;
 
     private String description;
@@ -48,6 +50,8 @@ public class PlanCRD {
     private List<String> excludedGroups;
 
     private String generalConditions;
+
+    private String generalConditionsHrid;
 
     private int order;
 

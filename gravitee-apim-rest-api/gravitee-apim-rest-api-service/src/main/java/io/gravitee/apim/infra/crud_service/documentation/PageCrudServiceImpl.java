@@ -15,8 +15,6 @@
  */
 package io.gravitee.apim.infra.crud_service.documentation;
 
-import static io.gravitee.apim.core.utils.CollectionUtils.stream;
-
 import io.gravitee.apim.core.documentation.crud_service.PageCrudService;
 import io.gravitee.apim.core.documentation.exception.ApiPageInvalidReferenceTypeException;
 import io.gravitee.apim.core.documentation.exception.ApiPageNotDeletedException;
@@ -31,18 +29,15 @@ import io.gravitee.rest.api.service.exceptions.PageNotFoundException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
-@Slf4j
+@CustomLog
 @Service
 public class PageCrudServiceImpl implements PageCrudService {
 
     private final PageRepository pageRepository;
-    private static final Logger logger = LoggerFactory.getLogger(PageCrudServiceImpl.class);
 
     public PageCrudServiceImpl(@Lazy PageRepository pageRepository) {
         this.pageRepository = pageRepository;
@@ -60,7 +55,7 @@ public class PageCrudServiceImpl implements PageCrudService {
             var updatedPage = pageRepository.update(PageAdapter.INSTANCE.toRepository(pageToUpdate));
             return PageAdapter.INSTANCE.toEntity(updatedPage);
         } catch (TechnicalException e) {
-            logger.error("An error occurred while updating homepage attribute from {}", pageToUpdate, e);
+            log.error("An error occurred while updating homepage attribute from {}", pageToUpdate, e);
             throw new TechnicalDomainException("Error when updating Page", e);
         }
     }
@@ -75,7 +70,7 @@ public class PageCrudServiceImpl implements PageCrudService {
         try {
             return pageRepository.findById(id).map(PageAdapter.INSTANCE::toEntity);
         } catch (TechnicalException e) {
-            logger.error("An error occurred while finding Page by id {}", id, e);
+            log.error("An error occurred while finding Page by id {}", id, e);
         }
         return Optional.empty();
     }
@@ -85,7 +80,7 @@ public class PageCrudServiceImpl implements PageCrudService {
         try {
             pageRepository.delete(id);
         } catch (TechnicalException e) {
-            logger.error("An error occurred while deleting Page by id {}", id, e);
+            log.error("An error occurred while deleting Page by id {}", id, e);
             throw new ApiPageNotDeletedException(id, e);
         }
     }
@@ -95,8 +90,31 @@ public class PageCrudServiceImpl implements PageCrudService {
         try {
             pageRepository.unsetHomepage(ids);
         } catch (TechnicalException e) {
-            logger.error("An error occurred while deleting Page by id {}", ids, e);
+            log.error("An error occurred while deleting Page by id {}", ids, e);
             throw new ApiPageInvalidReferenceTypeException(ids.iterator().next(), e.getMessage());
+        }
+    }
+
+    @Override
+    public List<Page> findByApiId(String apiId) {
+        try {
+            log.debug("Find a pages by API id : {}", apiId);
+            var pages = pageRepository.search(
+                new PageCriteria.Builder().referenceType(PageReferenceType.API.name()).referenceId(apiId).build()
+            );
+            return PageAdapter.INSTANCE.toEntityList(pages);
+        } catch (TechnicalException ex) {
+            throw new TechnicalDomainException(String.format("An error occurred while trying to find a pages by API id: %s", apiId), ex);
+        }
+    }
+
+    @Override
+    public void updateCrossIds(List<Page> pages) {
+        log.debug("Update pages cross IDs : {}", pages);
+        try {
+            pageRepository.updateCrossIds(pages.stream().map(PageAdapter.INSTANCE::toRepository).toList());
+        } catch (TechnicalException e) {
+            throw new TechnicalDomainException(String.format("An error occurred while trying to update pages cross IDs %s", pages), e);
         }
     }
 
@@ -104,7 +122,7 @@ public class PageCrudServiceImpl implements PageCrudService {
         try {
             return pageRepository.create(page);
         } catch (TechnicalException e) {
-            logger.error("An error occurred while creating {}", page, e);
+            log.error("An error occurred while creating {}", page, e);
             throw new TechnicalDomainException("Error when creating Page", e);
         }
     }

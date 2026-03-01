@@ -77,7 +77,7 @@
 
 <div class="log-table" layout="row" flex layout-padding layout-align="center">
   <div layout="column" layout-padding style="background-color: #e1f5fe; border: 1px solid #b3e5fc" flex="50">
-    <div flex="5" layout="row" style="background-color: #b3e5fc" layout-align="center center">
+    <div layout="row" style="background-color: #b3e5fc" layout-align="center center">
       <span class="log-header" style="text-align: center">REQUEST</span>
     </div>
 
@@ -105,11 +105,13 @@
     </md-table-container>
 
     <md-table-container>
-      <table md-table class="gv-table-dense">
+      <table md-table class="gv-table-dense gv-log-response-headers-table">
         <tbody md-body>
-          <tr md-row ng-repeat="(key, value) in $ctrl.log.request.headers" style="word-break: break-all">
-            <td md-cell><span style="font-weight: bold">{{key}}</span></td>
-            <td md-cell>{{value[0]}}</td>
+          <tr md-row ng-repeat="(key, value) in $ctrl.log.request.headers">
+            <td md-cell class="header-name-cell">
+              <span style="font-weight: bold" title="{{ key }}">{{ key }}</span>
+            </td>
+            <td md-cell class="header-value-cell">{{ value[0] }}</td>
           </tr>
         </tbody>
       </table>
@@ -117,7 +119,7 @@
 
     <br />
 
-    <div ng-if="$ctrl.log.request.body" class="log-body">
+    <div ng-if="$ctrl.log.request.body" class="app-log-body log-body">
       <div
         ui-codemirror
         ui-codemirror-opts="{lineNumbers: true, lineWrapping: true, readOnly: true, mode: $ctrl.getMimeType($ctrl.log.request)}"
@@ -139,7 +141,7 @@
   <div style="width: 16px"></div>
 
   <div layout="column" layout-padding ng-class="{'gv-log-response-panel-{{$ctrl.log.status / 100 | number:0}}': true}" flex="50">
-    <div flex="5" layout="row" layout-align="center center">
+    <div layout="row" layout-align="center center">
       <span class="log-header" style="text-align: center">RESPONSE</span>
     </div>
 
@@ -163,17 +165,19 @@
     </md-table-container>
 
     <md-table-container>
-      <table md-table class="gv-table-dense">
+      <table md-table class="gv-table-dense gv-log-response-headers-table">
         <tbody md-body>
-          <tr md-row ng-repeat="(key, value) in $ctrl.log.response.headers" style="word-break: break-all">
-            <td md-cell><span style="font-weight: bold">{{key}}</span></td>
-            <td md-cell>{{value[0]}}</td>
+          <tr md-row ng-repeat="(key, value) in $ctrl.log.response.headers">
+            <td md-cell class="header-name-cell">
+              <span style="font-weight: bold" title="{{ key }}">{{ key }}</span>
+            </td>
+            <td md-cell class="header-value-cell">{{ value[0] }}</td>
           </tr>
         </tbody>
       </table>
     </md-table-container>
 
-    <div ng-if="$ctrl.log.response.body" class="log-body">
+    <div ng-if="$ctrl.log.response.body" class="app-log-body log-body">
       <div
         ui-codemirror
         ui-codemirror-opts="{lineNumbers: true, lineWrapping: true, readOnly: true, mode: $ctrl.getMimeType($ctrl.log.response)}"
@@ -189,6 +193,64 @@
           role="button"
         ></ng-md-icon>
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- Failure Section -->
+<div ng-if="$ctrl.log.errorKey != null" class="diagnostic-section diagnostic-section--failure">
+  <div class="diagnostic-section__header">
+    <div class="diagnostic-section__icon">❌</div>
+    <div class="diagnostic-section__title">Failure</div>
+  </div>
+  <div class="diagnostic-section__content">
+    <div class="diagnostic-item" ng-if="$ctrl.log.errorKey">
+      <div class="diagnostic-item__label">Key</div>
+      <div class="diagnostic-item__value">{{$ctrl.log.errorKey}}</div>
+    </div>
+    <div class="diagnostic-item" ng-if="$ctrl.log.errorComponentType">
+      <div class="diagnostic-item__label">Component</div>
+      <div class="diagnostic-item__value">{{$ctrl.log.errorComponentType}}</div>
+    </div>
+    <div class="diagnostic-item" ng-if="$ctrl.log.errorComponentName">
+      <div class="diagnostic-item__label">Name</div>
+      <div class="diagnostic-item__value">{{$ctrl.log.errorComponentName}}</div>
+    </div>
+    <div class="diagnostic-item diagnostic-item--message" ng-if="$ctrl.log.message">
+      <div class="diagnostic-item__label">message</div>
+      <div class="diagnostic-item__value">
+        <div class="diagnostic-item__message-text">{{$ctrl.log.message}}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Warnings Section -->
+<div ng-if="$ctrl.log.warnings != null && $ctrl.log.warnings.length > 0" class="diagnostic-section diagnostic-section--warning">
+  <div class="diagnostic-section__header">
+    <div class="diagnostic-section__icon">⚠️</div>
+    <div class="diagnostic-section__title">Warnings</div>
+  </div>
+  <div class="diagnostic-section__content">
+    <div ng-repeat="warning in $ctrl.log.warnings" class="diagnostic-warning">
+      <div class="diagnostic-item" ng-if="warning.key">
+        <div class="diagnostic-item__label">Key</div>
+        <div class="diagnostic-item__value">{{warning.key}}</div>
+      </div>
+      <div class="diagnostic-item" ng-if="warning.componentType">
+        <div class="diagnostic-item__label">Component</div>
+        <div class="diagnostic-item__value">{{warning.componentType}}</div>
+      </div>
+      <div class="diagnostic-item" ng-if="warning.componentName">
+        <div class="diagnostic-item__label">Name</div>
+        <div class="diagnostic-item__value">{{warning.componentName}}</div>
+      </div>
+      <div class="diagnostic-item diagnostic-item--message" ng-if="warning.message">
+        <div class="diagnostic-item__label">message</div>
+        <div class="diagnostic-item__value">
+          <div class="diagnostic-item__message-text">{{warning.message}}</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

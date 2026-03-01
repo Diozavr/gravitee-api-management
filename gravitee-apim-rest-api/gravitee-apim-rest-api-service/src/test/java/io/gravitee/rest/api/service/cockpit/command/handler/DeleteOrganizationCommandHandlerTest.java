@@ -15,8 +15,11 @@
  */
 package io.gravitee.rest.api.service.cockpit.command.handler;
 
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.never;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,8 +33,11 @@ import io.gravitee.exchange.api.command.CommandStatus;
 import io.gravitee.repository.exceptions.TechnicalException;
 import io.gravitee.repository.management.api.AccessPointRepository;
 import io.gravitee.repository.management.api.AuditRepository;
+import io.gravitee.repository.management.api.ClusterRepository;
 import io.gravitee.repository.management.api.CommandRepository;
+import io.gravitee.repository.management.api.CustomDashboardRepository;
 import io.gravitee.repository.management.api.CustomUserFieldsRepository;
+import io.gravitee.repository.management.api.DashboardRepository;
 import io.gravitee.repository.management.api.EntrypointRepository;
 import io.gravitee.repository.management.api.FlowRepository;
 import io.gravitee.repository.management.api.IdentityProviderActivationRepository;
@@ -73,13 +79,14 @@ import io.gravitee.rest.api.service.configuration.identity.IdentityProviderActiv
 import io.gravitee.rest.api.service.exceptions.OrganizationNotFoundException;
 import io.gravitee.rest.api.service.search.SearchEngineService;
 import java.util.List;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import lombok.SneakyThrows;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 public class DeleteOrganizationCommandHandlerTest {
 
     private static final String EMPTY_ORG_ID = "org#1";
@@ -141,6 +148,9 @@ public class DeleteOrganizationCommandHandlerTest {
     private CommandRepository commandRepository;
 
     @Mock
+    private CustomDashboardRepository customDashboardRepository;
+
+    @Mock
     private OrganizationService organizationService;
 
     @Mock
@@ -164,48 +174,62 @@ public class DeleteOrganizationCommandHandlerTest {
     @Mock
     private EntrypointRepository entrypointRepository;
 
+    @Mock
+    private ClusterRepository clusterRepository;
+
+    @Mock
+    private DashboardRepository dashboardRepository;
+
+    @Mock
+    private DeleteEnvironmentCommandHandler deleteEnvironmentCommandHandler;
+
     private DeleteOrganizationCommandHandler cut;
 
-    @Before
-    public void setUp() throws Exception {
-        when(organizationService.findByCockpitId(NOT_FOUND_ENV_ID)).thenThrow(new OrganizationNotFoundException(NOT_FOUND_ENV_ID));
-        when(organizationService.findByCockpitId(ERROR_ENV_ID)).thenThrow(new RuntimeException(ERROR_ENV_ID));
+    @BeforeEach
+    void setUp() throws Exception {
+        lenient()
+            .when(organizationService.findByCockpitId(NOT_FOUND_ENV_ID))
+            .thenThrow(new OrganizationNotFoundException(NOT_FOUND_ENV_ID));
+        lenient().when(organizationService.findByCockpitId(ERROR_ENV_ID)).thenThrow(new RuntimeException(ERROR_ENV_ID));
         OrganizationEntity emptyOrganization = new OrganizationEntity();
         emptyOrganization.setId(EMPTY_ORG_ID);
-        when(organizationService.findByCockpitId(EMPTY_ORG_ID)).thenReturn(emptyOrganization);
+        lenient().when(organizationService.findByCockpitId(EMPTY_ORG_ID)).thenReturn(emptyOrganization);
         OrganizationEntity organization = new OrganizationEntity();
         organization.setId(ORG_ID);
-        when(organizationService.findByCockpitId(ORG_ID)).thenReturn(organization);
-        when(userRepository.deleteByOrganizationId(ORG_ID)).thenReturn(List.of(USER_ID, USER_ID_2));
+        lenient().when(organizationService.findByCockpitId(ORG_ID)).thenReturn(organization);
+        lenient().when(userRepository.deleteByOrganizationId(ORG_ID)).thenReturn(List.of(USER_ID, USER_ID_2));
 
-        cut =
-            new DeleteOrganizationCommandHandler(
-                accessPointRepository,
-                auditRepository,
-                commandRepository,
-                customUserFieldsRepository,
-                entrypointRepository,
-                flowRepository,
-                identityProviderActivationRepository,
-                identityProviderRepository,
-                licenseRepository,
-                mediaRepository,
-                membershipRepository,
-                metadataRepository,
-                notificationTemplateRepository,
-                parameterRepository,
-                portalNotificationRepository,
-                roleRepository,
-                tagRepository,
-                tenantRepository,
-                tokenRepository,
-                userRepository,
-                accessPointService,
-                environmentService,
-                identityProviderActivationService,
-                organizationService,
-                searchEngineService
-            );
+        cut = new DeleteOrganizationCommandHandler(
+            accessPointRepository,
+            auditRepository,
+            commandRepository,
+            customDashboardRepository,
+            customUserFieldsRepository,
+            entrypointRepository,
+            flowRepository,
+            identityProviderActivationRepository,
+            identityProviderRepository,
+            licenseRepository,
+            mediaRepository,
+            membershipRepository,
+            metadataRepository,
+            notificationTemplateRepository,
+            parameterRepository,
+            portalNotificationRepository,
+            roleRepository,
+            tagRepository,
+            tenantRepository,
+            tokenRepository,
+            userRepository,
+            clusterRepository,
+            dashboardRepository,
+            accessPointService,
+            environmentService,
+            identityProviderActivationService,
+            organizationService,
+            searchEngineService,
+            deleteEnvironmentCommandHandler
+        );
     }
 
     @Test
@@ -219,15 +243,40 @@ public class DeleteOrganizationCommandHandlerTest {
     }
 
     @Test
-    public void should_not_delete_organization_with_environment() {
-        when(environmentService.findByOrganization(EMPTY_ORG_ID)).thenReturn(List.of(EnvironmentEntity.builder().id("env-id").build()));
+    @SneakyThrows
+    public void should_delete_organization_environments() {
+        when(environmentService.findByOrganization(EMPTY_ORG_ID)).thenReturn(
+            List.of(
+                EnvironmentEntity.builder().cockpitId("cockpit-env-1").build(),
+                EnvironmentEntity.builder().cockpitId("cockpit-env-2").build()
+            )
+        );
+
+        DeleteOrganizationReply reply = cut
+            .handle(new DeleteOrganizationCommand(new DeleteOrganizationCommandPayload("delete-empty-org", EMPTY_ORG_ID, USER_ID)))
+            .blockingGet();
+
+        assertEquals(CommandStatus.SUCCEEDED, reply.getCommandStatus());
+        verify(deleteEnvironmentCommandHandler).processDeletionWorkflow("cockpit-env-1", USER_ID);
+        verify(deleteEnvironmentCommandHandler).processDeletionWorkflow("cockpit-env-2", USER_ID);
+    }
+
+    @Test
+    @SneakyThrows
+    public void should_reply_with_error_when_environment_deletion_fails() {
+        when(environmentService.findByOrganization(EMPTY_ORG_ID)).thenReturn(
+            List.of(
+                EnvironmentEntity.builder().cockpitId("cockpit-env-1").build(),
+                EnvironmentEntity.builder().cockpitId("cockpit-env-2").build()
+            )
+        );
+        doThrow(new TechnicalException("Failed")).when(deleteEnvironmentCommandHandler).processDeletionWorkflow(anyString(), eq(USER_ID));
 
         DeleteOrganizationReply reply = cut
             .handle(new DeleteOrganizationCommand(new DeleteOrganizationCommandPayload("delete-empty-org", EMPTY_ORG_ID, USER_ID)))
             .blockingGet();
 
         assertEquals(CommandStatus.ERROR, reply.getCommandStatus());
-        verify(organizationService, never()).delete(EMPTY_ORG_ID);
     }
 
     @Test
@@ -261,15 +310,23 @@ public class DeleteOrganizationCommandHandlerTest {
     }
 
     private void verifyDeleteOrganization(ExecutionContext executionContext) throws TechnicalException {
-        verify(accessPointRepository)
-            .deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), AccessPointReferenceType.ORGANIZATION);
+        verify(accessPointRepository).deleteByReferenceIdAndReferenceType(
+            executionContext.getOrganizationId(),
+            AccessPointReferenceType.ORGANIZATION
+        );
         verify(flowRepository).deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), FlowReferenceType.ORGANIZATION);
-        verify(parameterRepository)
-            .deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), ParameterReferenceType.ORGANIZATION);
-        verify(auditRepository)
-            .deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), Audit.AuditReferenceType.ORGANIZATION);
-        verify(customUserFieldsRepository)
-            .deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), CustomUserFieldReferenceType.ORGANIZATION);
+        verify(parameterRepository).deleteByReferenceIdAndReferenceType(
+            executionContext.getOrganizationId(),
+            ParameterReferenceType.ORGANIZATION
+        );
+        verify(auditRepository).deleteByReferenceIdAndReferenceType(
+            executionContext.getOrganizationId(),
+            Audit.AuditReferenceType.ORGANIZATION
+        );
+        verify(customUserFieldsRepository).deleteByReferenceIdAndReferenceType(
+            executionContext.getOrganizationId(),
+            CustomUserFieldReferenceType.ORGANIZATION
+        );
         verify(userRepository).deleteByOrganizationId(executionContext.getOrganizationId());
         verify(searchEngineService).delete(executionContext, UserEntity.builder().id(USER_ID).build());
         verify(searchEngineService).delete(executionContext, UserEntity.builder().id(USER_ID_2).build());
@@ -279,39 +336,47 @@ public class DeleteOrganizationCommandHandlerTest {
         verify(portalNotificationRepository).deleteAll(USER_ID_2);
         verify(tokenRepository).deleteByReferenceIdAndReferenceType(USER_ID, TokenReferenceType.USER.name());
         verify(tokenRepository).deleteByReferenceIdAndReferenceType(USER_ID_2, TokenReferenceType.USER.name());
-        verify(tenantRepository)
-            .deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), TenantReferenceType.ORGANIZATION);
+        verify(tenantRepository).deleteByReferenceIdAndReferenceType(
+            executionContext.getOrganizationId(),
+            TenantReferenceType.ORGANIZATION
+        );
         verify(roleRepository).deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), RoleReferenceType.ORGANIZATION);
-        verify(membershipRepository)
-            .deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), MembershipReferenceType.ORGANIZATION);
+        verify(membershipRepository).deleteByReferenceIdAndReferenceType(
+            executionContext.getOrganizationId(),
+            MembershipReferenceType.ORGANIZATION
+        );
         verify(identityProviderRepository).deleteByOrganizationId(executionContext.getOrganizationId());
-        verify(identityProviderActivationRepository)
-            .deleteByReferenceIdAndReferenceType(
-                executionContext.getOrganizationId(),
-                io.gravitee.repository.management.model.IdentityProviderActivationReferenceType.ORGANIZATION
-            );
+        verify(identityProviderActivationRepository).deleteByReferenceIdAndReferenceType(
+            executionContext.getOrganizationId(),
+            io.gravitee.repository.management.model.IdentityProviderActivationReferenceType.ORGANIZATION
+        );
         verify(commandRepository).deleteByOrganizationId(executionContext.getOrganizationId());
         verify(licenseRepository).delete(ORG_ID, License.ReferenceType.ORGANIZATION);
         verify(tagRepository).deleteByReferenceIdAndReferenceType(ORG_ID, TagReferenceType.ORGANIZATION);
         verify(licenseRepository).delete(ORG_ID, License.ReferenceType.ORGANIZATION);
         verify(mediaRepository).deleteByOrganization(ORG_ID);
         verify(organizationService).delete(executionContext.getOrganizationId());
-        verify(notificationTemplateRepository)
-            .deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), NotificationTemplateReferenceType.ORGANIZATION);
-        verify(entrypointRepository)
-            .deleteByReferenceIdAndReferenceType(executionContext.getOrganizationId(), EntrypointReferenceType.ORGANIZATION);
+        verify(notificationTemplateRepository).deleteByReferenceIdAndReferenceType(
+            executionContext.getOrganizationId(),
+            NotificationTemplateReferenceType.ORGANIZATION
+        );
+        verify(entrypointRepository).deleteByReferenceIdAndReferenceType(
+            executionContext.getOrganizationId(),
+            EntrypointReferenceType.ORGANIZATION
+        );
+        verify(clusterRepository).deleteByOrganizationId(executionContext.getOrganizationId());
+        verify(customDashboardRepository).deleteByOrganizationId(executionContext.getOrganizationId());
     }
 
     private void verifyDisableOrganization(ExecutionContext context) {
         verify(accessPointService).deleteAccessPoints(AccessPoint.ReferenceType.ORGANIZATION, context.getOrganizationId());
-        verify(identityProviderActivationService)
-            .removeAllIdpsFromTarget(
-                context,
-                new IdentityProviderActivationService.ActivationTarget(
-                    context.getOrganizationId(),
-                    IdentityProviderActivationReferenceType.ORGANIZATION
-                )
-            );
+        verify(identityProviderActivationService).removeAllIdpsFromTarget(
+            context,
+            new IdentityProviderActivationService.ActivationTarget(
+                context.getOrganizationId(),
+                IdentityProviderActivationReferenceType.ORGANIZATION
+            )
+        );
     }
 
     @Test

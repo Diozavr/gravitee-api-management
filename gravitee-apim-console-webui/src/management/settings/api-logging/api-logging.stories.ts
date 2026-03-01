@@ -61,6 +61,10 @@ export default {
                       limit: 'PT10S',
                       default: 'PT10S',
                     },
+                    windowedCount: {
+                      limit: '1/PT1S',
+                      default: '1/PT10S',
+                    },
                   },
                 },
               }),
@@ -70,7 +74,7 @@ export default {
     }),
   ],
   argTypes: {},
-  render: (args) => ({
+  render: args => ({
     template: `
       <div style="width: 870px">
         <api-logging></api-logging>

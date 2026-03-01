@@ -21,7 +21,7 @@ import static io.gravitee.apim.integration.tests.messages.sse.SseAssertions.asse
 import static io.gravitee.apim.integration.tests.messages.sse.SseAssertions.assertRetry;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
+import static org.awaitility.Awaitility.await;
 
 import com.graviteesource.entrypoint.sse.SseEntrypointConnectorFactory;
 import com.graviteesource.reactor.message.MessageApiReactorFactory;
@@ -56,6 +56,7 @@ import io.vertx.rxjava3.core.buffer.Buffer;
 import io.vertx.rxjava3.core.http.HttpClient;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
@@ -147,9 +148,6 @@ class OpenTelemetryTracingV4IntegrationTest extends AbstractGatewayTest {
         Set<String> expectedOperationNames = Set.of(
             "POST",
             "Request phase",
-            "REQUEST Processor (processor-metrics)",
-            "REQUEST Processor (pre-processor-transaction)",
-            "REQUEST Processor (processor-x-forward-for)",
             "REQUEST flow (api-flow-1)",
             "REQUEST policy-latency",
             "REQUEST Security (keyless)",
@@ -157,9 +155,7 @@ class OpenTelemetryTracingV4IntegrationTest extends AbstractGatewayTest {
             "POST /endpoint",
             "Response phase",
             "RESPONSE flow (api-flow-1)",
-            "RESPONSE policy-latency",
-            "RESPONSE Processor (processor-reporter)",
-            "RESPONSE Processor (processor-response-time)"
+            "RESPONSE policy-latency"
         );
 
         await()
@@ -182,39 +178,30 @@ class OpenTelemetryTracingV4IntegrationTest extends AbstractGatewayTest {
     @Test
     @DeployApi("/apis/v4/messages/sse/sse-entrypoint-mock-endpoint-tracing.json")
     void should_get_messages_with_default_configuration(HttpClient httpClient) {
-        startSseStream(httpClient)
-            // expect 3 chunks: retry, two messages
-            .awaitCount(3)
-            .assertValueAt(
-                0,
-                chunk -> {
-                    assertRetry(chunk);
-                    return true;
-                }
-            )
-            .assertValueAt(
-                1,
-                chunk -> {
-                    assertOnMessage(chunk, 0L, MESSAGE);
-                    return true;
-                }
-            )
-            .assertValueAt(
-                2,
-                chunk -> {
-                    assertOnMessage(chunk, 1L, MESSAGE);
-                    return true;
-                }
-            )
+        var obs = startSseStream(httpClient);
+        // expect 3 chunks: retry, two messages
+        await()
+            .atMost(30, TimeUnit.SECONDS)
+            .until(() -> obs.values().size() >= 3);
+        obs
+            .assertValueAt(0, chunk -> {
+                assertRetry(chunk);
+                return true;
+            })
+            .assertValueAt(1, chunk -> {
+                assertOnMessage(chunk, 0L, MESSAGE);
+                return true;
+            })
+            .assertValueAt(2, chunk -> {
+                assertOnMessage(chunk, 1L, MESSAGE);
+                return true;
+            })
             .cancel();
 
         httpClient.close().blockingAwait();
 
         Set<String> expectedOperationNames = Set.of(
             "GET /test",
-            "REQUEST Processor (processor-metrics)",
-            "REQUEST Processor (pre-processor-transaction)",
-            "REQUEST Processor (processor-x-forward-for)",
             "REQUEST Security (keyless)",
             "Request phase",
             "REQUEST flow (api-flow ready)",
@@ -225,9 +212,7 @@ class OpenTelemetryTracingV4IntegrationTest extends AbstractGatewayTest {
             "MESSAGE_RESPONSE flow (api-flow ready)",
             "Subscribe",
             "message (0)",
-            "policy-message-flow-ready",
-            "RESPONSE Processor (processor-response-time)",
-            "RESPONSE Processor (processor-reporter)"
+            "policy-message-flow-ready"
         );
         await()
             .atMost(30, SECONDS)
@@ -266,7 +251,6 @@ class OpenTelemetryTracingV4IntegrationTest extends AbstractGatewayTest {
 
         var trace = data.getJsonObject(0);
         var spans = trace.getJsonArray("spans");
-        assertThat(spans).hasSameSizeAs(expectedOperationName);
 
         String[] operationNames = spans
             .stream()

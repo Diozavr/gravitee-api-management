@@ -41,9 +41,9 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.container.ResourceContext;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
 public class PortalMenuLinksResource extends AbstractResource {
 
     @Context
@@ -69,14 +69,12 @@ public class PortalMenuLinksResource extends AbstractResource {
 
         var portalMenuLinksSubset = computePaginationData(portalMenuLinks, paginationParam);
 
-        return Response
-            .ok(
-                new PortalMenuLinksResponse()
-                    .data(mapper.map(portalMenuLinksSubset))
-                    .pagination(PaginationInfo.computePaginationInfo(portalMenuLinks.size(), portalMenuLinksSubset.size(), paginationParam))
-                    .links(computePaginationLinks(portalMenuLinks.size(), paginationParam))
-            )
-            .build();
+        return Response.ok(
+            new PortalMenuLinksResponse()
+                .data(mapper.map(portalMenuLinksSubset))
+                .pagination(PaginationInfo.computePaginationInfo(portalMenuLinks.size(), portalMenuLinksSubset.size(), paginationParam))
+                .links(computePaginationLinks(portalMenuLinks.size(), paginationParam))
+        ).build();
     }
 
     @POST
@@ -90,8 +88,7 @@ public class PortalMenuLinksResource extends AbstractResource {
             new CreatePortalMenuLinkUseCase.Input(executionContext.getEnvironmentId(), mapper.map(createPortalMenuLink))
         );
 
-        return Response
-            .created(this.getLocationHeader(output.portalMenuLink().getId()))
+        return Response.created(this.getLocationHeader(output.portalMenuLink().getId()))
             .entity(mapper.map(output.portalMenuLink()))
             .build();
     }

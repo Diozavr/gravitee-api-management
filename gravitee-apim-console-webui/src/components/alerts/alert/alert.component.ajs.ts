@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 import { IScope } from 'angular';
-
 import { Router } from '@angular/router';
 import { cloneDeep, find, isEqual } from 'lodash';
 
@@ -63,20 +62,17 @@ const AlertComponentAjs: ng.IComponentOptions = {
         if (this.activatedRoute.snapshot.params.apiId) {
           this.referenceType = Scope.API;
           this.referenceId = this.activatedRoute.snapshot.params.apiId;
-          this.groups = ['API metrics', 'Health-check'];
           this.titlePrefix = this.resolvedApi.name;
         } else if (this.activatedRoute.snapshot.params.applicationId) {
           this.referenceType = Scope.APPLICATION;
           this.referenceId = this.activatedRoute.snapshot.params.applicationId;
-          this.groups = ['Application'];
           this.titlePrefix = ($scope.$parent as any).$resolve.resolvedApplication.data.name;
         } else {
           this.referenceType = Scope.ENVIRONMENT;
-          this.groups = ['Node', 'API metrics', 'Health-check'];
           this.titlePrefix = 'Platform';
         }
-
-        this.rules = Rule.findByScope(this.referenceType);
+        this.groups = Rule.findCategoriesByScope(this.referenceType, Constants?.org?.settings?.cloudHosted?.enabled);
+        this.rules = Rule.findByScope(this.referenceType, Constants?.org?.settings?.cloudHosted?.enabled);
         this.updateMode = this.activatedRoute.snapshot.params.alertId !== undefined;
 
         if (!this.updateMode) {
@@ -87,14 +83,14 @@ const AlertComponentAjs: ng.IComponentOptions = {
         }
 
         this.template = this.alert.template || false;
-        this.apiByDefault = this.alert.event_rules && this.alert.event_rules.findIndex((rule) => rule.event === 'API_CREATE') !== -1;
+        this.apiByDefault = this.alert.event_rules && this.alert.event_rules.findIndex(rule => rule.event === 'API_CREATE') !== -1;
         this.initialAlert = cloneDeep(this.alert);
 
         this.selectedTab = indexOfTab > -1 ? indexOfTab : 1;
         this.currentTab = this.tabs[this.selectedTab];
       };
 
-      this.$onChanges = (changes) => {
+      this.$onChanges = changes => {
         const currentAlert = find(this.alerts, { id: this.activatedRoute.snapshot.params.alertId });
         if (this.updateMode && (!isEqual(this.alerts, changes.alerts.currentValue) || !isEqual(currentAlert, this.alert))) {
           this.alerts = changes.alerts.currentValue;
@@ -134,7 +130,7 @@ const AlertComponentAjs: ng.IComponentOptions = {
         } else {
           service = AlertService.create({ ...alert, type: rawType });
         }
-        return service.then((response) => {
+        return service.then(response => {
           this.formAlert.$setPristine();
           NotificationService.show('Alert has been saved successfully');
           const alert = response.data;
@@ -181,7 +177,7 @@ const AlertComponentAjs: ng.IComponentOptions = {
       };
 
       this.onRuleChange = () => {
-        const rule: Rule = find(this.rules, (rule) => rule.source + '@' + rule.type === this.alert.type);
+        const rule: Rule = find(this.rules, rule => rule.source + '@' + rule.type === this.alert.type);
         this.alert.source = rule.source;
         if (this.alert.filters) {
           this.alert.filters.length = 0;

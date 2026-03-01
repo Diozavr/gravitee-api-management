@@ -54,6 +54,11 @@
 
         <dependency>
             <groupId>io.gravitee.node</groupId>
+            <artifactId>gravitee-node-logging</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.gravitee.node</groupId>
             <artifactId>gravitee-node-vertx</artifactId>
         </dependency>
 
@@ -61,6 +66,11 @@
             <groupId>io.gravitee.apim.common</groupId>
             <artifactId>gravitee-apim-common</artifactId>
             <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.gravitee.plugin</groupId>
+            <artifactId>gravitee-plugin-common-configurations</artifactId>
         </dependency>
 
         <dependency>
@@ -84,12 +94,6 @@
         <dependency>
             <groupId>io.gravitee.apim.gateway</groupId>
             <artifactId>gravitee-apim-gateway-platform</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.gravitee.apim.gateway</groupId>
-            <artifactId>gravitee-apim-gateway-buffer</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -138,6 +142,12 @@
         <dependency>
             <groupId>io.gravitee.apim.definition</groupId>
             <artifactId>gravitee-apim-definition-jackson</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.gravitee.apim.reporter</groupId>
+            <artifactId>gravitee-apim-reporter-common</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -260,6 +270,11 @@
         <dependency>
             <groupId>ch.qos.logback.contrib</groupId>
             <artifactId>logback-json-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>co.elastic.logging</groupId>
+            <artifactId>logback-ecs-encoder</artifactId>
             <scope>compile</scope>
         </dependency>
 
@@ -505,6 +520,11 @@
                 <dependency>
                     <groupId>com.graviteesource.cloud</groupId>
                     <artifactId>gravitee-cloud-initializer</artifactId>
+                </dependency>
+
+                <dependency>
+                    <groupId>com.graviteesource.common</groupId>
+                    <artifactId>gravitee-common-mcp</artifactId>
                 </dependency>
             </dependencies>
         </profile>

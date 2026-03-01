@@ -16,11 +16,13 @@
 package io.gravitee.rest.api.portal.rest.resource.param;
 
 import jakarta.ws.rs.WebApplicationException;
+import lombok.CustomLog;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class AnalyticsTypeParam extends AbstractParam<AnalyticsTypeParam.AnalyticsType> {
 
     public enum AnalyticsType {
@@ -40,7 +42,9 @@ public class AnalyticsTypeParam extends AbstractParam<AnalyticsTypeParam.Analyti
             if (param != null) {
                 return AnalyticsType.valueOf(param.toUpperCase());
             }
-        } catch (IllegalArgumentException iae) {}
+        } catch (IllegalArgumentException iae) {
+            log.debug("IllegalArgumentException ignored in AnalyticsTypeParam: {}", iae.getMessage(), iae);
+        }
 
         return null;
     }

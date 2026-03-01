@@ -58,6 +58,7 @@ import org.glassfish.jersey.media.multipart.file.StreamDataBodyPart;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * @author David BRASSELY (brasseld at gmail.com)
@@ -398,8 +399,7 @@ public class ApiResourceTest extends AbstractResourceTest {
                 eq("Foo"),
                 eq(DefinitionVersion.valueOfLabel("1.0.0"))
             )
-        )
-            .thenReturn(mockApi);
+        ).thenReturn(mockApi);
 
         final Response response = envTarget(API + "/import-path-mappings").queryParam("page", "Foo").request().post(null);
         assertEquals(OK_200, response.getStatus());
@@ -414,8 +414,7 @@ public class ApiResourceTest extends AbstractResourceTest {
                 eq("Foo"),
                 eq(DefinitionVersion.valueOfLabel("2.0.0"))
             )
-        )
-            .thenReturn(mockApi);
+        ).thenReturn(mockApi);
 
         final Response response = envTarget(API + "/import-path-mappings")
             .queryParam("page", "Foo")
@@ -528,5 +527,198 @@ public class ApiResourceTest extends AbstractResourceTest {
 
         assertEquals("application/yaml", response.getHeaders().getFirst("Content-Type"));
         assertEquals("attachment;filename=my-api-1.yml", response.getHeaders().getFirst("Content-Disposition"));
+    }
+
+    @Test
+    public void shouldRollbackApi_withV2Payload() {
+        //given
+        final String v2Payload = """
+            {
+              "id": "my-api",
+              "name": "My Api",
+              "version": "v1.0",
+              "description": "rollback test for v2",
+              "visibility": "PUBLIC",
+              "proxy": {
+                "virtual_hosts": [ { "path": "/test" } ],
+                "groups": []
+              },
+              "plans": [],
+              "flows": [],
+              "paths": {}
+            }
+            """;
+
+        ApiEntity rollbacked = new ApiEntity();
+        rollbacked.setId(API);
+        rollbacked.setName(API);
+        rollbacked.setUpdatedAt(new Date());
+        doReturn(rollbacked).when(apiService).rollback(eq(GraviteeContext.getExecutionContext()), eq(API), any());
+
+        // when
+        Response response = envTarget(API + "/rollback").request().post(Entity.json(v2Payload));
+
+        // then
+        assertEquals(OK_200, response.getStatus());
+        verify(apiService, times(1)).rollback(eq(GraviteeContext.getExecutionContext()), eq(API), any());
+        ApiEntity body = response.readEntity(ApiEntity.class);
+        assertNotNull(body);
+        assertEquals(API, body.getId());
+    }
+
+    @Test
+    public void shouldReturnBadRequest_onV4PayloadForRollback() {
+        //given
+        final String v4Payload = """
+            {
+              "id": "my-api",
+              "name": "v4 api",
+              "version": "1.0",
+              "description": "v4 api description",
+              "visibility": "PRIVATE",
+              "definitionVersion": "4.0.0",
+              "proxy": {
+                "virtual_hosts": [ { "path": "/" } ],
+                "groups": []
+              },
+              "plans": [],
+              "flows": [],
+              "paths": {}
+            }
+            """;
+
+        // when
+        Response response = envTarget(API + "/rollback").request().post(Entity.json(v4Payload));
+
+        // then
+        assertEquals(BAD_REQUEST_400, response.getStatus());
+
+        try {
+            ErrorEntity err = response.readEntity(ErrorEntity.class);
+            assertNotNull(err);
+            System.out.println(err.getMessage());
+            assertEquals("Detected a v4 API definition. Please use the migration tool instead of rollback.", err.getMessage());
+        } catch (Exception ignore) {
+            String msg = response.readEntity(String.class);
+            assertTrue(msg.toLowerCase().contains("v4"));
+        }
+
+        verify(apiService, never()).rollback(any(), any(), any());
+    }
+
+    public void shouldSanitizeInvalidInlinePictureJson() throws Exception {
+        reset(apiDuplicatorService);
+        String json = "{\"picture\":\"data:image/svg+xml;base64,AAAA\"}";
+
+        ApiEntity updatedApi = new ApiEntity();
+        updatedApi.setId("my-api-id");
+        updatedApi.setUpdatedAt(new Date());
+        updatedApi.setGraviteeDefinitionVersion(DefinitionVersion.V2.getLabel());
+        doReturn(updatedApi)
+            .when(apiDuplicatorService)
+            .updateWithImportedDefinition(eq(GraviteeContext.getExecutionContext()), any(), any());
+
+        final Response response = envTarget().path(API + "/import").request().put(Entity.entity(json, MediaType.APPLICATION_JSON_TYPE));
+
+        assertEquals(OK_200, response.getStatus());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(apiDuplicatorService).updateWithImportedDefinition(
+            eq(GraviteeContext.getExecutionContext()),
+            any(),
+            payloadCaptor.capture()
+        );
+        Object payload = payloadCaptor.getValue();
+        assertTrue(payload instanceof com.fasterxml.jackson.databind.node.ObjectNode);
+        com.fasterxml.jackson.databind.node.ObjectNode node = (com.fasterxml.jackson.databind.node.ObjectNode) payload;
+        assertTrue(node.has("picture"));
+        assertTrue(node.get("picture").isNull());
+    }
+
+    @Test
+    public void shouldSanitizeInvalidInlinePictureInTextPlain() {
+        reset(apiDuplicatorService);
+        String body = "{\"picture\":\"data:image/svg+xml;base64,AAAA\"}";
+
+        ApiEntity updatedApi = new ApiEntity();
+        updatedApi.setId("my-api-id");
+        updatedApi.setUpdatedAt(new Date());
+        updatedApi.setGraviteeDefinitionVersion(DefinitionVersion.V2.getLabel());
+        doReturn(updatedApi)
+            .when(apiDuplicatorService)
+            .updateWithImportedDefinition(eq(GraviteeContext.getExecutionContext()), any(), any());
+
+        final Response response = envTarget().path(API + "/import-url").request().put(Entity.text(body));
+
+        assertEquals(OK_200, response.getStatus());
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(apiDuplicatorService).updateWithImportedDefinition(
+            eq(GraviteeContext.getExecutionContext()),
+            any(),
+            payloadCaptor.capture()
+        );
+        Object payload = payloadCaptor.getValue();
+        assertTrue(payload instanceof String);
+        String sanitized = (String) payload;
+        assertTrue(sanitized.contains("\"picture\":null"));
+    }
+
+    @Test
+    public void shouldSanitizeInvalidInlineBackgroundJson() throws Exception {
+        reset(apiDuplicatorService);
+        String json = "{\"background\":\"data:image/svg+xml;base64,AAAA\"}";
+
+        ApiEntity updatedApi = new ApiEntity();
+        updatedApi.setId("my-api-id");
+        updatedApi.setUpdatedAt(new Date());
+        updatedApi.setGraviteeDefinitionVersion(DefinitionVersion.V2.getLabel());
+        doReturn(updatedApi)
+            .when(apiDuplicatorService)
+            .updateWithImportedDefinition(eq(GraviteeContext.getExecutionContext()), any(), any());
+
+        final Response response = envTarget().path(API + "/import").request().put(Entity.entity(json, MediaType.APPLICATION_JSON_TYPE));
+
+        assertEquals(OK_200, response.getStatus());
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(apiDuplicatorService).updateWithImportedDefinition(
+            eq(GraviteeContext.getExecutionContext()),
+            any(),
+            payloadCaptor.capture()
+        );
+        Object payload = payloadCaptor.getValue();
+        assertTrue(payload instanceof com.fasterxml.jackson.databind.node.ObjectNode);
+        com.fasterxml.jackson.databind.node.ObjectNode node = (com.fasterxml.jackson.databind.node.ObjectNode) payload;
+        assertTrue(node.has("background"));
+        assertTrue(node.get("background").isNull());
+    }
+
+    @Test
+    public void shouldSanitizeInvalidInlineBackgroundInTextPlain() {
+        reset(apiDuplicatorService);
+        String body = "{\"background\":\"data:image/svg+xml;base64,AAAA\"}";
+
+        ApiEntity updatedApi = new ApiEntity();
+        updatedApi.setId("my-api-id");
+        updatedApi.setUpdatedAt(new Date());
+        updatedApi.setGraviteeDefinitionVersion(DefinitionVersion.V2.getLabel());
+        doReturn(updatedApi)
+            .when(apiDuplicatorService)
+            .updateWithImportedDefinition(eq(GraviteeContext.getExecutionContext()), any(), any());
+
+        final Response response = envTarget().path(API + "/import-url").request().put(Entity.text(body));
+
+        assertEquals(OK_200, response.getStatus());
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(apiDuplicatorService).updateWithImportedDefinition(
+            eq(GraviteeContext.getExecutionContext()),
+            any(),
+            payloadCaptor.capture()
+        );
+        Object payload = payloadCaptor.getValue();
+        assertTrue(payload instanceof String);
+        String sanitized = (String) payload;
+        assertTrue(sanitized.contains("\"background\":null"));
     }
 }

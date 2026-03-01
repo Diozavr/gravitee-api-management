@@ -21,16 +21,20 @@ import io.gravitee.secrets.api.annotation.Secret;
 import io.gravitee.secrets.api.el.FieldKind;
 import java.io.Serial;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
+ * @deprecated since 4.10.0, use {@link io.gravitee.plugin.configurations.ssl.pkcs12.PKCS12TrustStore} instead
  */
+@Deprecated(since = "4.10.0", forRemoval = true)
 @Getter
 @Setter
 @Builder
+@EqualsAndHashCode(callSuper = true)
 public class PKCS12TrustStore extends TrustStore {
 
     @Serial

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { Meta, moduleMetadata, StoryObj } from '@storybook/angular';
-import { action } from '@storybook/addon-actions';
+import { action } from 'storybook/actions';
 import { of } from 'rxjs';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -52,7 +52,7 @@ export default {
           useValue: {
             search: () => of(searchableUsers),
             getUserAvatar: () => 'https://i.pravatar.cc/100',
-            get: (id: string) => of(searchableUsers.find((user) => user.id === id)),
+            get: (id: string) => of(searchableUsers.find(user => user.id === id)),
           },
         },
       ],
@@ -68,13 +68,13 @@ export default {
     },
   },
   render: ({ selectedUserId, disabled }) => {
-    const userControl = new FormControl({ value: searchableUsers.find((u) => u.id === selectedUserId), disabled });
+    const userControl = new FormControl({ value: searchableUsers.find(u => u.id === selectedUserId), disabled });
 
-    userControl.valueChanges.subscribe((value) => {
+    userControl.valueChanges.subscribe(value => {
       action('UserId')(value);
     });
 
-    userControl.statusChanges.subscribe((value) => {
+    userControl.statusChanges.subscribe(value => {
       action('UserId')(value);
     });
 

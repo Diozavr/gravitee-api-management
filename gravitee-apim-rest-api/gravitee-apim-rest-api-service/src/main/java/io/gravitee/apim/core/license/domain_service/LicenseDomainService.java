@@ -42,7 +42,17 @@ public class LicenseDomainService {
         var license = licenseManager.getOrganizationLicenseOrPlatform(organizationId);
 
         // For now federation feature is allowed for any enterprise license
-        return !Objects.equals(license.getTier(), "oss");
+        return license == null || !Objects.equals(license.getTier(), "oss");
+    }
+
+    /**
+     * Check that API Product deployment is allowed by the license (requires universe tier).
+     * @param organizationId The organization id
+     * @return <code>true</code> when API Product deployment is allowed.
+     */
+    public boolean isApiProductDeploymentAllowed(String organizationId) {
+        var license = licenseManager.getOrganizationLicenseOrPlatform(organizationId);
+        return Objects.equals(license.getTier(), "universe");
     }
 
     /**
@@ -53,18 +63,17 @@ public class LicenseDomainService {
      * @param license -- license content to be saved
      */
     public void createOrUpdateOrganizationLicense(String organizationId, String license) {
-        this.licenseCrudService.getOrganizationLicense(organizationId)
-            .ifPresentOrElse(
-                l -> {
-                    if (!Objects.equals(l.getLicense(), license)) {
-                        this.licenseCrudService.updateOrganizationLicense(organizationId, license);
-                    }
-                },
-                () -> {
-                    if (Objects.nonNull(license)) {
-                        this.licenseCrudService.createOrganizationLicense(organizationId, license);
-                    }
+        this.licenseCrudService.getOrganizationLicense(organizationId).ifPresentOrElse(
+            l -> {
+                if (!Objects.equals(l.getLicense(), license)) {
+                    this.licenseCrudService.updateOrganizationLicense(organizationId, license);
                 }
-            );
+            },
+            () -> {
+                if (Objects.nonNull(license)) {
+                    this.licenseCrudService.createOrganizationLicense(organizationId, license);
+                }
+            }
+        );
     }
 }

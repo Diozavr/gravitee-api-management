@@ -55,11 +55,10 @@ public class DeletePlanDomainService {
 
     private void createAuditLog(Plan planToDelete, AuditInfo auditInfo) {
         auditService.createApiAuditLog(
-            ApiAuditLogEntity
-                .builder()
+            ApiAuditLogEntity.builder()
                 .organizationId(auditInfo.organizationId())
                 .environmentId(auditInfo.environmentId())
-                .apiId(planToDelete.getApiId())
+                .apiId(planToDelete.getReferenceId())
                 .event(PlanAuditEvent.PLAN_DELETED)
                 .actor(auditInfo.actor())
                 .oldValue(planToDelete)

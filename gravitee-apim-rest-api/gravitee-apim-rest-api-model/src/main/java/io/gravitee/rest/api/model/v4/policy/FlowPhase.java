@@ -21,12 +21,26 @@ import lombok.Getter;
 
 @Getter
 public enum FlowPhase {
+    ENTRYPOINT_CONNECT(ApiProtocolType.NATIVE_KAFKA),
     INTERACT(ApiProtocolType.NATIVE_KAFKA),
-    CONNECT(ApiProtocolType.NATIVE_KAFKA),
     PUBLISH(ApiProtocolType.NATIVE_KAFKA, ApiProtocolType.HTTP_MESSAGE),
     SUBSCRIBE(ApiProtocolType.NATIVE_KAFKA, ApiProtocolType.HTTP_MESSAGE),
-    REQUEST(ApiProtocolType.NATIVE_KAFKA, ApiProtocolType.HTTP_PROXY, ApiProtocolType.HTTP_MESSAGE),
-    RESPONSE(ApiProtocolType.NATIVE_KAFKA, ApiProtocolType.HTTP_PROXY, ApiProtocolType.HTTP_MESSAGE);
+    REQUEST(
+        ApiProtocolType.NATIVE_KAFKA,
+        ApiProtocolType.HTTP_PROXY,
+        ApiProtocolType.HTTP_MESSAGE,
+        ApiProtocolType.MCP_PROXY,
+        ApiProtocolType.LLM_PROXY,
+        ApiProtocolType.A2A_PROXY
+    ),
+    RESPONSE(
+        ApiProtocolType.NATIVE_KAFKA,
+        ApiProtocolType.HTTP_PROXY,
+        ApiProtocolType.HTTP_MESSAGE,
+        ApiProtocolType.MCP_PROXY,
+        ApiProtocolType.LLM_PROXY,
+        ApiProtocolType.A2A_PROXY
+    );
 
     private final List<ApiProtocolType> apiProtocolType;
 

@@ -37,6 +37,7 @@ import io.gravitee.repository.management.model.NotificationReferenceType;
 import io.gravitee.repository.management.model.PortalNotificationConfig;
 import io.gravitee.rest.api.model.MembershipReferenceType;
 import io.gravitee.rest.api.model.notification.PortalNotificationConfigEntity;
+import io.gravitee.rest.api.service.GroupService;
 import io.gravitee.rest.api.service.MembershipService;
 import io.gravitee.rest.api.service.PortalNotificationConfigService;
 import java.util.Arrays;
@@ -62,11 +63,14 @@ public class PortalNotificationConfigService_SaveTest {
     @Mock
     MembershipService membershipService;
 
+    @Mock
+    GroupService groupService;
+
     PortalNotificationConfigService underTest;
 
     @Before
     public void setup() {
-        underTest = new PortalNotificationConfigServiceImpl(portalNotificationConfigRepository, membershipService);
+        underTest = new PortalNotificationConfigServiceImpl(portalNotificationConfigRepository, membershipService, groupService);
     }
 
     @Test
@@ -151,8 +155,7 @@ public class PortalNotificationConfigService_SaveTest {
 
     @Test
     public void shouldRemoveGroupIds() throws TechnicalException {
-        PortalNotificationConfig config = PortalNotificationConfig
-            .builder()
+        PortalNotificationConfig config = PortalNotificationConfig.builder()
             .groups(new HashSet<>(Set.of("1", "2", "3")))
             .user("po")
             .referenceType(NotificationReferenceType.API)
@@ -163,11 +166,10 @@ public class PortalNotificationConfigService_SaveTest {
         when(portalNotificationConfigRepository.findById("po", NotificationReferenceType.API, "123")).thenReturn(Optional.of(config));
 
         underTest.removeGroupIds("123", Set.of("3"));
-        verify(portalNotificationConfigRepository, times(1))
-            .update(
-                assertArg(c -> {
-                    assertEquals(Set.of("1", "2"), c.getGroups());
-                })
-            );
+        verify(portalNotificationConfigRepository, times(1)).update(
+            assertArg(c -> {
+                assertEquals(Set.of("1", "2"), c.getGroups());
+            })
+        );
     }
 }

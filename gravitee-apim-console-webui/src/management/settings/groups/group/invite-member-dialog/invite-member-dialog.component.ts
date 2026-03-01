@@ -30,8 +30,7 @@ import { GioPermissionModule } from '../../../../../shared/components/gio-permis
 import { Invitation } from '../../../../../entities/invitation/invitation';
 import { ApiPrimaryOwnerMode } from '../../../../../services/apiPrimaryOwnerMode.service';
 import { EnvironmentSettingsService } from '../../../../../services-ngx/environment-settings.service';
-import { RoleName } from '../membershipState';
-import { Member } from '../../../../../entities/management-api-v2';
+import { RoleName, Member } from '../membershipState';
 import { AddOrInviteMembersDialogData } from '../group.component';
 import { Group } from '../../../../../entities/group/group';
 
@@ -117,7 +116,7 @@ export class InviteMemberDialogComponent implements OnInit {
   private disableAPIRoleOptions() {
     this.disabledAPIRoles.set(
       new Set(
-        this.defaultAPIRoles.filter((role) => this.isPrimaryOwnerDisabled(role) || this.isSystemRoleDisabled(role)).map((role) => role.id),
+        this.defaultAPIRoles.filter(role => this.isPrimaryOwnerDisabled(role) || this.isSystemRoleDisabled(role)).map(role => role.id),
       ),
     );
   }
@@ -127,7 +126,7 @@ export class InviteMemberDialogComponent implements OnInit {
   }
 
   private isPrimaryOwnerPresent() {
-    return this.members.some((member) => member.roles['API'] === RoleName.PRIMARY_OWNER);
+    return this.members.some(member => member.roles['API'] === RoleName.PRIMARY_OWNER);
   }
 
   private isSystemRoleDisabled(role: Role): boolean {

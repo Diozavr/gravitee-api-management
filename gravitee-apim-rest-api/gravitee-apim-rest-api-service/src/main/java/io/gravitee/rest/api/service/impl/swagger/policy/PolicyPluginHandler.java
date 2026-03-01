@@ -18,14 +18,14 @@ package io.gravitee.rest.api.service.impl.swagger.policy;
 import io.gravitee.plugin.policy.PolicyPlugin;
 import io.gravitee.policy.api.swagger.v2.SwaggerOperationVisitor;
 import io.gravitee.policy.api.swagger.v3.OAIOperationVisitor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 public class PolicyPluginHandler extends io.gravitee.plugin.policy.internal.PolicyPluginHandler {
 
     @Autowired
@@ -34,13 +34,14 @@ public class PolicyPluginHandler extends io.gravitee.plugin.policy.internal.Poli
     @Override
     protected void register(PolicyPlugin policyPlugin) {
         Class<? extends OAIOperationVisitor> oaiVisitor = new OAIOperationVisitorClassFinder().lookupFirst(policyPlugin.policy());
-        Class<? extends SwaggerOperationVisitor> swaggerVisitor = new SwaggerOperationVisitorClassFinder()
-            .lookupFirst(policyPlugin.policy());
+        Class<? extends SwaggerOperationVisitor> swaggerVisitor = new SwaggerOperationVisitorClassFinder().lookupFirst(
+            policyPlugin.policy()
+        );
 
         try {
             addVisitor(policyPlugin, createInstance(swaggerVisitor), createInstance(oaiVisitor));
         } catch (Exception e) {
-            logger.error("Unable to register policy chain", e);
+            log.error("Unable to register policy chain", e);
         }
     }
 
@@ -50,7 +51,7 @@ public class PolicyPluginHandler extends io.gravitee.plugin.policy.internal.Poli
         OAIOperationVisitor oaiOperationVisitor
     ) {
         if (swaggerOperationVisitor != null && oaiOperationVisitor != null) {
-            logger.info("Add a Swagger visitor for policy: id{}", policyPlugin.id());
+            log.info("Add a Swagger visitor for policy: id{}", policyPlugin.id());
 
             PolicyOperationVisitor visitor = new PolicyOperationVisitor();
             visitor.setId(policyPlugin.id());
@@ -70,7 +71,7 @@ public class PolicyPluginHandler extends io.gravitee.plugin.policy.internal.Poli
         try {
             return clazz.newInstance();
         } catch (InstantiationException | IllegalAccessException ex) {
-            logger.error("Unable to instantiate class: {}", clazz, ex);
+            log.error("Unable to instantiate class: {}", clazz, ex);
             throw ex;
         }
     }

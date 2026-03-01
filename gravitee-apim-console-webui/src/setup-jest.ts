@@ -15,6 +15,8 @@
  */
 
 import { setupZoneTestEnv } from 'jest-preset-angular/setup-env/zone';
+import 'chart.js/auto';
+import 'jest-canvas-mock';
 
 setupZoneTestEnv();
 
@@ -28,7 +30,7 @@ jest.mock('@asciidoctor/core', () => jest.fn());
 
 // mocking openapi-parser for tests
 jest.mock('@scalar/openapi-parser', () => {
-  const mockDereference = jest.fn().mockImplementation(async (spec) => ({
+  const mockDereference = jest.fn().mockImplementation(async spec => ({
     schema: spec,
   }));
   const mockValidate = jest.fn().mockImplementation(async () => true);
@@ -79,4 +81,42 @@ Object.defineProperty(document.body.style, 'transform', {
       configurable: true,
     };
   },
+});
+
+// Mock crypto.randomUUID for Jest environment. Used for default id generation in components.
+Object.defineProperty(globalThis, 'crypto', {
+  value: {
+    ...globalThis.crypto,
+    randomUUID: () =>
+      'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.floor(Math.random() * 16);
+        const v = c === 'x' ? r : (r % 4) + 8;
+        return v.toString(16);
+      }),
+  },
+});
+
+// Hide the following error:
+// "Could not parse CSS stylesheet"
+// eslint-disable-next-line
+const originalError = console.error;
+beforeAll(() => {
+  jest.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+    const firstArg = args[0];
+    // jsdom CSS parsing
+    if (firstArg instanceof Error && firstArg.message.includes('Could not parse CSS stylesheet')) {
+      return;
+    }
+    // jsdom structured error
+    if (
+      // eslint-disable-next-line
+      typeof firstArg === 'object' &&
+      firstArg !== null &&
+      'type' in firstArg &&
+      (firstArg as any).type === 'css parsing'
+    ) {
+      return;
+    }
+    originalError.call(console, ...args);
+  });
 });

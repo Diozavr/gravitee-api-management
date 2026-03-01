@@ -15,6 +15,7 @@
  */
 package io.gravitee.apim.core.api.model;
 
+import io.gravitee.definition.model.v4.nativeapi.NativeAnalytics;
 import io.gravitee.definition.model.v4.nativeapi.NativeApi;
 import io.gravitee.definition.model.v4.nativeapi.NativeEndpointGroup;
 import io.gravitee.definition.model.v4.nativeapi.NativeFlow;
@@ -41,13 +42,15 @@ public class NewNativeApi extends AbstractNewApi {
     @Builder.Default
     private List<NativeFlow> flows = List.of();
 
+    @Builder.Default
+    private NativeAnalytics nativeAnalytics = new NativeAnalytics();
+
     /**
      * @return An instance of {@link NativeApi.NativeApiBuilder} based on the current state of this NewNativeApi.
      */
     public NativeApi.NativeApiBuilder<?, ?> toNativeApiDefinitionBuilder() {
         // Currently we can't use MapStruct in core. We will need to discuss as team if we want to introduce a rule to allow MapStruct in core.
-        return NativeApi
-            .builder()
+        return NativeApi.builder()
             .name(name)
             .type(type)
             .apiVersion(apiVersion)
@@ -55,6 +58,7 @@ public class NewNativeApi extends AbstractNewApi {
             .tags(tags)
             .listeners(listeners)
             .endpointGroups(endpointGroups)
-            .flows(flows);
+            .flows(flows)
+            .analytics(nativeAnalytics);
     }
 }

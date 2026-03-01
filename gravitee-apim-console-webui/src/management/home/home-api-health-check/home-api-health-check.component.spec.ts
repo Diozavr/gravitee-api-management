@@ -68,8 +68,8 @@ describe('HomeApiHealthCheckComponent', () => {
     // For table
     await expectApisListRequest([]);
 
-    const { headerCells, rowCells } = await computeApisTableCells();
-    expect(headerCells).toEqual([
+    const tableCells = await computeApisTableCells();
+    expect(tableCells.headerCells).toEqual([
       {
         actions: '',
         name: 'Name',
@@ -78,7 +78,9 @@ describe('HomeApiHealthCheckComponent', () => {
         availability: 'API Availability',
       },
     ]);
-    expect(rowCells).toEqual([['No APIs to display.']]);
+    const table = await loader.getHarness(MatTableHarness);
+    const tableHost = await table.host();
+    expect(await tableHost.text()).toContain('No APIs to display.');
   });
 
   it('should display a table with one row', async () => {
@@ -155,7 +157,7 @@ describe('HomeApiHealthCheckComponent', () => {
     });
 
     it('should fetch last Health data', async () => {
-      await loader.getHarness(MatButtonHarness.with({ selector: '.time-frame__refresh-btn' })).then((button) => button.click());
+      await loader.getHarness(MatButtonHarness.with({ selector: '.time-frame__refresh-btn' })).then(button => button.click());
 
       expectGetApiHealth(api.id);
       expectGetApiHealthAverage(api.id);
@@ -180,7 +182,7 @@ describe('HomeApiHealthCheckComponent', () => {
     });
 
     it("should filter by 'has_health_check:true'", async () => {
-      await loader.getHarness(MatButtonHarness.with({ text: 'Filter to APIs with Health Check enabled' })).then((button) => button.click());
+      await loader.getHarness(MatButtonHarness.with({ text: 'Filter to APIs with Health Check enabled' })).then(button => button.click());
 
       expectApisListRequest([api], 'has_health_check:true');
     });
@@ -189,10 +191,10 @@ describe('HomeApiHealthCheckComponent', () => {
     const table = await loader.getHarness(MatTableHarness.with({ selector: '#apisTable' }));
 
     const headerRows = await table.getHeaderRows();
-    const headerCells = await parallel(() => headerRows.map((row) => row.getCellTextByColumnName()));
+    const headerCells = await parallel(() => headerRows.map(row => row.getCellTextByColumnName()));
 
     const rows = await table.getRows();
-    const rowCells = await parallel(() => rows.map((row) => row.getCellTextByIndex()));
+    const rowCells = await parallel(() => rows.map(row => row.getCellTextByIndex()));
     return { headerCells, rowCells };
   }
 
@@ -235,7 +237,7 @@ describe('HomeApiHealthCheckComponent', () => {
   }
 
   function expectGetApiHealthAverage(apiId: string) {
-    const req = httpTestingController.expectOne((req) => {
+    const req = httpTestingController.expectOne(req => {
       return req.method === 'GET' && req.url.startsWith(`${CONSTANTS_TESTING.env.baseURL}/apis/${apiId}/health/average`);
     });
     req.flush({

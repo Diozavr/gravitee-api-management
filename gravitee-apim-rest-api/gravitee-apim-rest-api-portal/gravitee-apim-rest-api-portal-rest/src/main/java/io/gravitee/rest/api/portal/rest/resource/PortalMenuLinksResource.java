@@ -19,20 +19,17 @@ import io.gravitee.apim.core.portal_menu_link.model.PortalMenuLink;
 import io.gravitee.apim.core.portal_menu_link.use_case.ListAllPortalMenuLinksForEnvironmentUseCase;
 import io.gravitee.apim.core.portal_menu_link.use_case.ListPublicPortalMenuLinksForEnvironmentUseCase;
 import io.gravitee.common.http.MediaType;
-import io.gravitee.rest.api.model.permissions.RolePermission;
-import io.gravitee.rest.api.model.permissions.RolePermissionAction;
 import io.gravitee.rest.api.portal.rest.mapper.PortalMenuLinkMapper;
-import io.gravitee.rest.api.rest.annotation.Permission;
-import io.gravitee.rest.api.rest.annotation.Permissions;
 import io.gravitee.rest.api.service.common.GraviteeContext;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
-@Slf4j
+@CustomLog
+@Deprecated
 public class PortalMenuLinksResource extends AbstractResource {
 
     @Inject
@@ -51,15 +48,13 @@ public class PortalMenuLinksResource extends AbstractResource {
         List<PortalMenuLink> portalMenuLinks;
 
         if (isAuthenticated()) {
-            portalMenuLinks =
-                listAllPortalMenuLinksForEnvironmentUseCase
-                    .execute(new ListAllPortalMenuLinksForEnvironmentUseCase.Input(executionContext.getEnvironmentId()))
-                    .portalMenuLinkList();
+            portalMenuLinks = listAllPortalMenuLinksForEnvironmentUseCase
+                .execute(new ListAllPortalMenuLinksForEnvironmentUseCase.Input(executionContext.getEnvironmentId()))
+                .portalMenuLinkList();
         } else {
-            portalMenuLinks =
-                listPublicPortalMenuLinksForEnvironmentUseCase
-                    .execute(new ListPublicPortalMenuLinksForEnvironmentUseCase.Input(executionContext.getEnvironmentId()))
-                    .portalMenuLinkList();
+            portalMenuLinks = listPublicPortalMenuLinksForEnvironmentUseCase
+                .execute(new ListPublicPortalMenuLinksForEnvironmentUseCase.Input(executionContext.getEnvironmentId()))
+                .portalMenuLinkList();
         }
 
         return Response.ok(mapper.map(portalMenuLinks)).build();

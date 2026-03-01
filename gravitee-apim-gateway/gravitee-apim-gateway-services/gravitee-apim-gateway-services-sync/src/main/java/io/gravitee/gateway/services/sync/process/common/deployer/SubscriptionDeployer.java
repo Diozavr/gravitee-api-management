@@ -17,7 +17,6 @@ package io.gravitee.gateway.services.sync.process.common.deployer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.gravitee.common.utils.UUID;
 import io.gravitee.definition.model.command.SubscriptionFailureCommand;
 import io.gravitee.gateway.api.service.Subscription;
 import io.gravitee.gateway.api.service.SubscriptionService;
@@ -36,21 +35,19 @@ import io.gravitee.repository.management.model.MessageRecipient;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.vertx.core.json.JsonObject;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * @author Guillaume LAMIRAND (guillaume.lamirand at graviteesource.com)
  * @author GraviteeSource Team
  */
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class SubscriptionDeployer implements Deployer<SubscriptionDeployable> {
 
     private final SubscriptionService subscriptionService;
@@ -73,16 +70,13 @@ public class SubscriptionDeployer implements Deployer<SubscriptionDeployable> {
                     .forEach(subscription -> {
                         try {
                             if (Subscription.Type.PUSH == subscription.getType()) {
-                                dispatchableSubscription.compute(
-                                    subscription.getApi(),
-                                    (apiId, subscriptions) -> {
-                                        if (subscriptions == null) {
-                                            subscriptions = new ArrayList<>();
-                                        }
-                                        subscriptions.add(subscription);
-                                        return subscriptions;
+                                dispatchableSubscription.compute(subscription.getApi(), (apiId, subscriptions) -> {
+                                    if (subscriptions == null) {
+                                        subscriptions = new ArrayList<>();
                                     }
-                                );
+                                    subscriptions.add(subscription);
+                                    return subscriptions;
+                                });
                             }
                             subscriptionService.register(subscription);
                             log.debug("Subscription [{}] deployed for api [{}] ", subscription.getId(), subscription.getApi());
@@ -168,23 +162,17 @@ public class SubscriptionDeployer implements Deployer<SubscriptionDeployable> {
     }
 
     private Completable sendFailureCommand(Subscription subscription, Throwable throwable) {
-        return Completable
-            .fromRunnable(() -> {
-                final Command command = new Command();
-                Instant now = Instant.now();
-                command.setId(UUID.random().toString());
-                command.setFrom(node.id());
-                command.setTo(MessageRecipient.MANAGEMENT_APIS.name());
-                command.setTags(List.of(CommandTags.SUBSCRIPTION_FAILURE.name()));
-                command.setCreatedAt(Date.from(now));
-                command.setUpdatedAt(Date.from(now));
-                command.setEnvironmentId(subscription.getEnvironmentId());
+        return Completable.fromRunnable(() -> {
+            final Command command = new Command();
+            command.setFrom(node.id());
+            command.setTo(MessageRecipient.MANAGEMENT_APIS.name());
+            command.setTags(List.of(CommandTags.SUBSCRIPTION_FAILURE.name()));
+            command.setEnvironmentId(subscription.getEnvironmentId());
 
-                convertSubscriptionCommand(subscription, command, throwable);
+            convertSubscriptionCommand(subscription, command, throwable);
 
-                saveCommand(subscription, command);
-            })
-            .subscribeOn(Schedulers.io());
+            saveCommand(subscription, command);
+        }).subscribeOn(Schedulers.io());
     }
 
     private void convertSubscriptionCommand(Subscription subscription, Command command, Throwable throwable) {

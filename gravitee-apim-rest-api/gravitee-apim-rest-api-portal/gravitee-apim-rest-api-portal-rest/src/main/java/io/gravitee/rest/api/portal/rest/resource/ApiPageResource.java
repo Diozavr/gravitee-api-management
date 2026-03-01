@@ -36,13 +36,13 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Florent CHAMFROY (florent.chamfroy at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class ApiPageResource extends AbstractResource {
 
     private static final String INCLUDE_CONTENT = "content";
@@ -63,7 +63,7 @@ public class ApiPageResource extends AbstractResource {
         @QueryParam("include") List<String> include
     ) {
         ExecutionContext executionContext = GraviteeContext.getExecutionContext();
-        GenericApiEntity genericApiEntity = apiSearchService.findGenericById(executionContext, apiId);
+        GenericApiEntity genericApiEntity = apiSearchService.findGenericById(executionContext, apiId, false, false, false);
 
         if (accessControlService.canAccessApiFromPortal(executionContext, genericApiEntity)) {
             final String acceptedLocale = HttpHeadersUtil.getFirstAcceptedLocaleName(acceptLang);
@@ -105,7 +105,13 @@ public class ApiPageResource extends AbstractResource {
     public Response getPageContentByApiIdAndPageId(@PathParam("apiId") String apiId, @PathParam("pageId") String pageId) {
         final ApiQuery apiQuery = new ApiQuery();
         apiQuery.setIds(Collections.singletonList(apiId));
-        GenericApiEntity genericApiEntity = apiSearchService.findGenericById(GraviteeContext.getExecutionContext(), apiId);
+        GenericApiEntity genericApiEntity = apiSearchService.findGenericById(
+            GraviteeContext.getExecutionContext(),
+            apiId,
+            false,
+            false,
+            false
+        );
         if (accessControlService.canAccessApiFromPortal(GraviteeContext.getExecutionContext(), genericApiEntity)) {
             PageEntity pageEntity = pageService.findById(pageId, null);
             if (

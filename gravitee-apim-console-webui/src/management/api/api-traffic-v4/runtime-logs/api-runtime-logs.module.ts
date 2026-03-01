@@ -17,22 +17,31 @@ import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { GioLoaderModule } from '@gravitee/ui-particles-angular';
+import { GioBannerModule, GioLoaderModule } from '@gravitee/ui-particles-angular';
 import { MatCardModule } from '@angular/material/card';
+import { RouterLink } from '@angular/router';
 
 import { ApiRuntimeLogsComponent } from './api-runtime-logs.component';
-import { ApiRuntimeLogsListModule, ApiRuntimeLogsQuickFiltersModule } from './components';
+import { ApiRuntimeLogsQuickFiltersModule } from './components';
 import { QuickFiltersStoreService } from './services';
+import { ApiRuntimeLogsListComponent } from './components/api-runtime-logs-list/api-runtime-logs-list.component';
+
+import { ActionButtonsDirective } from '../../api-navigation/api-navigation-header/action-buttons.directive';
+import { ApiNavigationModule } from '../../api-navigation/api-navigation.module';
 
 @NgModule({
   imports: [
     CommonModule,
-    ApiRuntimeLogsListModule,
     ApiRuntimeLogsQuickFiltersModule,
     MatButtonModule,
     MatIconModule,
     GioLoaderModule,
     MatCardModule,
+    RouterLink,
+    ApiRuntimeLogsListComponent,
+    GioBannerModule,
+    ActionButtonsDirective,
+    ApiNavigationModule,
   ],
   declarations: [ApiRuntimeLogsComponent],
   exports: [ApiRuntimeLogsComponent],

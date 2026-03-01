@@ -15,6 +15,7 @@
  */
 package io.gravitee.gateway.reactive.policy;
 
+import io.gravitee.gateway.reactive.api.ComponentType;
 import io.gravitee.gateway.reactive.api.ExecutionPhase;
 import io.gravitee.gateway.reactive.api.context.base.BaseExecutionContext;
 import io.gravitee.gateway.reactive.api.context.http.HttpExecutionContext;
@@ -23,12 +24,15 @@ import io.gravitee.gateway.reactive.api.hook.HttpHook;
 import io.gravitee.gateway.reactive.api.hook.PolicyHook;
 import io.gravitee.gateway.reactive.api.hook.PolicyMessageHook;
 import io.gravitee.gateway.reactive.api.policy.http.HttpPolicy;
+import io.gravitee.gateway.reactive.core.context.ComponentScope;
+import io.gravitee.gateway.reactive.core.context.HttpExecutionContextInternal;
 import io.gravitee.gateway.reactive.core.hook.HookHelper;
 import io.reactivex.rxjava3.core.Completable;
 import jakarta.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import java.util.function.Function;
+import lombok.CustomLog;
 
 /**
  * PolicyChain is responsible for executing a given list of policies respecting the original order.
@@ -38,7 +42,7 @@ import lombok.extern.slf4j.Slf4j;
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class HttpPolicyChain extends AbstractPolicyChain<HttpPolicy> implements Hookable<HttpHook> {
 
     private List<PolicyHook> policyHooks;
@@ -72,17 +76,50 @@ public class HttpPolicyChain extends AbstractPolicyChain<HttpPolicy> implements 
         });
     }
 
+    /**
+     * Executes all registered onResponse actions for each policy in reverse order.
+     *
+     * This method checks if the provided execution context is an instance of HttpExecutionContextInternal
+     * and if there are any onResponse actions to execute. For each policy, it retrieves the corresponding
+     * onResponse action and executes it within the appropriate component scope. If no actions are found,
+     * the method completes immediately.
+     *
+     * @param ctx the HTTP execution context containing the onResponse actions.
+     * @return a Completable that completes when all actions have been executed.
+     */
+    public Completable executeActionsOnResponse(HttpExecutionContext ctx) {
+        if (!(ctx instanceof HttpExecutionContextInternal internalCtx) || internalCtx.getOnResponseActions() == null) {
+            return Completable.complete();
+        }
+
+        return reversedPolicies().concatMapCompletable(policy -> {
+            var onResponseAction = internalCtx.getOnResponseAction(policy);
+
+            if (onResponseAction != null) {
+                ComponentScope.push(ctx, ComponentType.POLICY, policy.id());
+                return onResponseAction.apply(ctx).doFinally(() -> ComponentScope.remove(ctx, ComponentType.POLICY, policy.id()));
+            }
+
+            return Completable.complete();
+        });
+    }
+
     @Override
     protected Completable executePolicy(final BaseExecutionContext baseCtx, final HttpPolicy policy) {
-        log.debug("Executing policy {} on phase {} in policy chain {}", policy.id(), phase, id);
+        try {
+            baseCtx.withLogger(log).debug("Executing policy {} on phase {} in policy chain {}", policy.id(), phase, id);
 
-        HttpExecutionContext ctx = (HttpExecutionContext) baseCtx;
-        return switch (phase) {
-            case REQUEST -> HookHelper.hook(() -> policy.onRequest(ctx), policy.id(), policyHooks, ctx, phase);
-            case RESPONSE -> HookHelper.hook(() -> policy.onResponse(ctx), policy.id(), policyHooks, ctx, phase);
-            case MESSAGE_REQUEST -> HookHelper.hook(() -> policy.onMessageRequest(ctx), policy.id(), policyMessageHooks, ctx, phase);
-            case MESSAGE_RESPONSE -> HookHelper.hook(() -> policy.onMessageResponse(ctx), policy.id(), policyMessageHooks, ctx, phase);
-            default -> Completable.error(new IllegalArgumentException("Execution phase unknown"));
-        };
+            HttpExecutionContext ctx = (HttpExecutionContext) baseCtx;
+            return switch (phase) {
+                case REQUEST -> HookHelper.hook(() -> policy.onRequest(ctx), policy.id(), policyHooks, ctx, phase);
+                case RESPONSE -> HookHelper.hook(() -> policy.onResponse(ctx), policy.id(), policyHooks, ctx, phase);
+                case MESSAGE_REQUEST -> HookHelper.hook(() -> policy.onMessageRequest(ctx), policy.id(), policyMessageHooks, ctx, phase);
+                case MESSAGE_RESPONSE -> HookHelper.hook(() -> policy.onMessageResponse(ctx), policy.id(), policyMessageHooks, ctx, phase);
+                default -> Completable.error(new IllegalArgumentException("Execution phase unknown"));
+            };
+        } catch (Exception e) {
+            // Capture any error that could occur during policy execution assembly (e.g. NPE, IllegalArgumentException, ...) and rethrow it properly in a reactive way.
+            return Completable.error(e);
+        }
     }
 }

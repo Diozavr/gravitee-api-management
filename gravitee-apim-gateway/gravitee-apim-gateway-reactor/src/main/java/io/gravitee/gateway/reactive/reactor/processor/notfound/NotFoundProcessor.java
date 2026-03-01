@@ -24,11 +24,11 @@ import io.gravitee.gateway.reactive.core.processor.Processor;
 import io.gravitee.reporter.api.v4.metric.Metrics;
 import io.grpc.Status;
 import io.reactivex.rxjava3.core.Completable;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
 
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class NotFoundProcessor implements Processor {
 
@@ -44,7 +44,7 @@ public class NotFoundProcessor implements Processor {
     @Override
     public Completable execute(final HttpExecutionContextInternal ctx) {
         return Completable.defer(() -> {
-            log.warn("No handler can be found for request {}, returning NOT_FOUND (404)", ctx.request().path());
+            ctx.withLogger(log).warn("No handler can be found for request {}, returning NOT_FOUND (404)", ctx.request().path());
 
             // Init not found metrics
             Metrics metrics = ctx.metrics();

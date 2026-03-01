@@ -18,11 +18,14 @@ package io.gravitee.rest.api.service.v4.impl;
 import static io.gravitee.definition.model.DefinitionContext.MODE_FULLY_MANAGED;
 import static io.gravitee.definition.model.DefinitionContext.ORIGIN_KUBERNETES;
 import static io.gravitee.definition.model.DefinitionContext.ORIGIN_MANAGEMENT;
+import static io.gravitee.repository.management.model.Api.AuditEvent.API_CREATED;
+import static io.gravitee.repository.management.model.Api.AuditEvent.API_LOGGING_DISABLED;
+import static io.gravitee.repository.management.model.Api.AuditEvent.API_LOGGING_ENABLED;
+import static io.gravitee.repository.management.model.Api.AuditEvent.API_LOGGING_UPDATED;
 import static io.gravitee.rest.api.model.api.ApiLifecycleState.CREATED;
 import static io.gravitee.rest.api.model.api.ApiLifecycleState.PUBLISHED;
 import static io.gravitee.rest.api.model.api.ApiLifecycleState.UNPUBLISHED;
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -38,7 +41,6 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
@@ -54,6 +56,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.gravitee.apim.core.flow.crud_service.FlowCrudService;
+import io.gravitee.common.event.EventManager;
 import io.gravitee.common.http.HttpMethod;
 import io.gravitee.definition.jackson.datatype.GraviteeMapper;
 import io.gravitee.definition.model.DefinitionVersion;
@@ -96,6 +99,7 @@ import io.gravitee.repository.management.model.LifecycleState;
 import io.gravitee.repository.management.model.NotificationReferenceType;
 import io.gravitee.rest.api.model.EventType;
 import io.gravitee.rest.api.model.MemberEntity;
+import io.gravitee.rest.api.model.MembershipEntity;
 import io.gravitee.rest.api.model.MembershipMemberType;
 import io.gravitee.rest.api.model.MembershipReferenceType;
 import io.gravitee.rest.api.model.MetadataFormat;
@@ -295,6 +299,9 @@ public class ApiServiceImplTest {
     @Mock
     private ScoringReportRepository scoringReportRepository;
 
+    @Mock
+    private EventManager eventManager;
+
     @InjectMocks
     private SynchronizationService synchronizationService = Mockito.spy(new SynchronizationService(this.objectMapper));
 
@@ -331,39 +338,38 @@ public class ApiServiceImplTest {
             new CategoryMapper(categoryService)
         );
         GenericApiMapper genericApiMapper = new GenericApiMapper(apiMapper, apiConverter);
-        apiService =
-            new ApiServiceImpl(
-                apiRepository,
-                apiMapper,
-                genericApiMapper,
-                primaryOwnerService,
-                apiValidationService,
-                parameterService,
-                workflowService,
-                auditService,
-                membershipService,
-                genericNotificationConfigService,
-                apiMetadataService,
-                flowCrudService,
-                searchEngineService,
-                planService,
-                planSearchService,
-                subscriptionService,
-                eventService,
-                pageService,
-                topApiService,
-                portalNotificationConfigService,
-                alertService,
-                apiQualityRuleRepository,
-                scoringReportRepository,
-                mediaService,
-                propertiesService,
-                apiNotificationService,
-                tagsValidationService,
-                apiAuthorizationService,
-                groupService,
-                apiCategoryService
-            );
+        apiService = new ApiServiceImpl(
+            apiRepository,
+            apiMapper,
+            genericApiMapper,
+            primaryOwnerService,
+            apiValidationService,
+            parameterService,
+            workflowService,
+            auditService,
+            membershipService,
+            genericNotificationConfigService,
+            apiMetadataService,
+            flowCrudService,
+            searchEngineService,
+            planService,
+            planSearchService,
+            subscriptionService,
+            eventService,
+            pageService,
+            topApiService,
+            portalNotificationConfigService,
+            alertService,
+            apiQualityRuleRepository,
+            scoringReportRepository,
+            mediaService,
+            propertiesService,
+            apiNotificationService,
+            tagsValidationService,
+            apiAuthorizationService,
+            groupService,
+            apiCategoryService
+        );
         var apiSearchService = new ApiSearchServiceImpl(
             apiRepository,
             apiMapper,
@@ -374,29 +380,29 @@ public class ApiServiceImplTest {
             apiAuthorizationService,
             integrationRepository
         );
-        apiStateService =
-            new ApiStateServiceImpl(
-                apiSearchService,
-                apiRepository,
-                apiMapper,
-                genericApiMapper,
-                apiNotificationService,
-                primaryOwnerService,
-                auditService,
-                eventService,
-                eventLatestRepository,
-                objectMapper,
-                apiMetadataService,
-                apiValidationService,
-                planSearchService,
-                apiConverter,
-                synchronizationService
-            );
+        apiStateService = new ApiStateServiceImpl(
+            apiSearchService,
+            apiRepository,
+            apiMapper,
+            genericApiMapper,
+            apiNotificationService,
+            primaryOwnerService,
+            auditService,
+            eventService,
+            eventLatestRepository,
+            objectMapper,
+            apiMetadataService,
+            apiValidationService,
+            planSearchService,
+            apiConverter,
+            synchronizationService,
+            eventManager,
+            searchEngineService
+        );
         //        when(virtualHostService.sanitizeAndValidate(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
         reset(searchEngineService);
         UserEntity admin = new UserEntity();
         admin.setId(USER_NAME);
-        when(primaryOwnerService.getPrimaryOwner(any(), any(), any())).thenReturn(new PrimaryOwnerEntity(admin));
 
         updateApiEntity = new UpdateApiEntity();
         updateApiEntity.setId(API_ID);
@@ -415,8 +421,9 @@ public class ApiServiceImplTest {
         updatedApi.setName(API_NAME);
         updatedApi.setEnvironmentId(GraviteeContext.getExecutionContext().getEnvironmentId());
 
-        when(apiMetadataService.fetchMetadataForApi(any(ExecutionContext.class), any(ApiEntity.class)))
-            .thenAnswer(invocation -> invocation.getArgument(1));
+        when(apiMetadataService.fetchMetadataForApi(any(ExecutionContext.class), any(ApiEntity.class))).thenAnswer(invocation ->
+            invocation.getArgument(1)
+        );
     }
 
     @Test(expected = ApiRunningStateException.class)
@@ -435,9 +442,10 @@ public class ApiServiceImplTest {
         Api api = new Api();
         api.setId(API_ID);
         api.setLifecycleState(LifecycleState.STOPPED);
+        api.setDefinitionVersion(DefinitionVersion.V4);
+        api.setType(ApiType.NATIVE);
 
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
-        when(planService.findByApi(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(Collections.emptySet());
 
         apiService.delete(GraviteeContext.getExecutionContext(), API_ID, false);
 
@@ -445,6 +453,10 @@ public class ApiServiceImplTest {
         verify(mediaService, times(1)).deleteAllByApi(API_ID);
         verify(apiMetadataService, times(1)).deleteAllByApi(eq(GraviteeContext.getExecutionContext()), eq(API_ID));
         verify(flowCrudService, times(1)).saveApiFlows(API_ID, null);
+        verify(searchEngineService, times(1)).delete(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(indexableApi -> indexableApi instanceof GenericApiEntity && indexableApi.getId().equals(API_ID))
+        );
     }
 
     @Test(expected = ApiNotDeletableException.class)
@@ -457,7 +469,9 @@ public class ApiServiceImplTest {
         PlanEntity planEntity = new PlanEntity();
         planEntity.setId(PLAN_ID);
         planEntity.setStatus(PlanStatus.PUBLISHED);
-        when(planSearchService.findByApi(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(singleton(planEntity));
+        when(planSearchService.findByApi(eq(GraviteeContext.getExecutionContext()), any(GenericApiEntity.class), eq(false))).thenReturn(
+            singleton(planEntity)
+        );
 
         apiService.delete(GraviteeContext.getExecutionContext(), API_ID, false);
         verify(membershipService, times(1)).deleteReference(GraviteeContext.getExecutionContext(), MembershipReferenceType.API, API_ID);
@@ -473,7 +487,9 @@ public class ApiServiceImplTest {
         PlanEntity planEntity = new PlanEntity();
         planEntity.setId(PLAN_ID);
         planEntity.setStatus(PlanStatus.CLOSED);
-        when(planSearchService.findByApi(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(singleton(planEntity));
+        when(planSearchService.findByApi(eq(GraviteeContext.getExecutionContext()), any(GenericApiEntity.class), eq(false))).thenReturn(
+            singleton(planEntity)
+        );
 
         apiService.delete(GraviteeContext.getExecutionContext(), API_ID, false);
 
@@ -492,7 +508,9 @@ public class ApiServiceImplTest {
         PlanEntity planEntity = new PlanEntity();
         planEntity.setId(PLAN_ID);
         planEntity.setStatus(PlanStatus.STAGING);
-        when(planSearchService.findByApi(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(singleton(planEntity));
+        when(planSearchService.findByApi(eq(GraviteeContext.getExecutionContext()), any(GenericApiEntity.class), eq(false))).thenReturn(
+            singleton(planEntity)
+        );
 
         apiService.delete(GraviteeContext.getExecutionContext(), API_ID, false);
 
@@ -514,7 +532,9 @@ public class ApiServiceImplTest {
         io.gravitee.rest.api.model.PlanEntity planEntity = new io.gravitee.rest.api.model.PlanEntity();
         planEntity.setId(PLAN_ID);
         planEntity.setStatus(io.gravitee.rest.api.model.PlanStatus.STAGING);
-        when(planSearchService.findByApi(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(singleton(planEntity));
+        when(planSearchService.findByApi(eq(GraviteeContext.getExecutionContext()), any(GenericApiEntity.class), eq(false))).thenReturn(
+            singleton(planEntity)
+        );
 
         apiService.delete(GraviteeContext.getExecutionContext(), API_ID, false);
 
@@ -558,7 +578,9 @@ public class ApiServiceImplTest {
         final PlanEntity closedPlan = new PlanEntity();
         closedPlan.setId(PLAN_ID);
         closedPlan.setStatus(PlanStatus.CLOSED);
-        when(planSearchService.findByApi(GraviteeContext.getExecutionContext(), API_ID)).thenReturn(Collections.singleton(planEntity));
+        when(planSearchService.findByApi(eq(GraviteeContext.getExecutionContext()), any(GenericApiEntity.class), eq(false))).thenReturn(
+            Collections.singleton(planEntity)
+        );
         when(planService.close(GraviteeContext.getExecutionContext(), PLAN_ID)).thenReturn(closedPlan);
 
         apiService.delete(GraviteeContext.getExecutionContext(), API_ID, true);
@@ -594,8 +616,14 @@ public class ApiServiceImplTest {
 
         apiService.delete(GraviteeContext.getExecutionContext(), API_ID, false);
 
-        verify(eventService, times(1))
-            .createApiEvent(any(ExecutionContext.class), anySet(), anyString(), eq(EventType.UNPUBLISH_API), eq(API_ID), anyMap());
+        verify(eventService, times(1)).createApiEvent(
+            any(ExecutionContext.class),
+            anySet(),
+            anyString(),
+            eq(EventType.UNPUBLISH_API),
+            eq(API_ID),
+            anyMap()
+        );
     }
 
     @Test
@@ -609,8 +637,14 @@ public class ApiServiceImplTest {
 
         apiService.delete(GraviteeContext.getExecutionContext(), API_ID, false);
 
-        verify(eventService, never())
-            .createApiEvent(any(ExecutionContext.class), anySet(), anyString(), eq(EventType.UNPUBLISH_API), eq(API_ID), anyMap());
+        verify(eventService, never()).createApiEvent(
+            any(ExecutionContext.class),
+            anySet(),
+            anyString(),
+            eq(EventType.UNPUBLISH_API),
+            eq(API_ID),
+            anyMap()
+        );
     }
 
     @Test
@@ -655,36 +689,87 @@ public class ApiServiceImplTest {
 
         testRepositoryApi(repositoryApiCaptor.getValue());
 
-        verify(auditService)
-            .createApiAuditLog(
-                eq(executionContext),
-                eq(API_ID),
-                eq(emptyMap()),
-                eq(Api.AuditEvent.API_CREATED),
-                any(Date.class),
-                isNull(),
-                any(Api.class)
-            );
-        verify(membershipService)
-            .addRoleToMemberOnReference(
-                GraviteeContext.getExecutionContext(),
-                new MembershipService.MembershipReference(MembershipReferenceType.API, API_ID),
-                new MembershipService.MembershipMember(USER_NAME, null, MembershipMemberType.USER),
-                new MembershipService.MembershipRole(RoleScope.API, SystemRole.PRIMARY_OWNER.name())
-            );
-        verify(genericNotificationConfigService)
-            .create(argThat(notifConfig -> notifConfig.getNotifier().equals(NotifierServiceImpl.DEFAULT_EMAIL_NOTIFIER_ID)));
-        verify(apiMetadataService)
-            .create(
-                eq(GraviteeContext.getExecutionContext()),
-                argThat(newApiMetadataEntity ->
+        verify(auditService).createApiAuditLog(
+            eq(executionContext),
+            argThat(
+                auditLogData ->
+                    auditLogData.getProperties().isEmpty() &&
+                    auditLogData.getEvent().equals(API_CREATED) &&
+                    auditLogData.getOldValue() == null &&
+                    auditLogData.getNewValue() instanceof Api
+            ),
+            eq(API_ID)
+        );
+        verify(membershipService).addRoleToMemberOnReference(
+            GraviteeContext.getExecutionContext(),
+            new MembershipService.MembershipReference(MembershipReferenceType.API, API_ID),
+            new MembershipService.MembershipMember(USER_NAME, null, MembershipMemberType.USER),
+            new MembershipService.MembershipRole(RoleScope.API, SystemRole.PRIMARY_OWNER.name())
+        );
+        verify(genericNotificationConfigService).create(
+            argThat(notifConfig -> notifConfig.getNotifier().equals(NotifierServiceImpl.DEFAULT_EMAIL_NOTIFIER_ID))
+        );
+        verify(apiMetadataService).create(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(
+                newApiMetadataEntity ->
                     newApiMetadataEntity.getFormat().equals(MetadataFormat.MAIL) &&
                     newApiMetadataEntity.getName().equals(MetadataService.METADATA_EMAIL_SUPPORT_KEY)
-                )
-            );
+            )
+        );
         verify(flowCrudService).saveApiFlows(API_ID, apiEntity.getFlows());
         verify(apiMetadataService).fetchMetadataForApi(eq(executionContext), any(ApiEntity.class));
         verify(searchEngineService).index(eq(executionContext), any(GenericApiEntity.class), eq(false));
+
+        assertNull(apiEntity.getAllowedInApiProducts());
+    }
+
+    @Test
+    public void should_not_set_allowedInApiProducts_for_non_proxy_v4_imports() throws TechnicalException {
+        ApiEntity apiEntity = fakeApiEntityV4();
+        apiEntity.setType(ApiType.MESSAGE);
+        ExecutionContext executionContext = GraviteeContext.getExecutionContext();
+        doReturn(Optional.empty()).when(apiRepository).findById(anyString());
+        doReturn(apiEntity.getPrimaryOwner())
+            .when(primaryOwnerService)
+            .getPrimaryOwner(executionContext, USER_NAME, apiEntity.getPrimaryOwner());
+        doReturn(emptySet()).when(groupService).findByEvent(GraviteeContext.getCurrentEnvironment(), GroupEvent.API_CREATE);
+        doReturn(new ApiEntity()).when(apiMetadataService).fetchMetadataForApi(any(), any());
+        doReturn(false).when(parameterService).findAsBoolean(executionContext, Key.API_REVIEW_ENABLED, ParameterReferenceType.ENVIRONMENT);
+
+        Api createdApi = new Api();
+        createdApi.setId(API_ID);
+        createdApi.setCreatedAt(new Date());
+        doReturn(createdApi).when(apiRepository).create(any());
+
+        apiService.createWithImport(executionContext, apiEntity, USER_NAME);
+
+        // For non‑PROXY V4 APIs, allowedInApiProducts should be cleared (null)
+        assertNull(apiEntity.getAllowedInApiProducts());
+    }
+
+    @Test
+    public void should_respect_explicit_allowedInApiProducts_true_on_import() throws TechnicalException {
+        ApiEntity apiEntity = fakeApiEntityV4();
+        apiEntity.setAllowedInApiProducts(true);
+        ExecutionContext executionContext = GraviteeContext.getExecutionContext();
+        doReturn(Optional.empty()).when(apiRepository).findById(anyString());
+        doReturn(apiEntity.getPrimaryOwner())
+            .when(primaryOwnerService)
+            .getPrimaryOwner(executionContext, USER_NAME, apiEntity.getPrimaryOwner());
+        doReturn(emptySet()).when(groupService).findByEvent(GraviteeContext.getCurrentEnvironment(), GroupEvent.API_CREATE);
+        doReturn(new ApiEntity()).when(apiMetadataService).fetchMetadataForApi(any(), any());
+        doReturn(false).when(parameterService).findAsBoolean(executionContext, Key.API_REVIEW_ENABLED, ParameterReferenceType.ENVIRONMENT);
+
+        Api createdApi = new Api();
+        createdApi.setId(API_ID);
+        createdApi.setCreatedAt(new Date());
+        doReturn(createdApi).when(apiRepository).create(any());
+
+        apiService.createWithImport(executionContext, apiEntity, USER_NAME);
+
+        // When explicitly set to true on import, it must be respected (not overwritten with default false)
+        assertTrue(Boolean.TRUE.equals(apiEntity.getAllowedInApiProducts()));
     }
 
     private void testRepositoryApi(Api api) {
@@ -812,15 +897,14 @@ public class ApiServiceImplTest {
         updateApiEntity.setLabels(asList("label1", "label1"));
 
         final ApiEntity apiEntity = apiService.update(GraviteeContext.getExecutionContext(), API_ID, updateApiEntity, USER_NAME);
-        verify(apiRepository)
-            .update(
-                argThat(updateArg -> {
-                    // Update should not change images, as there is a dedicated resource for that
-                    assertThat(updateArg.getPicture()).isEqualTo(api.getPicture());
-                    assertThat(updateArg.getBackground()).isEqualTo(api.getBackground());
-                    return true;
-                })
-            );
+        verify(apiRepository).update(
+            argThat(updateArg -> {
+                // Update should not change images, as there is a dedicated resource for that
+                assertThat(updateArg.getPicture()).isEqualTo(api.getPicture());
+                assertThat(updateArg.getBackground()).isEqualTo(api.getBackground());
+                return true;
+            })
+        );
         assertNotNull(apiEntity);
         verify(searchEngineService, times(1)).index(eq(GraviteeContext.getExecutionContext()), any(), eq(false));
     }
@@ -899,8 +983,9 @@ public class ApiServiceImplTest {
             .when(tagsValidationService)
             .validatePlanTagsAgainstApiTags(any(Set.class), any(Set.class));
 
-        assertThatThrownBy(() -> apiService.update(GraviteeContext.getExecutionContext(), API_ID, updateApiEntity, true, USER_NAME))
-            .isInstanceOf(InvalidDataException.class);
+        assertThatThrownBy(() ->
+            apiService.update(GraviteeContext.getExecutionContext(), API_ID, updateApiEntity, true, USER_NAME)
+        ).isInstanceOf(InvalidDataException.class);
 
         verify(apiRepository, never()).update(any());
     }
@@ -935,8 +1020,9 @@ public class ApiServiceImplTest {
 
         apiService.update(GraviteeContext.getExecutionContext(), API_ID, updateApiEntity, true, USER_NAME);
 
-        verify(apiRepository, times(1))
-            .update(argThat(api -> ORIGIN_KUBERNETES.equals(api.getOrigin()) && MODE_FULLY_MANAGED.equals(api.getMode())));
+        verify(apiRepository, times(1)).update(
+            argThat(api -> ORIGIN_KUBERNETES.equals(api.getOrigin()) && MODE_FULLY_MANAGED.equals(api.getMode()))
+        );
     }
 
     // TODO FCY: should be moved into right test class once healthcheck is moved to HTTP endpoint plugin
@@ -1022,8 +1108,7 @@ public class ApiServiceImplTest {
                 Key.LOGGING_AUDIT_TRAIL_ENABLED,
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         prepareUpdate();
 
@@ -1048,16 +1133,11 @@ public class ApiServiceImplTest {
 
         apiService.update(GraviteeContext.getExecutionContext(), API_ID, updateApiEntity, USER_NAME);
 
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(API_ID),
-                eq(emptyMap()),
-                eq(Api.AuditEvent.API_LOGGING_DISABLED),
-                any(Date.class),
-                any(),
-                any()
-            );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getProperties().isEmpty() && auditLogData.getEvent().equals(API_LOGGING_DISABLED)),
+            eq(API_ID)
+        );
     }
 
     @Test
@@ -1068,8 +1148,7 @@ public class ApiServiceImplTest {
                 Key.LOGGING_AUDIT_TRAIL_ENABLED,
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         prepareUpdate();
 
@@ -1091,16 +1170,11 @@ public class ApiServiceImplTest {
 
         apiService.update(GraviteeContext.getExecutionContext(), API_ID, updateApiEntity, USER_NAME);
 
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(API_ID),
-                eq(emptyMap()),
-                eq(Api.AuditEvent.API_LOGGING_ENABLED),
-                any(Date.class),
-                any(),
-                any()
-            );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getProperties().isEmpty() && auditLogData.getEvent().equals(API_LOGGING_ENABLED)),
+            eq(API_ID)
+        );
     }
 
     @Test
@@ -1111,8 +1185,7 @@ public class ApiServiceImplTest {
                 Key.LOGGING_AUDIT_TRAIL_ENABLED,
                 ParameterReferenceType.ENVIRONMENT
             )
-        )
-            .thenReturn(true);
+        ).thenReturn(true);
 
         prepareUpdate();
 
@@ -1136,16 +1209,11 @@ public class ApiServiceImplTest {
 
         ApiEntity apiEntity = apiService.update(GraviteeContext.getExecutionContext(), API_ID, updateApiEntity, USER_NAME);
 
-        verify(auditService)
-            .createApiAuditLog(
-                eq(GraviteeContext.getExecutionContext()),
-                eq(API_ID),
-                eq(emptyMap()),
-                eq(Api.AuditEvent.API_LOGGING_UPDATED),
-                any(Date.class),
-                any(),
-                any()
-            );
+        verify(auditService).createApiAuditLog(
+            eq(GraviteeContext.getExecutionContext()),
+            argThat(auditLogData -> auditLogData.getProperties().isEmpty() && auditLogData.getEvent().equals(API_LOGGING_UPDATED)),
+            eq(API_ID)
+        );
         verify(apiNotificationService, times(1)).triggerUpdateNotification(eq(GraviteeContext.getExecutionContext()), eq(apiEntity));
     }
 
@@ -1157,8 +1225,9 @@ public class ApiServiceImplTest {
         when(apiValidationService.canDeploy(any(), any())).thenReturn(true);
         when(apiRepository.findById(API_ID)).thenReturn(Optional.of(api));
         when(apiRepository.update(api)).thenReturn(api);
-        when(eventLatestRepository.search(any(EventCriteria.class), eq(Event.EventProperties.DEPLOYMENT_NUMBER), eq(0L), eq(1L)))
-            .thenReturn(List.of(previousPublishedEvent));
+        when(eventLatestRepository.search(any(EventCriteria.class), eq(Event.EventProperties.API_ID), eq(0L), eq(1L))).thenReturn(
+            List.of(previousPublishedEvent)
+        );
 
         final ApiDeploymentEntity apiDeploymentEntity = new ApiDeploymentEntity();
         apiDeploymentEntity.setDeploymentLabel("deploy-label");
@@ -1169,19 +1238,19 @@ public class ApiServiceImplTest {
             apiDeploymentEntity
         );
 
-        verify(eventService)
-            .createApiEvent(
-                any(ExecutionContext.class),
-                anySet(),
-                anyString(),
-                eq(EventType.PUBLISH_API),
-                eq(api),
-                argThat(properties ->
+        verify(eventService).createApiEvent(
+            any(ExecutionContext.class),
+            anySet(),
+            anyString(),
+            eq(EventType.PUBLISH_API),
+            eq(api),
+            argThat(
+                properties ->
                     properties.get(Event.EventProperties.USER.getValue()).equals(USER_NAME) &&
                     properties.get(Event.EventProperties.DEPLOYMENT_NUMBER.getValue()).equals("4") &&
                     properties.get(Event.EventProperties.DEPLOYMENT_LABEL.getValue()).equals(apiDeploymentEntity.getDeploymentLabel())
-                )
-            );
+            )
+        );
         verify(apiNotificationService).triggerDeployNotification(any(ExecutionContext.class), eq(result));
     }
 
@@ -1202,6 +1271,10 @@ public class ApiServiceImplTest {
         prepareUpdateApiEntity(endpointGroupName, endpointName, path);
 
         when(apiRepository.update(any())).thenReturn(updatedApi);
+
+        when(membershipService.getPrimaryOwner(any(), eq(MembershipReferenceType.API), eq(updatedApi.getId()))).thenReturn(
+            MembershipEntity.builder().memberType(MembershipMemberType.USER).build()
+        );
 
         api.setName(API_NAME);
         api.setApiLifecycleState(ApiLifecycleState.CREATED);
@@ -1260,8 +1333,7 @@ public class ApiServiceImplTest {
         primaryOwnerEntity.setDisplayName(USER_NAME);
         apiEntity.setPrimaryOwner(primaryOwnerEntity);
 
-        HttpListener httpListener = HttpListener
-            .builder()
+        HttpListener httpListener = HttpListener.builder()
             .paths(List.of(Path.builder().host("my.fake.host").path("/test").build()))
             .pathMappings(Set.of("/test"))
             .build();
@@ -1293,19 +1365,19 @@ public class ApiServiceImplTest {
         endpoint.setType("http-get");
         endpoint.setConfiguration(
             "{\n" +
-            "                        \"bootstrapServers\": \"kafka:9092\",\n" +
-            "                        \"topics\": [\n" +
-            "                            \"demo\"\n" +
-            "                        ],\n" +
-            "                        \"producer\": {\n" +
-            "                            \"enabled\": false\n" +
-            "                        },\n" +
-            "                        \"consumer\": {\n" +
-            "                            \"encodeMessageId\": true,\n" +
-            "                            \"enabled\": true,\n" +
-            "                            \"autoOffsetReset\": \"earliest\"\n" +
-            "                        }\n" +
-            "                    }"
+                "                        \"bootstrapServers\": \"kafka:9092\",\n" +
+                "                        \"topics\": [\n" +
+                "                            \"demo\"\n" +
+                "                        ],\n" +
+                "                        \"producer\": {\n" +
+                "                            \"enabled\": false\n" +
+                "                        },\n" +
+                "                        \"consumer\": {\n" +
+                "                            \"encodeMessageId\": true,\n" +
+                "                            \"enabled\": true,\n" +
+                "                            \"autoOffsetReset\": \"earliest\"\n" +
+                "                        }\n" +
+                "                    }"
         );
         endpointGroup.setEndpoints(List.of(endpoint));
         apiEntity.setEndpointGroups(List.of(endpointGroup));

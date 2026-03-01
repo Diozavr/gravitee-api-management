@@ -24,13 +24,13 @@ import io.gravitee.node.api.upgrader.UpgraderException;
 import io.gravitee.repository.management.api.OrganizationRepository;
 import io.gravitee.rest.api.service.RoleService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class IntegrationRolesUpgrader implements Upgrader {
 
     private final RoleService roleService;
@@ -46,15 +46,15 @@ public class IntegrationRolesUpgrader implements Upgrader {
     @Override
     public boolean upgrade() throws UpgraderException {
         return this.wrapException(() -> {
-                organizationRepository
-                    .findAll()
-                    .forEach(organization -> {
-                        ExecutionContext executionContext = new ExecutionContext(organization);
-                        initializeIntegrationRoles(executionContext);
-                        roleService.createOrUpdateSystemRoles(executionContext, executionContext.getOrganizationId());
-                    });
-                return true;
-            });
+            organizationRepository
+                .findAll()
+                .forEach(organization -> {
+                    ExecutionContext executionContext = new ExecutionContext(organization);
+                    initializeIntegrationRoles(executionContext);
+                    roleService.createOrUpdateSystemRoles(executionContext, executionContext.getOrganizationId());
+                });
+            return true;
+        });
     }
 
     private void initializeIntegrationRoles(ExecutionContext executionContext) {

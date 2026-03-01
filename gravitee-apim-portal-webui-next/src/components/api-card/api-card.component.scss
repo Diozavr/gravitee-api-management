@@ -15,6 +15,7 @@
  */
 :host {
   display: flex;
+  min-width: 0;
   min-height: 256px;
   flex-flow: column;
 }
@@ -27,6 +28,7 @@
 
   &__header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 16px;
 
@@ -59,7 +61,6 @@
     overflow: hidden;
     max-height: 98px;
     -webkit-box-orient: vertical;
-    color: var(--mdc-outlined-text-field-label-text-color);
     -webkit-line-clamp: 4;
     line-clamp: 4;
     text-overflow: ellipsis;

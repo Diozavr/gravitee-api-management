@@ -25,11 +25,11 @@ import io.gravitee.repository.distributedsync.model.DistributedEventType;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.Date;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class ApiKeyMapper {
 
     private final ObjectMapper objectMapper;
@@ -47,28 +47,25 @@ public class ApiKeyMapper {
     }
 
     public Flowable<DistributedEvent> to(final ApiKeyDeployable deployable) {
-        return Flowable
-            .fromIterable(deployable.apiKeys())
-            .flatMapMaybe(apiKey ->
-                Maybe.fromCallable(() -> {
-                    try {
-                        DistributedEvent.DistributedEventBuilder builder = DistributedEvent
-                            .builder()
-                            .id(apiKey.getId())
-                            .type(DistributedEventType.API_KEY)
-                            .syncAction(SyncActionMapper.to(deployable.syncAction()))
-                            .updatedAt(new Date())
-                            .refType(DistributedEventType.API)
-                            .refId(deployable.apiId());
-                        if (deployable.syncAction() == SyncAction.DEPLOY) {
-                            builder.payload(objectMapper.writeValueAsString(apiKey));
-                        }
-                        return builder.build();
-                    } catch (Exception e) {
-                        log.warn("Error while building distributed event from apikey", e);
-                        return null;
+        return Flowable.fromIterable(deployable.apiKeys()).flatMapMaybe(apiKey ->
+            Maybe.fromCallable(() -> {
+                try {
+                    DistributedEvent.DistributedEventBuilder builder = DistributedEvent.builder()
+                        .id(apiKey.getId())
+                        .type(DistributedEventType.API_KEY)
+                        .syncAction(SyncActionMapper.to(deployable.syncAction()))
+                        .updatedAt(new Date())
+                        .refType(DistributedEventType.API)
+                        .refId(deployable.apiId());
+                    if (deployable.syncAction() == SyncAction.DEPLOY) {
+                        builder.payload(objectMapper.writeValueAsString(apiKey));
                     }
-                })
-            );
+                    return builder.build();
+                } catch (Exception e) {
+                    log.warn("Error while building distributed event from apikey", e);
+                    return null;
+                }
+            })
+        );
     }
 }

@@ -34,9 +34,8 @@ import { Role } from '../../../../../entities/role/role';
 import { ApiPrimaryOwnerMode } from '../../../../../services/apiPrimaryOwnerMode.service';
 import { EnvironmentSettingsService } from '../../../../../services-ngx/environment-settings.service';
 import { SearchableUser } from '../../../../../entities/user/searchableUser';
-import { Member } from '../../../../../entities/management-api-v2';
 import { GroupMembership } from '../../../../../entities/group/groupMember';
-import { RoleName } from '../membershipState';
+import { Member, RoleName } from '../membershipState';
 import { UsersService } from '../../../../../services-ngx/users.service';
 import { AddOrInviteMembersDialogData } from '../group.component';
 import { Group } from '../../../../../entities/group/group';
@@ -65,10 +64,12 @@ export class AddMembersDialogComponent implements OnInit {
   defaultAPIRoles: Role[];
   defaultApplicationRoles: Role[];
   defaultIntegrationRoles: Role[];
+  defaultClusterRoles: Role[];
   addMemberForm: FormGroup<{
     defaultAPIRole: FormControl<string>;
     defaultApplicationRole: FormControl<string>;
     defaultIntegrationRole: FormControl<string>;
+    defaultClusterRole: FormControl<string>;
     searchTerm: FormControl<string>;
   }>;
   disabledAPIRoles = new Set<string>();
@@ -99,6 +100,7 @@ export class AddMembersDialogComponent implements OnInit {
     this.defaultAPIRoles = this.data.defaultAPIRoles;
     this.defaultApplicationRoles = this.data.defaultApplicationRoles;
     this.defaultIntegrationRoles = this.data.defaultIntegrationRoles;
+    this.defaultClusterRoles = this.data.defaultClusterRoles;
   }
 
   private initializeForm() {
@@ -109,6 +111,7 @@ export class AddMembersDialogComponent implements OnInit {
         disabled: false,
       }),
       defaultIntegrationRole: new FormControl<string>({ value: 'USER', disabled: false }),
+      defaultClusterRole: new FormControl<string>({ value: 'USER', disabled: false }),
       searchTerm: new FormControl<string>({ value: '', disabled: false }),
     });
     this.disableSearch();
@@ -134,6 +137,7 @@ export class AddMembersDialogComponent implements OnInit {
     this.disableDefaultAPIRole();
     this.disableDefaultApplicationRole();
     this.disableDefaultIntegrationRole();
+    this.disableDefaultClusterRole();
     this.disableAPIRoleOptions();
   }
 
@@ -155,9 +159,15 @@ export class AddMembersDialogComponent implements OnInit {
     }
   }
 
+  private disableDefaultClusterRole(): void {
+    if (!this.canUpdateGroup()) {
+      this.addMemberForm.controls.defaultClusterRole.disable();
+    }
+  }
+
   private disableAPIRoleOptions() {
     this.disabledAPIRoles = new Set(
-      this.defaultAPIRoles.filter((role) => this.isPrimaryOwnerDisabled(role) || this.isSystemRoleDisabled(role)).map((role) => role.id),
+      this.defaultAPIRoles.filter(role => this.isPrimaryOwnerDisabled(role) || this.isSystemRoleDisabled(role)).map(role => role.id),
     );
   }
 
@@ -174,7 +184,7 @@ export class AddMembersDialogComponent implements OnInit {
   }
 
   private isPrimaryOwnerPresent() {
-    return this.members.some((member) => member.roles['API'] === RoleName.PRIMARY_OWNER);
+    return this.members.some(member => member.roles['API'] === RoleName.PRIMARY_OWNER);
   }
 
   private isSystemRoleDisabled(role: Role): boolean {
@@ -202,6 +212,10 @@ export class AddMembersDialogComponent implements OnInit {
           name: this.addMemberForm.controls.defaultIntegrationRole.value,
           scope: 'INTEGRATION',
         },
+        {
+          name: this.addMemberForm.controls.defaultClusterRole.value,
+          scope: 'CLUSTER',
+        },
       ],
     };
   }
@@ -212,9 +226,9 @@ export class AddMembersDialogComponent implements OnInit {
     }
 
     return this.usersService.search(searchTerm).pipe(
-      map((users) => {
-        const excludedIds = new Set([...this.members.map((member) => member.id), ...this.selectedUsers.map((user) => user.id)]);
-        return users.filter((user) => !excludedIds.has(user.id));
+      map(users => {
+        const excludedIds = new Set([...this.members.map(member => member.id), ...this.selectedUsers.map(user => user.id)]);
+        return users.filter(user => !excludedIds.has(user.id));
       }),
     );
   }
@@ -234,7 +248,7 @@ export class AddMembersDialogComponent implements OnInit {
 
     if (index >= 0) {
       this.selectedUsers.splice(index, 1);
-      const membershipIndex = this.memberships.findIndex((member) => member.id === user.id);
+      const membershipIndex = this.memberships.findIndex(member => member.id === user.id);
 
       if (membershipIndex >= 0) {
         this.memberships.splice(index, 1);
@@ -261,7 +275,7 @@ export class AddMembersDialogComponent implements OnInit {
   }
 
   private filterPrimaryOwners() {
-    return this.memberships.filter((membership) => membership.roles.find((role) => role.scope === 'API').name === RoleName.PRIMARY_OWNER);
+    return this.memberships.filter(membership => membership.roles.find(role => role.scope === 'API').name === RoleName.PRIMARY_OWNER);
   }
 
   onAPIRoleChange() {

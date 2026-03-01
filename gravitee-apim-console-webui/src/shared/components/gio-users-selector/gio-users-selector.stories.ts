@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { Meta, moduleMetadata, StoryObj } from '@storybook/angular';
-import { action } from '@storybook/addon-actions';
+import { action } from 'storybook/actions';
 import { of } from 'rxjs';
 import { Component } from '@angular/core';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -55,14 +55,14 @@ class UsersSelectorStoryComponent {
       .open<GioUsersSelectorComponent, GioUsersSelectorData, SearchableUser[]>(GioUsersSelectorComponent, {
         width: '500px',
         data: {
-          userFilterPredicate: (user) => user.id !== 'flash',
+          userFilterPredicate: user => user.id !== 'flash',
         },
         role: 'alertdialog',
         id: 'deleteIdentityProviderConfirmDialog',
       })
       .afterClosed()
       .pipe(
-        tap((selectedUsers) => {
+        tap(selectedUsers => {
           action('selectedUsers')(selectedUsers);
         }),
       )
@@ -88,7 +88,7 @@ export default {
 } as Meta;
 
 export const Default: StoryObj = {
-  play: (context) => {
+  play: context => {
     const button = context.canvasElement.querySelector('#open-users-selector') as HTMLButtonElement;
     button.click();
   },

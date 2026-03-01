@@ -29,7 +29,9 @@ import org.mapstruct.factory.Mappers;
 /**
  * @author Yann TAVERNIER (yann.tavernier at graviteesource.com)
  * @author GraviteeSource Team
+ * @deprecated since 4.10.0, use {@link io.gravitee.plugin.mappers.TrustStoreMapper} instead
  */
+@Deprecated(since = "4.10.0", forRemoval = true)
 @Mapper
 public interface TrustStoreMapper {
     TrustStoreMapper INSTANCE = Mappers.getMapper(TrustStoreMapper.class);
@@ -67,8 +69,10 @@ public interface TrustStoreMapper {
         private static final Map<String, TrustStoreMapper.TrustStoreImplementation> ENUM_MAP;
 
         static {
-            Map<String, TrustStoreMapper.TrustStoreImplementation> map =
-                new ConcurrentHashMap<String, TrustStoreMapper.TrustStoreImplementation>();
+            Map<String, TrustStoreMapper.TrustStoreImplementation> map = new ConcurrentHashMap<
+                String,
+                TrustStoreMapper.TrustStoreImplementation
+            >();
             for (TrustStoreMapper.TrustStoreImplementation instance : TrustStoreMapper.TrustStoreImplementation.values()) {
                 map.put(instance.className, instance);
             }

@@ -37,14 +37,17 @@ public enum Order {
     ORGANIZATION(4),
     DICTIONARY(5),
     SHARED_POLICY_GROUP(6),
-    API(7),
-    SUBSCRIPTION(8),
-    API_KEY(9),
-    DEBUG(10);
+    API_PRODUCT(7),
+    API(8),
+    SUBSCRIPTION(9),
+    API_KEY(10),
+    DEBUG(11);
 
     static {
         Set<Integer> elements = new HashSet<>();
-        List<Order> orders = Arrays.stream(Order.values()).filter(order -> !elements.add(order.index)).toList();
+        List<Order> orders = Arrays.stream(Order.values())
+            .filter(order -> !elements.add(order.index))
+            .toList();
         if (!orders.isEmpty()) {
             throw new IllegalStateException(String.format("Synchronizer order contain duplicated indexes [%s].", orders));
         }

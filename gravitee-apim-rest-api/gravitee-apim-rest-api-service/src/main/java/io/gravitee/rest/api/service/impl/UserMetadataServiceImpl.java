@@ -26,7 +26,12 @@ import io.gravitee.repository.management.api.search.builder.PageableBuilder;
 import io.gravitee.repository.management.model.CustomUserFieldReferenceType;
 import io.gravitee.repository.management.model.MetadataReferenceType;
 import io.gravitee.repository.management.model.User;
-import io.gravitee.rest.api.model.*;
+import io.gravitee.rest.api.model.EnvironmentEntity;
+import io.gravitee.rest.api.model.MetadataFormat;
+import io.gravitee.rest.api.model.NewUserMetadataEntity;
+import io.gravitee.rest.api.model.ReferenceMetadataEntity;
+import io.gravitee.rest.api.model.UpdateUserMetadataEntity;
+import io.gravitee.rest.api.model.UserMetadataEntity;
 import io.gravitee.rest.api.service.EnvironmentService;
 import io.gravitee.rest.api.service.UserMetadataService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
@@ -36,8 +41,7 @@ import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import io.gravitee.rest.api.service.sanitizer.CustomFieldSanitizer;
 import java.util.List;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -46,10 +50,9 @@ import org.springframework.stereotype.Component;
  * @author Eric LELEU (eric.leleu at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class UserMetadataServiceImpl extends AbstractReferenceMetadataService implements UserMetadataService {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(UserMetadataServiceImpl.class);
 
     @Lazy
     @Autowired
@@ -80,15 +83,13 @@ public class UserMetadataServiceImpl extends AbstractReferenceMetadataService im
 
     @Override
     public List<UserMetadataEntity> findAllByUserId(String userId) {
-        return GraviteeContext
-            .getCurrentUsersMetadata()
-            .computeIfAbsent(
-                userId,
-                k -> {
-                    final List<ReferenceMetadataEntity> allMetadata = findAllByReference(USER, userId, Optional.empty());
-                    return allMetadata.stream().map(m -> convert(m, userId)).collect(toList());
-                }
-            );
+        return GraviteeContext.getCurrentUsersMetadata().computeIfAbsent(userId, k -> {
+            final List<ReferenceMetadataEntity> allMetadata = findAllByReference(USER, userId, Optional.empty());
+            return allMetadata
+                .stream()
+                .map(m -> convert(m, userId))
+                .collect(toList());
+        });
     }
 
     @Override
@@ -119,9 +120,9 @@ public class UserMetadataServiceImpl extends AbstractReferenceMetadataService im
                     try {
                         this.delete(executionContext, CustomFieldSanitizer.formatKeyValue(key), USER, user.getId());
                     } catch (MetadataNotFoundException e) {
-                        LOGGER.debug(
+                        log.debug(
                             "Metadata key={}, refType={}, refId={} not found," +
-                            " ignore error because we want to delete it and user may not have this metadata",
+                                " ignore error because we want to delete it and user may not have this metadata",
                             key,
                             USER,
                             user.getId()
@@ -131,7 +132,7 @@ public class UserMetadataServiceImpl extends AbstractReferenceMetadataService im
                 pageNumber++;
             } while (pageOfUser.getPageElements() > 0);
         } catch (TechnicalException ex) {
-            LOGGER.error("An error occurred while trying to all metadata with key {}", key, ex);
+            log.error("An error occurred while trying to all metadata with key {}", key, ex);
             throw new TechnicalManagementException("An error occurred while trying to all metadata with key " + key, ex);
         }
     }

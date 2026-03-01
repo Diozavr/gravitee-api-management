@@ -24,6 +24,7 @@ import io.gravitee.gateway.reactive.api.context.http.HttpPlainExecutionContext;
 import io.gravitee.gateway.reactive.core.context.DefaultExecutionContext;
 import io.gravitee.gateway.reactive.core.context.interruption.InterruptionFailureException;
 import io.gravitee.policy.api.PolicyResult;
+import io.gravitee.reporter.api.v4.metric.Metrics;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.CompletableEmitter;
 import org.junit.jupiter.api.Test;
@@ -49,13 +50,13 @@ class PolicyChainAdapterTest {
     @Test
     public void shouldInterruptAndCompleteWhenFailWith() {
         final HttpPlainExecutionContext ctx = new DefaultExecutionContext(null, null);
+        ((DefaultExecutionContext) ctx).metrics(mock(Metrics.class));
         final PolicyResult policyResult = PolicyResult.failure("key", 500, "error");
 
-        Completable
-            .create(emitter -> {
-                final PolicyChainAdapter policyChainAdapter = new PolicyChainAdapter(ctx, emitter);
-                policyChainAdapter.failWith(policyResult);
-            })
+        Completable.create(emitter -> {
+            final PolicyChainAdapter policyChainAdapter = new PolicyChainAdapter(ctx, emitter);
+            policyChainAdapter.failWith(policyResult);
+        })
             .test()
             .assertFailure(InterruptionFailureException.class);
     }
@@ -63,13 +64,13 @@ class PolicyChainAdapterTest {
     @Test
     public void shouldInterruptAndCompleteWhenStreamFailWith() {
         final HttpPlainExecutionContext ctx = new DefaultExecutionContext(null, null);
+        ((DefaultExecutionContext) ctx).metrics(mock(Metrics.class));
         final PolicyResult policyResult = PolicyResult.failure("key", 500, "error");
 
-        Completable
-            .create(emitter -> {
-                final PolicyChainAdapter policyChainAdapter = new PolicyChainAdapter(ctx, emitter);
-                policyChainAdapter.streamFailWith(policyResult);
-            })
+        Completable.create(emitter -> {
+            final PolicyChainAdapter policyChainAdapter = new PolicyChainAdapter(ctx, emitter);
+            policyChainAdapter.streamFailWith(policyResult);
+        })
             .test()
             .assertFailure(InterruptionFailureException.class);
     }

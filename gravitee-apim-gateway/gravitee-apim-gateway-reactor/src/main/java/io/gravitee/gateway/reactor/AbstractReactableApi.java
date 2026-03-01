@@ -130,9 +130,10 @@ public abstract class AbstractReactableApi<T> implements ReactableApi<T>, Serial
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ReactableApi<?> that = (ReactableApi<?>) o;
-        return getId().equals(that.getId());
+        return switch (o) {
+            case ReactableApi<?> that -> getId().equals(that.getId());
+            case null, default -> false;
+        };
     }
 
     @Override
@@ -142,6 +143,17 @@ public abstract class AbstractReactableApi<T> implements ReactableApi<T>, Serial
 
     @Override
     public String toString() {
-        return "API " + "id[" + this.getId() + "] name[" + this.getName() + "] version[" + this.getApiVersion() + ']';
+        return (
+            "API " +
+            "id[" +
+            this.getId() +
+            "] name[" +
+            this.getName() +
+            "] version[" +
+            this.getApiVersion() +
+            "] revision[" +
+            this.getRevision() +
+            "]"
+        );
     }
 }

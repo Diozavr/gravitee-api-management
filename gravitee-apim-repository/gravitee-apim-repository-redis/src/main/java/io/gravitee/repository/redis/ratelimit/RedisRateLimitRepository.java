@@ -33,13 +33,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class RedisRateLimitRepository implements RateLimitRepository<RateLimit> {
 
     private static final String REDIS_KEY_PREFIX = "ratelimit:";
@@ -63,19 +63,18 @@ public class RedisRateLimitRepository implements RateLimitRepository<RateLimit> 
 
         final RateLimit newRate = supplier.get();
 
-        return SingleHelper
-            .toSingle(
-                (Consumer<Handler<AsyncResult<Response>>>) asyncResultHandler ->
-                    redisClient
-                        .redisApi()
-                        .flatMap(redisAPI ->
-                            redisAPI.evalsha(
-                                convertToList(this.redisClient.scriptSha1(SCRIPT_RATELIMIT_KEY), REDIS_KEY_PREFIX + key, weight, newRate)
-                            )
+        return SingleHelper.toSingle(
+            (Consumer<Handler<AsyncResult<Response>>>) asyncResultHandler ->
+                redisClient
+                    .redisApi()
+                    .flatMap(redisAPI ->
+                        redisAPI.evalsha(
+                            convertToList(this.redisClient.scriptSha1(SCRIPT_RATELIMIT_KEY), REDIS_KEY_PREFIX + key, weight, newRate)
                         )
-                        .onFailure(this::logOperationFailure)
-                        .onComplete(asyncResultHandler)
-            )
+                    )
+                    .onFailure(this::logOperationFailure)
+                    .onComplete(asyncResultHandler)
+        )
             .map(response -> {
                 // It may happen when the rate has been expired while running the script
                 // expired values return a list of 'null'

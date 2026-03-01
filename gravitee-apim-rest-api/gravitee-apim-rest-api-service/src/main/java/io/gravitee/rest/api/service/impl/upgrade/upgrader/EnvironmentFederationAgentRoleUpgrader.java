@@ -23,13 +23,13 @@ import io.gravitee.node.api.upgrader.UpgraderException;
 import io.gravitee.repository.management.api.OrganizationRepository;
 import io.gravitee.rest.api.service.RoleService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
+@CustomLog
 public class EnvironmentFederationAgentRoleUpgrader implements Upgrader {
 
     private final RoleService roleService;
@@ -45,15 +45,15 @@ public class EnvironmentFederationAgentRoleUpgrader implements Upgrader {
     @Override
     public boolean upgrade() throws UpgraderException {
         return this.wrapException(() -> {
-                organizationRepository
-                    .findAll()
-                    .stream()
-                    .filter(organization -> shouldCreateEnvironmentFederationAgentRole(organization.getId()))
-                    .forEach(organization -> {
-                        roleService.create(new ExecutionContext(organization.getId()), ROLE_ENVIRONMENT_FEDERATION_AGENT);
-                    });
-                return true;
-            });
+            organizationRepository
+                .findAll()
+                .stream()
+                .filter(organization -> shouldCreateEnvironmentFederationAgentRole(organization.getId()))
+                .forEach(organization -> {
+                    roleService.create(new ExecutionContext(organization.getId()), ROLE_ENVIRONMENT_FEDERATION_AGENT);
+                });
+            return true;
+        });
     }
 
     private boolean shouldCreateEnvironmentFederationAgentRole(String organizationId) {

@@ -15,12 +15,15 @@
  */
 package io.gravitee.plugin.endpoint.http.proxy;
 
+import io.gravitee.common.http.HttpStatusCode;
 import io.gravitee.common.http.MediaType;
 import io.gravitee.gateway.api.http.HttpHeaderNames;
 import io.gravitee.gateway.reactive.api.ConnectorMode;
+import io.gravitee.gateway.reactive.api.ExecutionFailure;
 import io.gravitee.gateway.reactive.api.connector.endpoint.sync.HttpEndpointSyncConnector;
 import io.gravitee.gateway.reactive.api.context.http.HttpExecutionContext;
 import io.gravitee.gateway.reactive.api.context.http.HttpRequest;
+import io.gravitee.gateway.reactive.core.context.interruption.InterruptionFailureException;
 import io.gravitee.plugin.endpoint.http.proxy.client.GrpcHttpClientFactory;
 import io.gravitee.plugin.endpoint.http.proxy.client.HttpClientFactory;
 import io.gravitee.plugin.endpoint.http.proxy.configuration.HttpProxyEndpointConnectorConfiguration;
@@ -29,21 +32,31 @@ import io.gravitee.plugin.endpoint.http.proxy.connector.GrpcConnector;
 import io.gravitee.plugin.endpoint.http.proxy.connector.HttpConnector;
 import io.gravitee.plugin.endpoint.http.proxy.connector.ProxyConnector;
 import io.gravitee.plugin.endpoint.http.proxy.connector.WebSocketConnector;
+import io.netty.channel.ConnectTimeoutException;
+import io.netty.handler.timeout.ReadTimeoutException;
 import io.reactivex.rxjava3.core.Completable;
+import io.vertx.circuitbreaker.TimeoutException;
+import io.vertx.core.impl.NoStackTraceTimeoutException;
+import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 /**
  * @author Jeoffrey HAEYAERT (jeoffrey.haeyaert at graviteesource.com)
  * @author GraviteeSource Team
  */
-@Slf4j
+@CustomLog
 public class HttpProxyEndpointConnector extends HttpEndpointSyncConnector {
 
     private static final String ENDPOINT_ID = "http-proxy";
-    static final Set<ConnectorMode> SUPPORTED_MODES = Set.of(ConnectorMode.REQUEST_RESPONSE);
+    private final Set<ConnectorMode> SUPPORTED_MODES = Set.of(ConnectorMode.REQUEST_RESPONSE);
+    static final String GATEWAY_CLIENT_CONNECTION_ERROR = "GATEWAY_CLIENT_CONNECTION_ERROR";
+    static final String REQUEST_TIMEOUT = "REQUEST_TIMEOUT";
+    private static final String SERVER_NULL_PATTERN = " for server null";
+    static final String CLIENT_ABORTED_DURING_RESPONSE_ERROR = "CLIENT_ABORTED_DURING_RESPONSE_ERROR";
+    static final String CLIENT_ABORTED_DURING_RESPONSE_MESSAGE = "The response cannot be sent to the client because the client has aborted";
 
     protected final HttpProxyEndpointConnectorConfiguration configuration;
     protected final HttpProxyEndpointConnectorSharedConfiguration sharedConfiguration;
@@ -80,27 +93,50 @@ public class HttpProxyEndpointConnector extends HttpEndpointSyncConnector {
     @Override
     public Completable connect(HttpExecutionContext ctx) {
         return Completable.defer(() -> {
+            // Http status set to 0 to detect client abort before backend response
+            ctx.response().status(0);
             HttpRequest request = ctx.request();
             return getConnector(request).connect(ctx);
-        });
+        })
+            .doOnDispose(() -> handleClientAbort(ctx))
+            .onErrorResumeNext(throwable -> handleException(throwable, ctx));
+    }
+
+    /**
+     * Handle client abort by setting appropriate error status and metrics.
+     * This is called when the client disconnects before the response is fully delivered.
+     */
+    private void handleClientAbort(final HttpExecutionContext ctx) {
+        if (ctx.response().status() == 0) {
+            ctx.response().status(499);
+            ctx.metrics().setErrorKey(CLIENT_ABORTED_DURING_RESPONSE_ERROR);
+            ctx.metrics().setErrorMessage(CLIENT_ABORTED_DURING_RESPONSE_MESSAGE);
+        }
+    }
+
+    @Override
+    protected void doStop() {
+        if (httpClientFactory != null) {
+            httpClientFactory.close();
+        }
+        if (grpcHttpClientFactory != null) {
+            grpcHttpClientFactory.close();
+        }
     }
 
     private ProxyConnector getConnector(HttpRequest request) {
         if (request.isWebSocket()) {
-            return this.connectors.computeIfAbsent(
-                    "ws",
-                    type -> new WebSocketConnector(configuration, sharedConfiguration, httpClientFactory)
-                );
+            return this.connectors.computeIfAbsent("ws", type ->
+                new WebSocketConnector(configuration, sharedConfiguration, httpClientFactory)
+            );
         } else if (isGrpc(request)) {
-            return this.connectors.computeIfAbsent(
-                    "grpc",
-                    type -> new GrpcConnector(configuration, sharedConfiguration, grpcHttpClientFactory)
-                );
+            return this.connectors.computeIfAbsent("grpc", type ->
+                new GrpcConnector(configuration, sharedConfiguration, grpcHttpClientFactory)
+            );
         } else {
-            return this.connectors.computeIfAbsent(
-                    "http",
-                    type -> new HttpConnector(configuration, sharedConfiguration, httpClientFactory)
-                );
+            return this.connectors.computeIfAbsent("http", type ->
+                new HttpConnector(configuration, sharedConfiguration, httpClientFactory)
+            );
         }
     }
 
@@ -114,13 +150,32 @@ public class HttpProxyEndpointConnector extends HttpEndpointSyncConnector {
         }
     }
 
-    @Override
-    protected void doStop() {
-        if (httpClientFactory != null) {
-            httpClientFactory.close();
-        }
-        if (grpcHttpClientFactory != null) {
-            grpcHttpClientFactory.close();
-        }
+    private Completable handleException(Throwable throwable, HttpExecutionContext ctx) {
+        return switch (throwable) {
+            case InterruptionFailureException e -> Completable.error(e);
+            case TimeoutException e -> ctx.interruptWith(
+                new ExecutionFailure(HttpStatusCode.GATEWAY_TIMEOUT_504).key(REQUEST_TIMEOUT).cause(throwable)
+            );
+            case NoStackTraceTimeoutException e -> ctx.interruptWith(
+                new ExecutionFailure(HttpStatusCode.GATEWAY_TIMEOUT_504).key(REQUEST_TIMEOUT).cause(rewriteServerNull(e, ctx))
+            );
+            case ReadTimeoutException e -> ctx.interruptWith(
+                new ExecutionFailure(HttpStatusCode.GATEWAY_TIMEOUT_504).key(REQUEST_TIMEOUT).cause(throwable)
+            );
+            case ConnectTimeoutException e -> ctx.interruptWith(
+                new ExecutionFailure(HttpStatusCode.GATEWAY_TIMEOUT_504).key(REQUEST_TIMEOUT).cause(throwable)
+            );
+            default -> ctx.interruptWith(
+                new ExecutionFailure(HttpStatusCode.BAD_GATEWAY_502).key(GATEWAY_CLIENT_CONNECTION_ERROR).cause(throwable)
+            );
+        };
+    }
+
+    private Throwable rewriteServerNull(NoStackTraceTimeoutException e, HttpExecutionContext ctx) {
+        String msg = e.getMessage();
+        String endpoint = ctx.metrics().getEndpoint();
+        return (msg != null && msg.endsWith(SERVER_NULL_PATTERN) && endpoint != null)
+            ? new NoStackTraceTimeoutException(msg.replace(SERVER_NULL_PATTERN, " for endpoint " + endpoint))
+            : e;
     }
 }

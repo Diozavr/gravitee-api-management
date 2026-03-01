@@ -15,9 +15,14 @@
  */
 package io.gravitee.rest.api.service.impl;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Sets;
 import io.gravitee.common.data.domain.Page;
@@ -38,8 +43,10 @@ import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.common.GraviteeContext;
 import io.gravitee.rest.api.service.configuration.application.ClientRegistrationService;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -87,6 +94,9 @@ public class ApplicationService_FindByIdsAndStatusTest {
     @Mock
     private ClientRegistrationService clientRegistrationService;
 
+    @Mock
+    private io.gravitee.apim.core.application_certificate.crud_service.ClientCertificateCrudService clientCertificateCrudService;
+
     @Before
     public void setUp() {
         GraviteeContext.setCurrentOrganization("DEFAULT");
@@ -116,8 +126,7 @@ public class ApplicationService_FindByIdsAndStatusTest {
     @Test
     public void shouldFindByIdsAndStatus() throws TechnicalException {
         ExecutionContext executionContext = GraviteeContext.getExecutionContext();
-        ApplicationCriteria criteria = ApplicationCriteria
-            .builder()
+        ApplicationCriteria criteria = ApplicationCriteria.builder()
             .restrictedToIds(Sets.newHashSet(APPLICATION_IDS))
             .status(ApplicationStatus.ACTIVE)
             .environmentIds(Set.of(executionContext.getEnvironmentId()))
@@ -132,14 +141,13 @@ public class ApplicationService_FindByIdsAndStatusTest {
         );
 
         assertNotNull(applications);
-        assertEquals(APPLICATION_IDS, applications.stream().map(ApplicationListItem::getId).collect(Collectors.toList()));
+        assertEquals(APPLICATION_IDS, applications.stream().map(ApplicationListItem::getId).toList());
     }
 
     @Test
     public void shouldFindByIdsAndStatusWithDuplicatedIdsAndStatus() throws TechnicalException {
         ExecutionContext executionContext = GraviteeContext.getExecutionContext();
-        ApplicationCriteria criteria = ApplicationCriteria
-            .builder()
+        ApplicationCriteria criteria = ApplicationCriteria.builder()
             .restrictedToIds(Sets.newHashSet(APPLICATION_IDS))
             .status(ApplicationStatus.ACTIVE)
             .environmentIds(Set.of(executionContext.getEnvironmentId()))
@@ -155,14 +163,13 @@ public class ApplicationService_FindByIdsAndStatusTest {
         );
 
         assertNotNull(applications);
-        assertEquals(APPLICATION_IDS, applications.stream().map(ApplicationListItem::getId).collect(Collectors.toList()));
+        assertEquals(APPLICATION_IDS, applications.stream().map(ApplicationListItem::getId).toList());
     }
 
     @Test
     public void shouldFindByIdsAndStatusWithNoEnvironmentCriteria() throws TechnicalException {
         ExecutionContext executionContext = new ExecutionContext("DEFAULT", null);
-        ApplicationCriteria criteria = ApplicationCriteria
-            .builder()
+        ApplicationCriteria criteria = ApplicationCriteria.builder()
             .restrictedToIds(Sets.newHashSet(APPLICATION_IDS))
             .status(ApplicationStatus.ACTIVE)
             .build();
@@ -176,7 +183,7 @@ public class ApplicationService_FindByIdsAndStatusTest {
         );
 
         assertNotNull(applications);
-        assertEquals(APPLICATION_IDS, applications.stream().map(ApplicationListItem::getId).collect(Collectors.toList()));
+        assertEquals(APPLICATION_IDS, applications.stream().map(ApplicationListItem::getId).toList());
     }
 
     @Test
@@ -197,8 +204,7 @@ public class ApplicationService_FindByIdsAndStatusTest {
     @Test(expected = TechnicalManagementException.class)
     public void shouldThrowsIfNoPrimaryOwner() throws TechnicalException {
         ExecutionContext executionContext = GraviteeContext.getExecutionContext();
-        ApplicationCriteria criteria = ApplicationCriteria
-            .builder()
+        ApplicationCriteria criteria = ApplicationCriteria.builder()
             .restrictedToIds(Sets.newHashSet(APPLICATION_IDS))
             .status(ApplicationStatus.ACTIVE)
             .environmentIds(Set.of(executionContext.getEnvironmentId()))
@@ -212,7 +218,7 @@ public class ApplicationService_FindByIdsAndStatusTest {
         );
 
         assertNotNull(applications);
-        assertEquals(APPLICATION_IDS, applications.stream().map(ApplicationListItem::getId).collect(Collectors.toList()));
+        assertEquals(APPLICATION_IDS, applications.stream().map(ApplicationListItem::getId).toList());
     }
 
     @Test(expected = TechnicalManagementException.class)

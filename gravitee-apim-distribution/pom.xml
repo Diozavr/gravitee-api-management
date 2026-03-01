@@ -69,6 +69,9 @@
           Only Gravitee members are able to make this distribution, as it requires access to an internal repository.
     -->
 
+    <modules>
+        <module>gravitee-apim-distribution-es-index-mappings</module>
+    </modules>
 
     <!-- Default dependencies, to allow a full OSS distribution with opensource plugins only -->
     <dependencies>
@@ -480,6 +483,19 @@
             <groupId>io.gravitee.policy</groupId>
             <artifactId>gravitee-policy-json-to-json</artifactId>
             <version>${gravitee-policy-json-to-json.version}</version>
+            <type>zip</type>
+            <scope>runtime</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.gravitee.policy</groupId>
+            <artifactId>gravitee-policy-json-to-toon</artifactId>
+            <version>${gravitee-policy-json-to-toon.version}</version>
             <type>zip</type>
             <scope>runtime</scope>
             <exclusions>
@@ -960,9 +976,9 @@
 
         <!-- Reporters -->
         <dependency>
-            <groupId>io.gravitee.reporter</groupId>
-            <artifactId>gravitee-reporter-elasticsearch</artifactId>
-            <version>${gravitee-reporter-elasticsearch.version}</version>
+            <groupId>io.gravitee.apim.reporter</groupId>
+            <artifactId>gravitee-apim-reporter-elasticsearch</artifactId>
+            <version>${project.version}</version>
             <type>zip</type>
             <scope>runtime</scope>
             <exclusions>
@@ -973,9 +989,9 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>io.gravitee.reporter</groupId>
-            <artifactId>gravitee-reporter-file</artifactId>
-            <version>${gravitee-reporter-file.version}</version>
+            <groupId>io.gravitee.apim.reporter</groupId>
+            <artifactId>gravitee-apim-reporter-file</artifactId>
+            <version>${project.version}</version>
             <type>zip</type>
             <scope>runtime</scope>
             <exclusions>
@@ -1383,7 +1399,45 @@
                         </exclusion>
                     </exclusions>
                 </dependency>
-
+                <dependency>
+                    <groupId>com.graviteesource.entrypoint</groupId>
+                    <artifactId>gravitee-entrypoint-mcp-proxy</artifactId>
+                    <version>${gravitee-reactor-mcp-proxy.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.entrypoint</groupId>
+                    <artifactId>gravitee-entrypoint-llm-proxy</artifactId>
+                    <version>${gravitee-reactor-llm-proxy.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.entrypoint</groupId>
+                    <artifactId>gravitee-entrypoint-a2a-proxy</artifactId>
+                    <version>${gravitee-reactor-a2a-proxy.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
 
                 <!-- Endpoints -->
                 <dependency>
@@ -1464,6 +1518,46 @@
                         </exclusion>
                     </exclusions>
                 </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.endpoint</groupId>
+                    <artifactId>gravitee-endpoint-mcp-proxy</artifactId>
+                    <version>${gravitee-reactor-mcp-proxy.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.endpoint</groupId>
+                    <artifactId>gravitee-endpoint-llm-proxy</artifactId>
+                    <version>${gravitee-reactor-llm-proxy.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.endpoint</groupId>
+                    <artifactId>gravitee-endpoint-a2a-proxy</artifactId>
+                    <version>${gravitee-reactor-a2a-proxy.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+
 
                 <!-- Reporters -->
                 <dependency>
@@ -1483,6 +1577,61 @@
                     <groupId>com.graviteesource.reporter</groupId>
                     <artifactId>gravitee-reporter-cloud</artifactId>
                     <version>${gravitee-reporter-cloud.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+
+                <!-- Resources -->
+
+                <dependency>
+                    <groupId>com.graviteesource.resource.ai.vectorstore</groupId>
+                    <artifactId>gravitee-resource-ai-vector-store-redis</artifactId>
+                    <version>${gravitee-resource-ai-vector-store-redis.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.resource.ai.vectorstore</groupId>
+                    <artifactId>gravitee-resource-ai-vector-store-aws-s3</artifactId>
+                    <version>${gravitee-resource-ai-vector-store-aws-s3.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>io.gravitee.resource</groupId>
+                    <artifactId>gravitee-resource-ai-model-text-embedding</artifactId>
+                    <version>${gravitee-resource-ai-model-text-embedding.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.resource</groupId>
+                    <artifactId>gravitee-resource-ai-model-token-classification</artifactId>
+                    <version>${gravitee-resource-ai-model-token-classification.version}</version>
                     <type>zip</type>
                     <scope>runtime</scope>
                     <exclusions>
@@ -1611,6 +1760,58 @@
                         </exclusion>
                     </exclusions>
                 </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.policy</groupId>
+                    <artifactId>gravitee-policy-token-ratelimit</artifactId>
+                    <version>${gravitee-policy-token-ratelimit.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.policy</groupId>
+                    <artifactId>gravitee-policy-mcp-acl</artifactId>
+                    <version>${gravitee-policy-mcp-acl.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.policy</groupId>
+                    <artifactId>gravitee-policy-ai-semantic-caching</artifactId>
+                    <version>${gravitee-policy-ai-semantic-caching.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.policy</groupId>
+                    <artifactId>gravitee-policy-pii-filtering</artifactId>
+                    <version>${gravitee-policy-pii-filtering.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
 
                 <!-- Reactors -->
                 <dependency>
@@ -1630,6 +1831,45 @@
                     <groupId>com.graviteesource.reactor</groupId>
                     <artifactId>gravitee-reactor-native-kafka</artifactId>
                     <version>${gravitee-reactor-native-kafka.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.reactor</groupId>
+                    <artifactId>gravitee-reactor-mcp-proxy</artifactId>
+                    <version>${gravitee-reactor-mcp-proxy.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.reactor</groupId>
+                    <artifactId>gravitee-reactor-llm-proxy</artifactId>
+                    <version>${gravitee-reactor-llm-proxy.version}</version>
+                    <type>zip</type>
+                    <scope>runtime</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>com.graviteesource.reactor</groupId>
+                    <artifactId>gravitee-reactor-a2a-proxy</artifactId>
+                    <version>${gravitee-reactor-a2a-proxy.version}</version>
                     <type>zip</type>
                     <scope>runtime</scope>
                     <exclusions>
@@ -1972,6 +2212,7 @@
                         </exclusion>
                     </exclusions>
                 </dependency>
+
                 <!-- Resources -->
                 <dependency>
                     <groupId>io.gravitee.resource</groupId>

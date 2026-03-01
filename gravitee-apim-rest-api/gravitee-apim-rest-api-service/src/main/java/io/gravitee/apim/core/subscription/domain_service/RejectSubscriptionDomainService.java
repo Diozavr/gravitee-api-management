@@ -18,6 +18,7 @@ package io.gravitee.apim.core.subscription.domain_service;
 import io.gravitee.apim.core.DomainService;
 import io.gravitee.apim.core.audit.domain_service.AuditDomainService;
 import io.gravitee.apim.core.audit.model.ApiAuditLogEntity;
+import io.gravitee.apim.core.audit.model.ApiProductAuditLogEntity;
 import io.gravitee.apim.core.audit.model.ApplicationAuditLogEntity;
 import io.gravitee.apim.core.audit.model.AuditInfo;
 import io.gravitee.apim.core.audit.model.AuditProperties;
@@ -29,14 +30,15 @@ import io.gravitee.apim.core.notification.model.hook.SubscriptionRejectedApiHook
 import io.gravitee.apim.core.notification.model.hook.SubscriptionRejectedApplicationHookContext;
 import io.gravitee.apim.core.subscription.crud_service.SubscriptionCrudService;
 import io.gravitee.apim.core.subscription.model.SubscriptionEntity;
+import io.gravitee.apim.core.subscription.model.SubscriptionReferenceType;
 import io.gravitee.apim.core.user.crud_service.UserCrudService;
 import io.gravitee.apim.core.user.model.BaseUserEntity;
 import java.util.Collections;
 import java.util.List;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@CustomLog
 @DomainService
 @RequiredArgsConstructor
 public class RejectSubscriptionDomainService {
@@ -107,23 +109,41 @@ public class RejectSubscriptionDomainService {
     }
 
     private void createAudit(SubscriptionEntity subscriptionEntity, SubscriptionEntity rejectedSubscriptionEntity, AuditInfo auditInfo) {
-        auditDomainService.createApiAuditLog(
-            ApiAuditLogEntity
-                .builder()
-                .actor(auditInfo.actor())
-                .organizationId(auditInfo.organizationId())
-                .environmentId(auditInfo.environmentId())
-                .apiId(subscriptionEntity.getApiId())
-                .event(SubscriptionAuditEvent.SUBSCRIPTION_UPDATED)
-                .oldValue(subscriptionEntity)
-                .newValue(rejectedSubscriptionEntity)
-                .createdAt(rejectedSubscriptionEntity.getClosedAt())
-                .properties(Collections.singletonMap(AuditProperties.APPLICATION, subscriptionEntity.getApplicationId()))
-                .build()
-        );
+        String referenceId = subscriptionEntity.getReferenceId();
+        boolean isApiProduct = SubscriptionReferenceType.API_PRODUCT == subscriptionEntity.getReferenceType();
+        var createdAt = rejectedSubscriptionEntity.getClosedAt();
+
+        if (isApiProduct) {
+            auditDomainService.createApiProductAuditLog(
+                ApiProductAuditLogEntity.builder()
+                    .actor(auditInfo.actor())
+                    .organizationId(auditInfo.organizationId())
+                    .environmentId(auditInfo.environmentId())
+                    .apiProductId(referenceId)
+                    .event(SubscriptionAuditEvent.SUBSCRIPTION_UPDATED)
+                    .oldValue(subscriptionEntity)
+                    .newValue(rejectedSubscriptionEntity)
+                    .createdAt(createdAt)
+                    .properties(Collections.singletonMap(AuditProperties.APPLICATION, subscriptionEntity.getApplicationId()))
+                    .build()
+            );
+        } else {
+            auditDomainService.createApiAuditLog(
+                ApiAuditLogEntity.builder()
+                    .actor(auditInfo.actor())
+                    .organizationId(auditInfo.organizationId())
+                    .environmentId(auditInfo.environmentId())
+                    .apiId(referenceId)
+                    .event(SubscriptionAuditEvent.SUBSCRIPTION_UPDATED)
+                    .oldValue(subscriptionEntity)
+                    .newValue(rejectedSubscriptionEntity)
+                    .createdAt(createdAt)
+                    .properties(Collections.singletonMap(AuditProperties.APPLICATION, subscriptionEntity.getApplicationId()))
+                    .build()
+            );
+        }
         auditDomainService.createApplicationAuditLog(
-            ApplicationAuditLogEntity
-                .builder()
+            ApplicationAuditLogEntity.builder()
                 .actor(auditInfo.actor())
                 .organizationId(auditInfo.organizationId())
                 .environmentId(auditInfo.environmentId())
@@ -131,8 +151,8 @@ public class RejectSubscriptionDomainService {
                 .event(SubscriptionAuditEvent.SUBSCRIPTION_UPDATED)
                 .oldValue(subscriptionEntity)
                 .newValue(rejectedSubscriptionEntity)
-                .createdAt(rejectedSubscriptionEntity.getClosedAt())
-                .properties(Collections.singletonMap(AuditProperties.API, subscriptionEntity.getApiId()))
+                .createdAt(createdAt)
+                .properties(Collections.singletonMap(isApiProduct ? AuditProperties.API_PRODUCT : AuditProperties.API, referenceId))
                 .build()
         );
     }

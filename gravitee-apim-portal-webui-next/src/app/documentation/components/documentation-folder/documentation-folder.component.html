@@ -1,0 +1,45 @@
+<!--
+
+    Copyright (C) 2024 The Gravitee team (http://gravitee.io)
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<app-sidenav-layout [breadcrumbs]="breadcrumbs()">
+  @if (subscribeApiId()) {
+    <div breadcrumbActions>
+      <button mat-stroked-button (click)="onSubscribe()" [disabled]="!currentUser()" data-testid="subscribe-button">
+        @if (currentUser()) {
+          <span i18n="@@subscribeToApiButton">Subscribe</span>
+        } @else {
+          <span i18n="@@signInToSubscribeButton">Sign in to subscribe</span>
+        }
+      </button>
+    </div>
+  }
+  <div sidenavContent class="documentation-folder__sidenav__content">
+    @if (tree() && tree()!.length > 0) {
+      <app-tree-component
+        class="documentation-folder__sidenav__tree"
+        [tree]="tree()"
+        [selectedId]="pageId$ | async"
+        (selectNode)="onSelect($event)"
+      />
+    } @else {
+      <div class="documentation-folder__sidenav__empty-state" i18n="@@emptyItemsLabel">No items to show</div>
+    }
+  </div>
+  <div mainContent>
+    <app-navigation-item-content-viewer [pageContent]="folderData()?.selectedPageContent ?? null" />
+  </div>
+</app-sidenav-layout>

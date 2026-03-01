@@ -7,8 +7,10 @@
     "payload": "{}",
     "parentId": null,
     "properties": {
-      "api_id": "api-1"
+      "api_id": "api-1",
+      "deployment_number": "1"
     },
+    "createdAt": 1451606400000,
     "updatedAt": 1451606400000
   },
   {
@@ -44,8 +46,10 @@
     "payload": "{}",
     "parentId": null,
     "properties": {
-      "api_id": "api-3"
+      "api_id": "api-3",
+      "deployment_number": "1"
     },
+    "createdAt": 1459468800000,
     "updatedAt": 1459468800000
   },
   {
@@ -255,6 +259,34 @@
     "parentId": null,
     "properties": {
       "environment_hrids": "default,another-env"
+    },
+    "createdAt": 1463739200000,
+    "updatedAt": 1463740200000
+  },
+  {
+    "id": "event21",
+    "organizations": ["org1"],
+    "environments": ["env1"],
+    "type": "DEBUG_API",
+    "payload": "{}",
+    "parentId": null,
+    "properties": {
+      "api_debug_status": "TO_DEBUG",
+      "gateway_id": "gateway-1"
+    },
+    "createdAt": 1459468800000,
+    "updatedAt": 1459468800000
+  },
+  {
+    "id": "event22",
+    "organizations": ["org1"],
+    "environments": ["env1"],
+    "type": "DEBUG_API",
+    "payload": "{}",
+    "parentId": null,
+    "properties": {
+      "api_debug_status": "SUCCESS",
+      "gateway_id": "gateway-1"
     },
     "createdAt": 1463739200000,
     "updatedAt": 1463740200000

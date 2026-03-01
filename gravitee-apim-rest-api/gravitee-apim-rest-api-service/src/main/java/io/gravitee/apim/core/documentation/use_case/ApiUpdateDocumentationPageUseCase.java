@@ -22,6 +22,7 @@ import io.gravitee.apim.core.documentation.crud_service.PageCrudService;
 import io.gravitee.apim.core.documentation.domain_service.ApiDocumentationDomainService;
 import io.gravitee.apim.core.documentation.domain_service.DocumentationValidationDomainService;
 import io.gravitee.apim.core.documentation.domain_service.HomepageDomainService;
+import io.gravitee.apim.core.documentation.domain_service.PageSourceDomainService;
 import io.gravitee.apim.core.documentation.domain_service.UpdateApiDocumentationDomainService;
 import io.gravitee.apim.core.documentation.model.AccessControl;
 import io.gravitee.apim.core.documentation.model.Page;
@@ -45,6 +46,7 @@ public class ApiUpdateDocumentationPageUseCase {
     private final PageCrudService pageCrudService;
     private final PageQueryService pageQueryService;
     private final DocumentationValidationDomainService documentationValidationDomainService;
+    private final PageSourceDomainService pageSourceDomainService;
 
     public Output execute(Input input) {
         var api = this.apiCrudService.get(input.apiId);
@@ -77,13 +79,16 @@ public class ApiUpdateDocumentationPageUseCase {
 
         var pageToUpdate = newPage.build();
 
+        if (pageToUpdate.getSource() != null && oldPage.getSource() != null) {
+            this.pageSourceDomainService.mergeSensitiveData(oldPage, pageToUpdate);
+        }
+
         if (!Objects.equals(oldPage.getContent(), input.content) || !Objects.equals(oldPage.getSource(), input.source)) {
-            pageToUpdate =
-                this.documentationValidationDomainService.validateAndSanitizeForUpdate(
-                        pageToUpdate,
-                        input.auditInfo().organizationId(),
-                        true
-                    );
+            pageToUpdate = this.documentationValidationDomainService.validateAndSanitizeForUpdate(
+                pageToUpdate,
+                input.auditInfo().organizationId(),
+                true
+            );
         }
 
         var updatedPage = this.updateApiDocumentationDomainService.updatePage(pageToUpdate, oldPage, input.auditInfo);
@@ -96,10 +101,9 @@ public class ApiUpdateDocumentationPageUseCase {
             this.updatePageOrders(oldPage.getOrder(), updatedPage, input.auditInfo);
         }
 
-        updatedPage =
-            updatedPage
-                .withHidden(this.apiDocumentationDomainService.pageIsHidden(updatedPage))
-                .withGeneralConditions(this.apiDocumentationDomainService.pageIsUsedAsGeneralConditions(updatedPage, api));
+        updatedPage = updatedPage
+            .withHidden(this.apiDocumentationDomainService.pageIsHidden(updatedPage))
+            .withGeneralConditions(this.apiDocumentationDomainService.pageIsUsedAsGeneralConditions(updatedPage, api));
 
         return new Output(updatedPage);
     }

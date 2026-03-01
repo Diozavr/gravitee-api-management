@@ -28,8 +28,8 @@ import io.gravitee.rest.api.service.InstallationService;
 import io.gravitee.rest.api.service.OrganizationService;
 import io.reactivex.rxjava3.core.Single;
 import java.util.Map;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -38,7 +38,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class HelloReplyAdapter implements ReplyAdapter<HelloReply, io.gravitee.exchange.api.command.hello.HelloReply> {
 
     private final InstallationService installationService;
@@ -52,26 +52,24 @@ public class HelloReplyAdapter implements ReplyAdapter<HelloReply, io.gravitee.e
 
     @Override
     public Single<io.gravitee.exchange.api.command.hello.HelloReply> adapt(final String targetId, final HelloReply reply) {
-        return Single
-            .just(reply.getPayload())
-            .map(replyPayload -> {
-                if (reply.getCommandStatus() == CommandStatus.SUCCEEDED) {
-                    final Map<String, String> additionalInformation = installationService.getOrInitialize().getAdditionalInformation();
-                    additionalInformation.put(InstallationService.COCKPIT_INSTALLATION_ID, replyPayload.getInstallationId());
-                    additionalInformation.put(InstallationService.COCKPIT_INSTALLATION_STATUS, replyPayload.getInstallationStatus());
-                    installationService.setAdditionalInformation(additionalInformation);
+        return Single.just(reply.getPayload()).map(replyPayload -> {
+            if (reply.getCommandStatus() == CommandStatus.SUCCEEDED) {
+                final Map<String, String> additionalInformation = installationService.getOrInitialize().getAdditionalInformation();
+                additionalInformation.put(InstallationService.COCKPIT_INSTALLATION_ID, replyPayload.getInstallationId());
+                additionalInformation.put(InstallationService.COCKPIT_INSTALLATION_STATUS, replyPayload.getInstallationStatus());
+                installationService.setAdditionalInformation(additionalInformation);
 
-                    if (replyPayload.getDefaultEnvironmentCockpitId() != null) {
-                        updateDefaultEnvironmentCockpitId(replyPayload.getDefaultEnvironmentCockpitId());
-                    }
-
-                    if (replyPayload.getDefaultOrganizationCockpitId() != null) {
-                        updateDefaultOrganizationCockpitId(replyPayload.getDefaultOrganizationCockpitId());
-                    }
+                if (replyPayload.getDefaultEnvironmentCockpitId() != null) {
+                    updateDefaultEnvironmentCockpitId(replyPayload.getDefaultEnvironmentCockpitId());
                 }
 
-                return new io.gravitee.exchange.api.command.hello.HelloReply(reply.getCommandId(), replyPayload);
-            });
+                if (replyPayload.getDefaultOrganizationCockpitId() != null) {
+                    updateDefaultOrganizationCockpitId(replyPayload.getDefaultOrganizationCockpitId());
+                }
+            }
+
+            return new io.gravitee.exchange.api.command.hello.HelloReply(reply.getCommandId(), replyPayload);
+        });
     }
 
     private void updateDefaultEnvironmentCockpitId(String defaultEnvironmentCockpitId) {

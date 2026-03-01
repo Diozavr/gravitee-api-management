@@ -30,10 +30,12 @@ import io.gravitee.rest.api.management.rest.model.PagedResult;
 import io.gravitee.rest.api.model.*;
 import io.gravitee.rest.api.model.alert.ApplicationAlertEventType;
 import io.gravitee.rest.api.model.alert.ApplicationAlertMembershipEvent;
+import io.gravitee.rest.api.model.api.ApiEntity;
 import io.gravitee.rest.api.model.permissions.RolePermission;
 import io.gravitee.rest.api.model.permissions.RolePermissionAction;
 import io.gravitee.rest.api.model.permissions.RoleScope;
 import io.gravitee.rest.api.model.permissions.SystemRole;
+import io.gravitee.rest.api.model.settings.ApiPrimaryOwnerMode;
 import io.gravitee.rest.api.rest.annotation.Permission;
 import io.gravitee.rest.api.rest.annotation.Permissions;
 import io.gravitee.rest.api.service.GroupService;
@@ -44,6 +46,7 @@ import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.common.GraviteeContext;
 import io.gravitee.rest.api.service.exceptions.GroupInvitationForbiddenException;
 import io.gravitee.rest.api.service.exceptions.GroupMembersLimitationExceededException;
+import io.gravitee.rest.api.service.exceptions.StillPrimaryOwnerException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -228,6 +231,7 @@ public class GroupMembersResource extends AbstractResource {
             RoleEntity previousApplicationRole = null;
             RoleEntity previousGroupRole = null;
             RoleEntity previousIntegrationRole = null;
+            RoleEntity previousClusterRole = null;
 
             if (membership.getId() != null) {
                 Set<RoleEntity> userRoles = membershipService.getRoles(
@@ -250,6 +254,9 @@ public class GroupMembersResource extends AbstractResource {
                         case INTEGRATION:
                             previousIntegrationRole = role;
                             break;
+                        case CLUSTER:
+                            previousClusterRole = role;
+                            break;
                         default:
                             break;
                     }
@@ -271,6 +278,19 @@ public class GroupMembersResource extends AbstractResource {
                 RoleEntity apiRoleEntity = roleEntities.get(RoleScope.API);
                 if (apiRoleEntity != null && !apiRoleEntity.equals(previousApiRole)) {
                     String roleName = getRoleName(RoleScope.API, apiRoleEntity, groupEntity, GroupEntity::isLockApiRole, hasPermission);
+
+                    // Validate: prevent changing from PRIMARY_OWNER if group owns APIs
+                    if (
+                        previousApiRole != null &&
+                        previousApiRole.getName().equals(SystemRole.PRIMARY_OWNER.name()) &&
+                        !roleName.equals(SystemRole.PRIMARY_OWNER.name())
+                    ) {
+                        List<ApiEntity> groupApis = groupService.getApis(executionContext.getEnvironmentId(), group);
+                        if (!groupApis.isEmpty()) {
+                            throw new StillPrimaryOwnerException(groupApis.size(), ApiPrimaryOwnerMode.GROUP);
+                        }
+                    }
+
                     updatedMembership = updateRole(RoleScope.API, roleName, previousApiRole, membership, executionContext);
                     if (previousApiRole != null && previousApiRole.getName().equals(SystemRole.PRIMARY_OWNER.name())) {
                         groupService.updateApiPrimaryOwner(group, null);
@@ -297,6 +317,12 @@ public class GroupMembersResource extends AbstractResource {
                     updateRole(RoleScope.INTEGRATION, roleName, previousIntegrationRole, membership, executionContext);
                 }
 
+                RoleEntity clusterRoleEntity = roleEntities.get(RoleScope.CLUSTER);
+                if (clusterRoleEntity != null && !clusterRoleEntity.equals(previousClusterRole)) {
+                    String roleName = getRoleName(RoleScope.CLUSTER, clusterRoleEntity, groupEntity, e -> true, hasPermission);
+                    updateRole(RoleScope.CLUSTER, roleName, previousClusterRole, membership, executionContext);
+                }
+
                 RoleEntity groupRoleEntity = roleEntities.get(RoleScope.GROUP);
                 if (groupRoleEntity != null && !groupRoleEntity.equals(previousGroupRole)) {
                     updateRole(RoleScope.GROUP, groupRoleEntity.getName(), previousGroupRole, membership, executionContext);
@@ -307,6 +333,7 @@ public class GroupMembersResource extends AbstractResource {
                 deleteIfNewAndPreviousRoleNull(apiRoleEntity, previousApiRole, membershipId);
                 deleteIfNewAndPreviousRoleNull(applicationRoleEntity, previousApplicationRole, membershipId);
                 deleteIfNewAndPreviousRoleNull(integrationRoleEntity, previousIntegrationRole, membershipId);
+                deleteIfNewAndPreviousRoleNull(clusterRoleEntity, previousClusterRole, membershipId);
                 deleteIfNewAndPreviousRoleNull(groupRoleEntity, previousGroupRole, membershipId);
 
                 // Send notification
@@ -315,6 +342,7 @@ public class GroupMembersResource extends AbstractResource {
                     previousApplicationRole == null &&
                     previousGroupRole == null &&
                     previousIntegrationRole == null &&
+                    previousClusterRole == null &&
                     updatedMembership != null
                 ) {
                     UserEntity userEntity = this.userService.findById(executionContext, updatedMembership.getId());
@@ -355,13 +383,24 @@ public class GroupMembersResource extends AbstractResource {
     ) {
         String roleName = roleEntity.getName();
         if (!hasPermission && isLocked.test(groupEntity)) {
-            if (groupEntity.getRoles() != null && !groupEntity.getRoles().isEmpty()) {
-                roleName = groupEntity.getRoles().get(scope);
-            } else {
+            String overrideRole = null;
+
+            // Try to get a role from a group configuration
+            if (groupEntity.getRoles() != null) {
+                overrideRole = groupEntity.getRoles().get(scope);
+            }
+
+            // If a group doesn't have this scope configured, try default roles
+            if (overrideRole == null) {
                 final List<RoleEntity> defaultRoles = roleService.findDefaultRoleByScopes(GraviteeContext.getCurrentOrganization(), scope);
                 if (defaultRoles != null && !defaultRoles.isEmpty()) {
-                    roleName = defaultRoles.get(0).getName();
+                    overrideRole = defaultRoles.getFirst().getName();
                 }
+            }
+
+            // Only override if we found a valid role
+            if (overrideRole != null) {
+                roleName = overrideRole;
             }
         }
         return roleName;

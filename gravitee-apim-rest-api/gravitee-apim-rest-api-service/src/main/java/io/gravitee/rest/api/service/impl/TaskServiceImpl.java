@@ -17,7 +17,9 @@ package io.gravitee.rest.api.service.impl;
 
 import static io.gravitee.rest.api.model.SubscriptionStatus.PENDING;
 import static io.gravitee.rest.api.model.WorkflowReferenceType.API;
-import static io.gravitee.rest.api.model.permissions.ApiPermission.*;
+import static io.gravitee.rest.api.model.permissions.ApiPermission.DEFINITION;
+import static io.gravitee.rest.api.model.permissions.ApiPermission.REVIEWS;
+import static io.gravitee.rest.api.model.permissions.ApiPermission.SUBSCRIPTION;
 import static java.util.Collections.singleton;
 import static java.util.stream.Collectors.toList;
 
@@ -28,22 +30,44 @@ import io.gravitee.repository.management.api.ApplicationRepository;
 import io.gravitee.repository.management.api.PlanRepository;
 import io.gravitee.repository.management.api.search.ApiCriteria;
 import io.gravitee.repository.management.api.search.UserCriteria;
-import io.gravitee.repository.management.model.*;
-import io.gravitee.rest.api.model.*;
+import io.gravitee.repository.management.model.Api;
+import io.gravitee.repository.management.model.Application;
+import io.gravitee.repository.management.model.Plan;
+import io.gravitee.repository.management.model.UserStatus;
+import io.gravitee.repository.management.model.Workflow;
+import io.gravitee.rest.api.model.EnvironmentEntity;
+import io.gravitee.rest.api.model.MembershipEntity;
 import io.gravitee.rest.api.model.MembershipMemberType;
+import io.gravitee.rest.api.model.RoleEntity;
+import io.gravitee.rest.api.model.SubscriptionEntity;
+import io.gravitee.rest.api.model.TaskEntity;
+import io.gravitee.rest.api.model.TaskType;
+import io.gravitee.rest.api.model.UserEntity;
+import io.gravitee.rest.api.model.WorkflowState;
+import io.gravitee.rest.api.model.WorkflowType;
 import io.gravitee.rest.api.model.common.PageableImpl;
-import io.gravitee.rest.api.model.common.SortableImpl;
 import io.gravitee.rest.api.model.pagedresult.Metadata;
 import io.gravitee.rest.api.model.permissions.RoleScope;
 import io.gravitee.rest.api.model.subscription.SubscriptionQuery;
-import io.gravitee.rest.api.service.*;
+import io.gravitee.rest.api.service.EnvironmentService;
+import io.gravitee.rest.api.service.MembershipService;
+import io.gravitee.rest.api.service.RoleService;
+import io.gravitee.rest.api.service.SubscriptionService;
+import io.gravitee.rest.api.service.TaskService;
+import io.gravitee.rest.api.service.UserService;
+import io.gravitee.rest.api.service.WorkflowService;
 import io.gravitee.rest.api.service.common.ExecutionContext;
 import io.gravitee.rest.api.service.exceptions.TechnicalManagementException;
 import io.gravitee.rest.api.service.exceptions.UnauthorizedAccessException;
 import io.gravitee.rest.api.service.promotion.PromotionTasksService;
-import java.util.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -52,10 +76,10 @@ import org.springframework.stereotype.Component;
  * @author Nicolas GERAUD(nicolas.geraud at graviteesource.com)
  * @author GraviteeSource Team
  */
+@CustomLog
 @Component
 public class TaskServiceImpl extends AbstractService implements TaskService {
 
-    private final Logger LOGGER = LoggerFactory.getLogger(TaskServiceImpl.class);
     private static final int NUMBER_OF_PENDING_USERS_TO_SEARCH = 100;
 
     @Autowired
@@ -127,32 +151,40 @@ public class TaskServiceImpl extends AbstractService implements TaskService {
                 }
             }
 
-            // search for IN_REVIEW apis
-            apiIds = getApisForAPermission(executionContext, userMembershipsAndPermissions, REVIEWS.getName());
-            if (!apiIds.isEmpty()) {
-                apiIds.forEach(apiId -> {
-                    final List<Workflow> workflows = workflowService.findByReferenceAndType(API, apiId, WorkflowType.REVIEW);
-                    if (workflows != null && !workflows.isEmpty()) {
-                        final Workflow currentWorkflow = workflows.get(0);
-                        if (WorkflowState.IN_REVIEW.name().equals(currentWorkflow.getState())) {
-                            tasks.add(convert(currentWorkflow));
-                        }
-                    }
-                });
-            }
+            // search for IN_REVIEW and REQUEST_FOR_CHANGES apis using a single batch query
+            final Set<String> reviewApiIds = getApisForAPermission(executionContext, userMembershipsAndPermissions, REVIEWS.getName());
+            final Set<String> definitionApiIds = getApisForAPermission(
+                executionContext,
+                userMembershipsAndPermissions,
+                DEFINITION.getName()
+            );
 
-            // search for REQUEST_FOR_CHANGES apis
-            apiIds = getApisForAPermission(executionContext, userMembershipsAndPermissions, DEFINITION.getName());
-            if (!apiIds.isEmpty()) {
-                apiIds.forEach(apiId -> {
-                    final List<Workflow> workflows = workflowService.findByReferenceAndType(API, apiId, WorkflowType.REVIEW);
-                    if (workflows != null && !workflows.isEmpty()) {
-                        final Workflow currentWorkflow = workflows.get(0);
-                        if (WorkflowState.REQUEST_FOR_CHANGES.name().equals(currentWorkflow.getState())) {
-                            tasks.add(convert(currentWorkflow));
-                        }
+            Set<String> allWorkflowApiIds = new HashSet<>();
+            allWorkflowApiIds.addAll(reviewApiIds);
+            allWorkflowApiIds.addAll(definitionApiIds);
+
+            if (!allWorkflowApiIds.isEmpty()) {
+                final List<Workflow> allWorkflows = workflowService.findByReferencesAndType(API, allWorkflowApiIds, WorkflowType.REVIEW);
+
+                // Keep only the latest (first) workflow per API since results are ordered by createdAt desc
+                Map<String, Workflow> latestWorkflowByApi = new HashMap<>();
+                for (Workflow wf : allWorkflows) {
+                    latestWorkflowByApi.putIfAbsent(wf.getReferenceId(), wf);
+                }
+
+                for (String apiId : reviewApiIds) {
+                    Workflow wf = latestWorkflowByApi.get(apiId);
+                    if (wf != null && WorkflowState.IN_REVIEW.name().equals(wf.getState())) {
+                        tasks.add(convert(wf));
                     }
-                });
+                }
+
+                for (String apiId : definitionApiIds) {
+                    Workflow wf = latestWorkflowByApi.get(apiId);
+                    if (wf != null && WorkflowState.REQUEST_FOR_CHANGES.name().equals(wf.getState())) {
+                        tasks.add(convert(wf));
+                    }
+                }
             }
 
             // search for TO_BE_VALIDATED promotions
@@ -160,7 +192,7 @@ public class TaskServiceImpl extends AbstractService implements TaskService {
 
             return tasks;
         } catch (TechnicalException e) {
-            LOGGER.error("Error retrieving user tasks {}", e.getMessage());
+            log.error("Error retrieving user tasks {}", e.getMessage());
             throw new TechnicalManagementException("Error retreiving user tasks", e);
         }
     }
@@ -287,7 +319,7 @@ public class TaskServiceImpl extends AbstractService implements TaskService {
                     metadata.put(workflow.getReferenceId(), "environmentId", api.getEnvironmentId());
                 });
             } catch (TechnicalException e) {
-                LOGGER.error("Error retrieving api task metadata {}", e.getMessage());
+                log.error("Error retrieving api task metadata {}", e.getMessage());
             }
         }
     }
@@ -301,7 +333,7 @@ public class TaskServiceImpl extends AbstractService implements TaskService {
                 metadata.put(subscription.getApplication(), "environmentId", value.getEnvironmentId());
             });
         } catch (TechnicalException e) {
-            LOGGER.error("Error retrieving application task metadata {}", e.getMessage());
+            log.error("Error retrieving application task metadata {}", e.getMessage());
         }
     }
 
@@ -310,7 +342,7 @@ public class TaskServiceImpl extends AbstractService implements TaskService {
             Optional<Plan> optPlan = planRepository.findById(subscription.getPlan());
 
             if (optPlan.isPresent()) {
-                String apiId = optPlan.get().getApi();
+                String apiId = optPlan.get().getReferenceId();
                 metadata.put(subscription.getPlan(), "name", optPlan.get().getName());
                 metadata.put(subscription.getPlan(), "api", apiId);
 
@@ -319,7 +351,7 @@ public class TaskServiceImpl extends AbstractService implements TaskService {
                 optionalApi.ifPresent(api -> metadata.put(apiId, "environmentId", api.getEnvironmentId()));
             }
         } catch (TechnicalException e) {
-            LOGGER.error("Error retrieving plan task metadata {}", e.getMessage());
+            log.error("Error retrieving plan task metadata {}", e.getMessage());
         }
     }
 
@@ -330,7 +362,7 @@ public class TaskServiceImpl extends AbstractService implements TaskService {
             taskEntity.setCreatedAt(user.getCreatedAt());
             taskEntity.setData(user);
         } catch (Exception e) {
-            LOGGER.error("Error converting user {} to a Task", user.getId());
+            log.error("Error converting user {} to a Task", user.getId());
             throw new TechnicalManagementException("Error converting user " + user.getId() + " to a Task", e);
         }
         return taskEntity;
@@ -343,7 +375,7 @@ public class TaskServiceImpl extends AbstractService implements TaskService {
             taskEntity.setCreatedAt(subscription.getCreatedAt());
             taskEntity.setData(subscription);
         } catch (Exception e) {
-            LOGGER.error("Error converting subscription {} to a Task", subscription.getId());
+            log.error("Error converting subscription {} to a Task", subscription.getId());
             throw new TechnicalManagementException("Error converting subscription " + subscription.getId() + " to a Task", e);
         }
         return taskEntity;
@@ -357,7 +389,7 @@ public class TaskServiceImpl extends AbstractService implements TaskService {
             taskEntity.setData(workflow);
         } catch (Exception e) {
             final String error = "Error converting workflow " + workflow.getId() + " to a Task";
-            LOGGER.error(error);
+            log.error(error);
             throw new TechnicalManagementException(error, e);
         }
         return taskEntity;
