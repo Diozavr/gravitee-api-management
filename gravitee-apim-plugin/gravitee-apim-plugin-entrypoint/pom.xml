@@ -36,5 +36,6 @@
         <module>gravitee-apim-plugin-entrypoint-handler</module>
         <module>gravitee-apim-plugin-entrypoint-http-proxy</module>
         <module>gravitee-apim-plugin-entrypoint-tcp-proxy</module>
+        <module>gravitee-apim-plugin-entrypoint-kafka</module>
     </modules>
 </project>

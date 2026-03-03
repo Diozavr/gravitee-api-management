@@ -166,6 +166,13 @@
             <type>zip</type>
         </dependency>
         <dependency>
+            <groupId>io.gravitee.apim.plugin.entrypoint</groupId>
+            <artifactId>gravitee-apim-plugin-entrypoint-kafka</artifactId>
+            <version>${project.version}</version>
+            <scope>runtime</scope>
+            <type>zip</type>
+        </dependency>
+        <dependency>
             <groupId>io.gravitee.entrypoint</groupId>
             <artifactId>gravitee-entrypoint-mcp</artifactId>
             <version>${gravitee-entrypoint-mcp.version}</version>
