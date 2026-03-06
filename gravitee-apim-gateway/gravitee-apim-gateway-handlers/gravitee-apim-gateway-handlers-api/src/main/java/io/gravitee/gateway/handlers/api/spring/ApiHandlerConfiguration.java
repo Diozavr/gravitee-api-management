@@ -48,6 +48,7 @@ import io.gravitee.gateway.reactive.flow.condition.evaluation.HttpMethodConditio
 import io.gravitee.gateway.reactive.flow.condition.evaluation.PathBasedConditionFilter;
 import io.gravitee.gateway.reactive.handlers.api.processor.ApiProcessorChainFactory;
 import io.gravitee.gateway.reactive.handlers.api.v4.DefaultApiReactorFactory;
+import io.gravitee.gateway.reactive.handlers.api.v4.MessageApiReactorFactory;
 import io.gravitee.gateway.reactive.handlers.api.v4.TcpApiReactorFactory;
 import io.gravitee.gateway.reactive.platform.organization.policy.OrganizationPolicyChainFactoryManager;
 import io.gravitee.gateway.reactive.policy.HttpPolicyFactory;
@@ -309,6 +310,29 @@ public class ApiHandlerConfiguration {
         GatewayConfiguration gatewayConfiguration
     ) {
         return new TcpApiReactorFactory(
+            configuration,
+            node,
+            entrypointConnectorPluginManager,
+            endpointConnectorPluginManager,
+            requestTimeoutConfiguration,
+            openTelemetryConfiguration,
+            openTelemetryFactory,
+            instrumenterTracerFactories,
+            gatewayConfiguration
+        );
+    }
+
+    @Bean
+    ReactorFactory<io.gravitee.gateway.reactive.handlers.api.v4.Api> messageApiReactorFactory(
+        EntrypointConnectorPluginManager entrypointConnectorPluginManager,
+        EndpointConnectorPluginManager endpointConnectorPluginManager,
+        RequestTimeoutConfiguration requestTimeoutConfiguration,
+        OpenTelemetryConfiguration openTelemetryConfiguration,
+        OpenTelemetryFactory openTelemetryFactory,
+        @Autowired(required = false) List<InstrumenterTracerFactory> instrumenterTracerFactories,
+        GatewayConfiguration gatewayConfiguration
+    ) {
+        return new MessageApiReactorFactory(
             configuration,
             node,
             entrypointConnectorPluginManager,
