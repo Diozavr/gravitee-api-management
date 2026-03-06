@@ -24,6 +24,7 @@ import io.gravitee.gateway.opentelemetry.TracingContext;
 import io.gravitee.gateway.reactive.core.context.DefaultDeploymentContext;
 import io.gravitee.gateway.reactive.core.v4.analytics.AnalyticsUtils;
 import io.gravitee.gateway.reactive.core.v4.endpoint.DefaultEndpointManager;
+import io.gravitee.gateway.reactive.handlers.api.v4.processor.MessageApiProcessorChainFactory;
 import io.gravitee.gateway.reactive.reactor.v4.reactor.ReactorFactory;
 import io.gravitee.gateway.reactor.Reactable;
 import io.gravitee.gateway.reactor.handler.ReactorHandler;
@@ -41,6 +42,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MessageApiReactorFactory implements ReactorFactory<Api> {
 
+    static final String KAFKA_CONSUMER_ENABLED_PROPERTY = "gateway.message.kafka.consumer.enabled";
+
     private final Configuration configuration;
     private final Node node;
     private final EntrypointConnectorPluginManager entrypointConnectorPluginManager;
@@ -50,6 +53,7 @@ public class MessageApiReactorFactory implements ReactorFactory<Api> {
     private final OpenTelemetryFactory openTelemetryFactory;
     private final List<InstrumenterTracerFactory> instrumenterTracerFactories;
     private final GatewayConfiguration gatewayConfiguration;
+    private final MessageApiProcessorChainFactory messageApiProcessorChainFactory;
 
     @Override
     public boolean support(final Class<? extends Reactable> clazz) {
@@ -59,6 +63,7 @@ public class MessageApiReactorFactory implements ReactorFactory<Api> {
     @Override
     public boolean canCreate(final Api api) {
         return (
+            isMessageKafkaConsumerEnabled() &&
             api.getDefinitionVersion() == DefinitionVersion.V4 &&
             api.getDefinition().getType() == ApiType.MESSAGE &&
             api
@@ -86,9 +91,14 @@ public class MessageApiReactorFactory implements ReactorFactory<Api> {
             deploymentContext,
             entrypointConnectorPluginManager,
             endpointManager,
+            messageApiProcessorChainFactory,
             requestTimeoutConfiguration,
             createTracingContext(api)
         );
+    }
+
+    protected boolean isMessageKafkaConsumerEnabled() {
+        return configuration.getProperty(KAFKA_CONSUMER_ENABLED_PROPERTY, Boolean.class, true);
     }
 
     protected TracingContext createTracingContext(final Api api) {
