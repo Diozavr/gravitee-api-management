@@ -50,6 +50,7 @@ import io.gravitee.gateway.reactive.handlers.api.processor.ApiProcessorChainFact
 import io.gravitee.gateway.reactive.handlers.api.v4.DefaultApiReactorFactory;
 import io.gravitee.gateway.reactive.handlers.api.v4.MessageApiReactorFactory;
 import io.gravitee.gateway.reactive.handlers.api.v4.TcpApiReactorFactory;
+import io.gravitee.gateway.reactive.handlers.api.v4.processor.MessageApiProcessorChainFactory;
 import io.gravitee.gateway.reactive.platform.organization.policy.OrganizationPolicyChainFactoryManager;
 import io.gravitee.gateway.reactive.policy.HttpPolicyFactory;
 import io.gravitee.gateway.reactive.policy.PolicyFactory;
@@ -323,6 +324,11 @@ public class ApiHandlerConfiguration {
     }
 
     @Bean
+    public MessageApiProcessorChainFactory messageApiProcessorChainFactory(ReporterService reporterService) {
+        return new MessageApiProcessorChainFactory(configuration, node, reporterService);
+    }
+
+    @Bean
     ReactorFactory<io.gravitee.gateway.reactive.handlers.api.v4.Api> messageApiReactorFactory(
         EntrypointConnectorPluginManager entrypointConnectorPluginManager,
         EndpointConnectorPluginManager endpointConnectorPluginManager,
@@ -330,7 +336,8 @@ public class ApiHandlerConfiguration {
         OpenTelemetryConfiguration openTelemetryConfiguration,
         OpenTelemetryFactory openTelemetryFactory,
         @Autowired(required = false) List<InstrumenterTracerFactory> instrumenterTracerFactories,
-        GatewayConfiguration gatewayConfiguration
+        GatewayConfiguration gatewayConfiguration,
+        MessageApiProcessorChainFactory messageApiProcessorChainFactory
     ) {
         return new MessageApiReactorFactory(
             configuration,
@@ -341,7 +348,8 @@ public class ApiHandlerConfiguration {
             openTelemetryConfiguration,
             openTelemetryFactory,
             instrumenterTracerFactories,
-            gatewayConfiguration
+            gatewayConfiguration,
+            messageApiProcessorChainFactory
         );
     }
 }

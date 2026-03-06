@@ -4,11 +4,12 @@
 
 Реализовать полноценный Kafka consumer execution path в APIM Gateway для V4 `MESSAGE` API: Gateway читает сообщения из Kafka, запускает flow/policy chain на каждое сообщение, фиксирует измеримый результат (лог/метрика/trace), и управляет delivery semantics (ack/retry/DLQ).
 
-Текущее состояние в ветке:
+Текущее состояние в ветке (обновлено):
 - есть routing в отдельный `MessageApiReactorFactory` для `ApiType.MESSAGE` + listeners `SUBSCRIPTION/KAFKA`;
 - reactor wiring добавлен в Spring;
-- `MessageApiReactor` пока только thin-wrapper над `TcpApiReactor`;
-- pipeline TCP имеет TODO на message/subscription-specific chain.
+- реализован `MessageApiProcessorChainFactory` и подключён в `MessageApiReactor`;
+- в `TcpApiReactor` добавлены extension hooks для message-specific pipeline (`beforeEntrypointRequest`, `afterEndpointInvocation`, `onError`);
+- в Kafka entrypoint добавлено обогащение message metadata (topic/partition/offset/timestamp + headers) и baseline config `enable.auto.commit=false`.
 
 ---
 
@@ -86,34 +87,39 @@ Tracing:
 ## 8. Implementation Plan (Phased)
 
 ### Phase A — Core Execution Context
-- Ввести `MessageExecutionContext`/internal attributes.
-- Добавить mapping KafkaRecord -> context.
+- [ ] Ввести `MessageExecutionContext`/internal attributes.
+- [~] Добавить mapping KafkaRecord -> context (частично: metadata/headers на `Message` добавлены, отдельный execution context ещё не введён).
 
 **DoD**: unit tests на все ключевые поля.
+**Статус**: **частично выполнено**.
 
 ### Phase B — Message Processor Chain
-- Реализовать `MessageApiProcessorChainFactory`.
-- Подключить в `MessageApiReactor`.
+- [x] Реализовать `MessageApiProcessorChainFactory`.
+- [x] Подключить в `MessageApiReactor`.
 
 **DoD**: порядок chain вызовов тестами подтверждён.
+**Статус**: **выполнено**.
 
 ### Phase C — Policy/Flow Integration
-- Подключить phase mapping `MESSAGE_REQUEST/RESPONSE`.
-- Гарантировать policy execution per message.
+- [~] Подключить phase mapping `MESSAGE_REQUEST/RESPONSE` (processor phase wiring сделан, полная flow/policy интеграция требует доработки).
+- [ ] Гарантировать policy execution per message.
 
 **DoD**: integration test показывает side-effect policy.
+**Статус**: **частично выполнено**.
 
 ### Phase D — Commit/Retry/DLQ
-- Реализовать retry policy + DLQ publish.
-- Commit только после success path.
+- [ ] Реализовать retry policy + DLQ publish.
+- [~] Commit только после success path (baseline auto-commit disabled, но полноценная explicit commit/retry/DLQ логика не завершена).
 
 **DoD**: integration tests success/retry/dlq.
+**Статус**: **не выполнено / частично выполнено**.
 
 ### Phase E — E2E
-- Реальный Kafka broker (без эмуляции).
-- Gateway consumer path end-to-end.
+- [ ] Реальный Kafka broker (без эмуляции).
+- [ ] Gateway consumer path end-to-end.
 
 **DoD**: тест воспроизводимо green.
+**Статус**: **не выполнено**.
 
 ---
 
@@ -171,17 +177,17 @@ Tracing:
 ## 14. Sprint Backlog (предлагаемый)
 
 ### Sprint 1
-- MessageExecutionContext contract + tests.
-- MessageApiProcessorChainFactory skeleton.
-- MessageApiReactor: separate chain (не только wrapper).
-- Happy path flow/policy invocation test.
+- [ ] MessageExecutionContext contract + tests.
+- [x] MessageApiProcessorChainFactory skeleton.
+- [x] MessageApiReactor: separate chain (не только wrapper).
+- [ ] Happy path flow/policy invocation test.
 
 ### Sprint 2
-- Kafka commit/retry baseline.
-- Structured logging + base metrics.
-- Real Kafka e2e (single broker, one topic, one policy side effect).
+- [ ] Kafka commit/retry baseline.
+- [ ] Structured logging + base metrics.
+- [ ] Real Kafka e2e (single broker, one topic, one policy side effect).
 
 ### Sprint 3
-- DLQ + rebalance hardening.
-- Perf and soak tests.
-- Rollout flags + docs.
+- [ ] DLQ + rebalance hardening.
+- [ ] Perf and soak tests.
+- [~] Rollout flags + docs (добавлен feature flag `gateway.message.kafka.consumer.enabled`, остальная rollout-документация требует доработки).

@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +32,8 @@ import io.gravitee.definition.model.v4.listener.http.HttpListener;
 import io.gravitee.definition.model.v4.listener.subscription.SubscriptionListener;
 import io.gravitee.gateway.env.GatewayConfiguration;
 import io.gravitee.gateway.env.RequestTimeoutConfiguration;
+import io.gravitee.gateway.reactive.core.processor.ProcessorChain;
+import io.gravitee.gateway.reactive.handlers.api.v4.processor.MessageApiProcessorChainFactory;
 import io.gravitee.node.api.Node;
 import io.gravitee.node.api.configuration.Configuration;
 import io.gravitee.node.opentelemetry.OpenTelemetryFactory;
@@ -80,8 +83,21 @@ class MessageApiReactorFactoryTest {
     @Mock
     GatewayConfiguration gatewayConfiguration;
 
+    @Mock
+    MessageApiProcessorChainFactory messageApiProcessorChainFactory;
+
+    @Mock
+    ProcessorChain processorChain;
+
     @BeforeEach
     void before() {
+        lenient().when(messageApiProcessorChainFactory.beforeApiExecution(any())).thenReturn(processorChain);
+        lenient().when(messageApiProcessorChainFactory.afterApiExecution(any())).thenReturn(processorChain);
+        lenient().when(messageApiProcessorChainFactory.onError(any())).thenReturn(processorChain);
+        lenient()
+            .when(configuration.getProperty(MessageApiReactorFactory.KAFKA_CONSUMER_ENABLED_PROPERTY, Boolean.class, true))
+            .thenReturn(true);
+
         cut = new MessageApiReactorFactory(
             configuration,
             node,
@@ -91,7 +107,8 @@ class MessageApiReactorFactoryTest {
             openTelemetryConfiguration,
             openTelemetryFactory,
             List.of(),
-            gatewayConfiguration
+            gatewayConfiguration,
+            messageApiProcessorChainFactory
         );
     }
 
@@ -135,6 +152,18 @@ class MessageApiReactorFactoryTest {
     @ParameterizedTest
     void should_call_can_create(Api api, boolean canCreate) {
         assertThat(cut.canCreate(api)).isEqualTo(canCreate);
+    }
+
+    @Test
+    void should_not_create_when_feature_flag_is_disabled() {
+        io.gravitee.definition.model.v4.Api apiDef = new io.gravitee.definition.model.v4.Api();
+        apiDef.setDefinitionVersion(DefinitionVersion.V4);
+        apiDef.setListeners(List.of(new SubscriptionListener()));
+        apiDef.setType(ApiType.MESSAGE);
+
+        when(configuration.getProperty(MessageApiReactorFactory.KAFKA_CONSUMER_ENABLED_PROPERTY, Boolean.class, true)).thenReturn(false);
+
+        assertThat(cut.canCreate(new Api(apiDef))).isFalse();
     }
 
     @Test

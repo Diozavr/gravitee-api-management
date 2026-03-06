@@ -27,6 +27,7 @@ import io.gravitee.definition.model.v4.listener.tcp.TcpListener;
 import io.gravitee.gateway.env.RequestTimeoutConfiguration;
 import io.gravitee.gateway.opentelemetry.TracingContext;
 import io.gravitee.gateway.reactive.api.ExecutionFailure;
+import io.gravitee.gateway.reactive.api.ExecutionPhase;
 import io.gravitee.gateway.reactive.api.context.DeploymentContext;
 import io.gravitee.gateway.reactive.api.context.InternalContextAttributes;
 import io.gravitee.gateway.reactive.api.context.tcp.TcpExecutionContext;
@@ -34,6 +35,7 @@ import io.gravitee.gateway.reactive.api.invoker.TcpInvoker;
 import io.gravitee.gateway.reactive.core.context.DefaultExecutionContext;
 import io.gravitee.gateway.reactive.core.context.HttpExecutionContextInternal;
 import io.gravitee.gateway.reactive.core.context.MutableExecutionContext;
+import io.gravitee.gateway.reactive.core.processor.ProcessorChain;
 import io.gravitee.gateway.reactive.core.tracing.TracingHook;
 import io.gravitee.gateway.reactive.core.v4.analytics.AnalyticsContext;
 import io.gravitee.gateway.reactive.core.v4.analytics.LoggingContext;
@@ -124,17 +126,36 @@ public class TcpApiReactor extends AbstractApiReactor {
         ctx.logEntries(DEFAULT_EXECUTION_CONTEXT_LOG_ENTRIES);
 
         // TODO specific Tcp API Request processor chain factory that contains SubscriptionProcessor in beforeApi chain
-        return new CompletableReactorChain(handleEntrypointRequest(ctx))
+        return new CompletableReactorChain(beforeEntrypointRequest(ctx))
+            .chainWith(handleEntrypointRequest(ctx))
             // configure backend call
             .chainWith(defaultInvoker.invoke(ctx))
             // setup timeout
             .chainWith(upstream -> timeout(upstream, ctx))
+            .chainWith(afterEndpointInvocation(ctx))
             // handle response
             .chainWith(handleEntrypointResponse(ctx))
+            .chainWithOnError(error -> onError(ctx))
             // hook everything up and start piping data
             .chainWith(ctx.response().end(ctx))
             .doOnSubscribe(disposable -> pendingRequests.incrementAndGet())
             .doFinally(pendingRequests::decrementAndGet);
+    }
+
+    protected Completable beforeEntrypointRequest(MutableExecutionContext ctx) {
+        return Completable.complete();
+    }
+
+    protected Completable afterEndpointInvocation(MutableExecutionContext ctx) {
+        return Completable.complete();
+    }
+
+    protected Completable onError(MutableExecutionContext ctx) {
+        return Completable.complete();
+    }
+
+    protected Completable executeProcessorChain(MutableExecutionContext ctx, ProcessorChain processorChain, ExecutionPhase executionPhase) {
+        return processorChain.execute(ctx, executionPhase);
     }
 
     @Override

@@ -23,6 +23,7 @@ import io.gravitee.gateway.reactive.api.connector.entrypoint.async.EntrypointAsy
 import io.gravitee.gateway.reactive.api.context.ExecutionContext;
 import io.gravitee.gateway.reactive.api.message.DefaultMessage;
 import io.gravitee.gateway.reactive.api.message.Message;
+import java.nio.charset.StandardCharsets;
 import io.gravitee.gateway.reactive.api.qos.Qos;
 import io.gravitee.gateway.reactive.api.qos.QosRequirement;
 import io.gravitee.plugin.entrypoint.kafka.configuration.KafkaEntrypointConnectorConfiguration;
@@ -33,6 +34,7 @@ import io.vertx.rxjava3.core.Vertx;
 import io.vertx.rxjava3.kafka.client.consumer.KafkaConsumer;
 import io.vertx.rxjava3.kafka.client.consumer.KafkaConsumerRecord;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -91,6 +93,21 @@ public class KafkaEntrypointConnector extends EntrypointAsyncConnector {
         if (configuration.getConsumerGroup() != null) {
             config.put(ConsumerConfig.GROUP_ID_CONFIG, configuration.getConsumerGroup());
         }
+        config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, Boolean.FALSE.toString());
+
+        if (configuration.getSecurityProtocol() != null) {
+            config.put("security.protocol", configuration.getSecurityProtocol());
+        }
+        if (configuration.getSaslMechanism() != null) {
+            config.put("sasl.mechanism", configuration.getSaslMechanism());
+        }
+        if (configuration.getUsername() != null && configuration.getPassword() != null) {
+            config.put(
+                "sasl.jaas.config",
+                "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"" +
+                configuration.getUsername() + "\" password=\"" + configuration.getPassword() + "\";"
+            );
+        }
         consumer = KafkaConsumer.create(vertx, config);
         Flowable<Message> messages = consumer
             .rxSubscribe(new HashSet<>(configuration.getTopics()))
@@ -100,7 +117,26 @@ public class KafkaEntrypointConnector extends EntrypointAsyncConnector {
     }
 
     private Message toMessage(KafkaConsumerRecord<String, io.vertx.core.buffer.Buffer> record) {
-        return DefaultMessage.builder().id(record.key()).content(Buffer.buffer(record.value().getBytes())).build();
+        final var metadata = new LinkedHashMap<String, Object>();
+        metadata.put("topic", record.topic());
+        metadata.put("partition", record.partition());
+        metadata.put("offset", record.offset());
+        metadata.put("timestamp", record.timestamp());
+
+        final var headers = new LinkedHashMap<String, String>();
+        record.headers().forEach(header -> {
+            if (header.value() != null) {
+                headers.put(header.key(), new String(header.value(), StandardCharsets.UTF_8));
+            }
+        });
+
+        return DefaultMessage
+            .builder()
+            .id(record.key())
+            .content(Buffer.buffer(record.value().getBytes()))
+            .metadata(metadata)
+            .headers(headers)
+            .build();
     }
 
     @Override

@@ -17,20 +17,25 @@ package io.gravitee.gateway.reactive.handlers.api.v4;
 
 import io.gravitee.gateway.env.RequestTimeoutConfiguration;
 import io.gravitee.gateway.opentelemetry.TracingContext;
+import io.gravitee.gateway.reactive.api.ExecutionPhase;
 import io.gravitee.gateway.reactive.api.context.DeploymentContext;
+import io.gravitee.gateway.reactive.core.context.MutableExecutionContext;
+import io.gravitee.gateway.reactive.core.processor.ProcessorChain;
 import io.gravitee.gateway.reactive.core.v4.endpoint.EndpointManager;
+import io.gravitee.gateway.reactive.handlers.api.v4.processor.MessageApiProcessorChainFactory;
 import io.gravitee.node.api.Node;
 import io.gravitee.node.api.configuration.Configuration;
 import io.gravitee.plugin.entrypoint.EntrypointConnectorPluginManager;
+import io.reactivex.rxjava3.core.Completable;
 
 /**
  * Dedicated reactor for message APIs.
- *
- * <p>
- * This implementation currently reuses the TCP reactive handling pipeline and opens a dedicated extension point for
- * message-specific flow/security processing in follow-up iterations.
  */
 public class MessageApiReactor extends TcpApiReactor {
+
+    private final ProcessorChain beforeApiExecutionProcessors;
+    private final ProcessorChain afterApiExecutionProcessors;
+    private final ProcessorChain onErrorProcessors;
 
     public MessageApiReactor(
         final Api api,
@@ -39,6 +44,7 @@ public class MessageApiReactor extends TcpApiReactor {
         final DeploymentContext deploymentContext,
         final EntrypointConnectorPluginManager entrypointConnectorPluginManager,
         final EndpointManager endpointManager,
+        final MessageApiProcessorChainFactory messageApiProcessorChainFactory,
         final RequestTimeoutConfiguration requestTimeoutConfiguration,
         final TracingContext tracingContext
     ) {
@@ -52,6 +58,24 @@ public class MessageApiReactor extends TcpApiReactor {
             requestTimeoutConfiguration,
             tracingContext
         );
+        this.beforeApiExecutionProcessors = messageApiProcessorChainFactory.beforeApiExecution(api);
+        this.afterApiExecutionProcessors = messageApiProcessorChainFactory.afterApiExecution(api);
+        this.onErrorProcessors = messageApiProcessorChainFactory.onError(api);
+    }
+
+    @Override
+    protected Completable beforeEntrypointRequest(MutableExecutionContext ctx) {
+        return executeProcessorChain(ctx, beforeApiExecutionProcessors, ExecutionPhase.MESSAGE_REQUEST);
+    }
+
+    @Override
+    protected Completable afterEndpointInvocation(MutableExecutionContext ctx) {
+        return executeProcessorChain(ctx, afterApiExecutionProcessors, ExecutionPhase.MESSAGE_RESPONSE);
+    }
+
+    @Override
+    protected Completable onError(MutableExecutionContext ctx) {
+        return executeProcessorChain(ctx, onErrorProcessors, ExecutionPhase.MESSAGE_RESPONSE);
     }
 
     @Override
