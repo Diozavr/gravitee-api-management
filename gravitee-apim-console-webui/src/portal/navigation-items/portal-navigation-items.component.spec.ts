@@ -48,6 +48,7 @@ import {
   NewPortalNavigationItem,
   PortalNavigationItem,
   PortalNavigationItemsResponse,
+  PortalPageContentType,
   UpdateFolderPortalNavigationItem,
   UpdateLinkPortalNavigationItem,
   UpdatePortalNavigationItem,
@@ -775,7 +776,7 @@ describe('PortalNavigationItemsComponent', () => {
         });
 
         expectCreateNavigationItem(
-          fakeNewPagePortalNavigationItem({ title, area: 'TOP_NAVBAR', type: 'PAGE', parentId: api.id }),
+          fakeNewPagePortalNavigationItem({ title, area: 'TOP_NAVBAR', type: 'PAGE', parentId: api.id, contentType: 'GRAVITEE_MARKDOWN' }),
           createdItem,
         );
         await expectGetNavigationItems(fakeResponse);
@@ -899,6 +900,25 @@ describe('PortalNavigationItemsComponent', () => {
       expectGetPageContent('nav-item-3-content', 'This is the content of Nav Item 3');
       expect(await harness.getEditorContentText()).toBe('This is the content of Nav Item 3');
       expect(await harness.isSaveButtonDisabled()).toBe(true);
+    });
+
+    it('should show GMD editor when page content type is GRAVITEE_MARKDOWN', async () => {
+      // beforeEach already loaded nav items and page content with default type GRAVITEE_MARKDOWN
+      const gmdEditor = await harness.getGmdEditor();
+      expect(gmdEditor).toBeTruthy();
+      expect(await harness.getEditorContentText()).toBe('This is the content of Nav Item 1');
+    });
+
+    it('should show OpenAPI editor when page content type is OPENAPI', async () => {
+      await harness.selectNavigationItemByTitle('Nav Item 3');
+      expectGetPageContent('nav-item-3-content', 'openapi: 3.0.0\ninfo:\n  title: Test', 'OPENAPI');
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const openApiEditor = await harness.getOpenApiEditor();
+      expect(openApiEditor).toBeTruthy();
+      const gmdEditor = await harness.getGmdEditor();
+      expect(gmdEditor).toBeFalsy();
     });
 
     it('should show empty message when non-PAGE is selected', async () => {
@@ -1080,6 +1100,41 @@ describe('PortalNavigationItemsComponent', () => {
         // After update, component refreshes the list — satisfy the subsequent GET
         await expectGetNavigationItems(fakePortalNavigationItemsResponse({ items: [unpublishedNavItem] }));
         expectGetPageContent('nav-item-1-content', 'This is the content of Nav Item 1');
+      });
+    });
+
+    describe('unpublished navigation item with unpublished parent', () => {
+      const unpublishedParent = fakePortalNavigationFolder({
+        id: 'parent-folder-1',
+        title: 'Parent Folder',
+        published: false,
+        order: 0,
+      });
+      const unpublishedChild = fakePortalNavigationPage({
+        id: 'child-page-1',
+        title: 'Child Page',
+        parentId: unpublishedParent.id,
+        portalPageContentId: 'child-page-1-content',
+        published: false,
+        order: 0,
+      });
+
+      beforeEach(async () => {
+        await expectGetNavigationItems(
+          fakePortalNavigationItemsResponse({
+            items: [unpublishedParent, unpublishedChild],
+          }),
+        );
+        expectGetPageContent('child-page-1-content', 'This is the content of Child Page');
+      });
+
+      it('should disable publish action when parent is unpublished', async () => {
+        expect(component.publishDisabled()).toBe(true);
+        expect(component.publishActionDisabled()).toBe(true);
+        expect(await harness.isPublishButtonVisible()).toBe(true);
+
+        const publishButton = await rootLoader.getHarness(MatButtonHarness.with({ text: /^Publish$/ }));
+        expect(await publishButton.isDisabled()).toBe(true);
       });
     });
   });
@@ -1874,10 +1929,10 @@ describe('PortalNavigationItemsComponent', () => {
     fixture.detectChanges();
   }
 
-  function expectGetPageContent(contentId: string, content: string) {
+  function expectGetPageContent(contentId: string, content: string, type: PortalPageContentType = 'GRAVITEE_MARKDOWN') {
     httpTestingController
       .expectOne({ method: 'GET', url: `${CONSTANTS_TESTING.env.v2BaseURL}/portal-page-contents/${contentId}` })
-      .flush({ id: contentId, content });
+      .flush({ id: contentId, content, type });
 
     fixture.detectChanges();
   }
